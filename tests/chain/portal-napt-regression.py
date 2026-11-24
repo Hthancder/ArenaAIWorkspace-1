@@ -24,6 +24,18 @@ def section(path: str) -> str:
     return PATCH[start:] if end < 0 else PATCH[start:end]
 
 
+def added(source: str, start: str = "", end: str = "") -> str:
+    """Return only the lines a diff slice *adds* (post-patch code).
+
+    Whole-file sections (new files) are fully reconstructible, but a section for
+    a modified file only contains its hunks -- the unchanged lines between them
+    are absent. So assertions about current behaviour read the added lines,
+    which is exactly what the patch introduces.
+    """
+    seg = source if not start else region(source, start, end)
+    return "\n".join(ln[1:] for ln in seg.splitlines() if ln.startswith("+"))
+
+
 def body(source: str, signature: str) -> str:
     """Return one function body from a patch section, comments stripped.
 
@@ -52,10 +64,31 @@ def body(source: str, signature: str) -> str:
     return "\n".join(code)
 
 
-portal_napt = section("src/modules/wifi/portal_napt.cpp")
-evil_portal = section("src/modules/wifi/evil_portal.cpp")
-napt_router = section("src/modules/wifi/napt_router.cpp")
+def whole_file(path: str) -> str:
+    """Reconstruct a file the patch *creates* (every line is an addition)."""
+    return "\n".join(
+        ln[1:] for ln in section(path).splitlines()
+        if ln.startswith("+") and not ln.startswith("+++")
+    )
+
+
+def region(source: str, start: str, end: str) -> str:
+    """Slice a fragment of the reconstructed file between two markers."""
+    a = source.find(start)
+    assert a >= 0, f"missing marker: {start}"
+    b = source.find(end, a)
+    assert b >= 0, f"missing end marker: {end}"
+    return source[a:b]
+
+
+portal_napt_raw = section("src/modules/wifi/portal_napt.cpp")
+evil_portal_raw = section("src/modules/wifi/evil_portal.cpp")
+napt_router_raw = section("src/modules/wifi/napt_router.cpp")
 logic = section("src/modules/wifi/evil_twin_logic.h")
+
+portal_napt = portal_napt_raw
+evil_portal = evil_portal_raw
+napt_router = napt_router_raw
 
 # ---------------------------------------------------------------- verification
 creds = body(evil_portal, "void EvilPortal::credsController")
@@ -80,10 +113,10 @@ assert "evilTwinDeauthAction(" in deauth, "deauth must follow the bounded policy
 assert "victimOnOurAp" in deauth and "verifying" in deauth, "safety gates missing"
 # The portal must only send when pulsed by the chain, not on a 250 ms timer.
 # Only the *removed* line (prefixed "-") may mention the old flood.
-assert all(ln.startswith("-") for ln in evil_portal.splitlines() if "> 250 && _deauth" in ln), \
+assert all(ln.startswith("-") for ln in evil_portal_raw.splitlines() if "> 250 && _deauth" in ln), \
     "permanent deauth flood removed"
 assert "_deauthPulseAt" in evil_portal, "chain-driven deauth pulse missing"
-assert "_deauthPulseAt" not in body(evil_portal, "void EvilPortal::credsController")
+assert "_deauthPulseAt" not in creds
 
 # ------------------------------------------------------------------- routing
 route = body(portal_napt, "static bool etRouteInPlace")
@@ -136,5 +169,75 @@ for rule in (
     "evilTwinClassifyVerify",
 ):
     assert rule in logic, f"missing evil-twin rule: {rule}"
+
+
+# ------------------------------------------- manual mode (WiFi Atks -> target)
+# The device path is WiFi -> WiFi Tools -> WiFi Attacks -> target -> Deauth /
+# Clone / Verify, i.e. EvilPortal(deauth=true, verify=true, autoMode=true) with
+# backgroundMode=false. Two regressions lived here and both look like "the
+# attack does nothing":
+#   * deauth was either a 250 ms flood forever (phones blacklist the SSID and
+#     fall back to mobile data) or never sent at all in manual mode,
+#   * verify was dropped entirely ((void)verifyPwd) so no key was ever checked.
+ctor = added(evil_portal, "@@ -26,6 +48,15 @@", "cleanlyStopWebUiForWiFiFeature")
+assert "_chainKick = !_backgroundMode && _deauth" in ctor, \
+    "manual mode must own a kick window (chain-less deauth)"
+assert "_asyncVerify = _verifyPwd" in ctor, "manual verify must run off the HTTP task"
+
+loop = added(evil_portal, "if (!isDeauthHeld && _deauth && _deauthPulseAt)", "if (totalCapturedCredentials !=")
+# Bounded kick: budget + backoff + safety gate, never a bare timer.
+assert "_chainKick" in loop, "manual kick window missing from the portal loop"
+assert "evilTwinDeauthGapMs(" in loop, "manual kick must use the backed-off gaps"
+assert "_kickBursts < kickTiming.maxBursts" in loop, "manual kick must stay inside the burst budget"
+# Safety gate: kicking while the victim is already on the clone throws it off
+# the clone too (the "phone falls back to mobile data" symptom).
+assert "apClientCount() > 0" in loop, "manual kick must stop once the victim joined the clone"
+assert "_deauthPulseAt" in loop, "chain-driven pulse must still work"
+# Async verify inside the portal loop, not inside the request handler.
+assert "takePendingCredentials(" in loop, "portal loop must pick up the queued key"
+assert "verifyCredentialsLocked(vSsid" in loop, "portal loop must run the handshake test"
+assert "notifyVerifyResult(" in loop, "verify result must reach the routing gate"
+# A wrong key must not end the manual attack: the remaining budget pulls a
+# victim that fell back to mobile data in again (bounded, never a new flood).
+assert "if (!vOk && _chainKick && apClientCount() == 0)" in loop, \
+    "manual mode must re-arm the bounded kick after a wrong key"
+# The old unconditional flood may only survive as a removed line.
+assert all(ln.startswith("-") for ln in evil_portal_raw.splitlines() if "> 250 && _deauth" in ln)
+
+evil_portal_h = section("src/modules/wifi/evil_portal.h")
+for field in ("_chainKick", "_kickBursts", "_lastKickMs", "_asyncVerify"):
+    assert field in evil_portal_h, f"missing portal state: {field}"
+
+# ------------------------------------------------------- chain menu plumbing
+# WiFi -> Chains used to bounce straight back: every submenu shared the global
+# `options` vector and cleared it, so the menu that was still running lost its
+# own entries from under the loop. Each level must own its vector.
+chains = whole_file("src/modules/wifi/chain_orchestrator.cpp")
+assert "options.clear()" not in chains, "chain menus must not clear the shared global menu vector"
+assert "loopOptions(options" not in chains, "chain menus must pass their own vector"
+assert chains.count("std::vector<Option> opts") >= 8, "every chain submenu needs a local vector"
+# A tap must never dead-end silently.
+assert "static void explainNoTarget" in chains, "a tap with no target must explain itself"
+assert "static bool askEvilTwinTarget" in chains, "the evil-twin entry must be able to ask for a target"
+assert "(need target)" not in chains, "stale dead-end label"
+route_menu = body(chains, "static void evilTwinRouteMenu")
+assert "askEvilTwinTarget(targetSsid" in route_menu, "evil-twin route must ask for a target in place"
+assert "explainNoTarget(" in route_menu, "evil-twin route must explain a missing target"
+
+
+# ------------------------------------------------------------ menu dispatch
+# loopOptions() used to call `options[chosen].operation()` directly. `options`
+# is the shared global vector and most operations rewrite it (EvilPortal::setup
+# re-assigns it, target_atk_menu re-assigns it, chain menus rebuild it), so the
+# std::function being executed was destroyed mid-flight. On the device that is
+# either "the tap does nothing / jumps back" or a crash.
+display_patch = section("src/core/display.cpp")
+assert "std::function<void()> chosenOp = options[chosen].operation;" in display_patch, \
+    "loopOptions must copy the callback before running it"
+dispatch = display_patch[display_patch.index("Selected: "):]
+assert dispatch.index("chosenOp = options[chosen].operation") < dispatch.index("chosenOp();"), \
+    "the copy must happen before the call"
+assert "options[chosen].operation();" not in added(display_patch), \
+    "must not call through the shared vector"
 
 print("evil-twin / portal-NAPT regression checks passed")

