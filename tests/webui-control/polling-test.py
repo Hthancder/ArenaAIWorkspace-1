@@ -14,7 +14,7 @@ assert request_helpers.count("req.onabort =") == 2
 assert "let systemInfoRefreshBusy = false;" in js
 assert "if (systemInfoRefreshBusy) return;" in js
 assert "systemInfoRefreshBusy = false;" in js
-assert "Keep the browser's applied palette/layout" not in js
+assert js.count("Keep the browser's applied palette/layout") == 1
 assert js.count("}, 15000);") == 1
 assert 'if (!document.hidden && $(".dialog-background.hidden") && !_runningUpload && !otaBusy)' in js
 
@@ -23,7 +23,7 @@ assert 'if (!document.hidden && $(".dialog-background.hidden") && !_runningUploa
 assert 'if (activeTab === "seclab" && !document.hidden' in js
 assert "if (secLabRefreshBusy) return;" in js
 assert "if (monRefreshBusy) return;" in js
-assert "if (studioRefreshBusy) return;" in js
+assert "if (studioRefreshBusy) { studioRefreshQueued = true; return; }" in js
 assert "monRefreshBusy = false;" in js
 assert "studioRefreshBusy = false;" in js
 assert "secLabRefreshBusy = false;" in js

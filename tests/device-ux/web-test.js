@@ -4,7 +4,7 @@ const html = fs.readFileSync(process.argv[3], 'utf8');
 for (const id of ['ux-find','ux-stop','ux-sound','ux-menu-tones','ux-volume','ux-brightness','ux-save','ux-status'])
   assert(html.includes(`id="${id}"`));
 const marker = '// Board controls: all mutations';
-const endMarker = '// Keep the browser\'s applied palette/layout in sync';
+const endMarker = '// ==== SecLab compact subtabs + overview mirror';
 const blockStart = source.indexOf(marker);
 const blockEnd = source.indexOf(endMarker, blockStart);
 assert(blockStart >= 0 && blockEnd > blockStart, 'device controls block markers are present');

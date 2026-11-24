@@ -4659,7 +4659,7 @@ index 5290300b..b27bf10a 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..7aa2b385 100644
+index fd616029..18874401 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -5942,7 +5942,7 @@ index fd616029..7aa2b385 100644
        }
      }
      return r;
-@@ -690,279 +961,583 @@ async function renderTFT(data) {
+@@ -690,279 +961,582 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6541,7 +6541,6 @@ index fd616029..7aa2b385 100644
 +      $("#ota-prog-msg").textContent = "Restart manually to use the update.";
 +      return;
 +    }
-+
 +    $("#ota-bar-fill").style.width = "100%";
 +    $("#ota-prog-pct").textContent = "100%";
 +    $("#ota-status").className = "ota-status ok";
@@ -6695,7 +6694,7 @@ index fd616029..7aa2b385 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1545,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1544,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6734,7 +6733,7 @@ index fd616029..7aa2b385 100644
      return;
    }
  
-@@ -1009,24 +1555,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1554,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6764,7 +6763,7 @@ index fd616029..7aa2b385 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1573,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1572,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6801,7 +6800,7 @@ index fd616029..7aa2b385 100644
      return;
    }
  
-@@ -1062,662 +1590,1676 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1589,1684 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7092,20 +7091,6 @@ index fd616029..7aa2b385 100644
 -    } else {
 -      textarea.setSelectionRange(newStart, newStart);
 -    }
--  };
--
--  const getCurrentLine = (pos) => {
--    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
--    const lineEnd = textarea.value.indexOf("\n", pos);
--    const line = textarea.value.slice(
--      lineStart,
--      lineEnd === -1 ? undefined : lineEnd,
--    );
--    return {
--      line,
--      lineStart,
--      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
--    };
 +    textarea.setSelectionRange(newStart, newEnd);
    };
 +  if (e.key === "Tab") {
@@ -7128,6 +7113,20 @@ index fd616029..7aa2b385 100644
 +  }
 +});
  
+-  const getCurrentLine = (pos) => {
+-    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
+-    const lineEnd = textarea.value.indexOf("\n", pos);
+-    const line = textarea.value.slice(
+-      lineStart,
+-      lineEnd === -1 ? undefined : lineEnd,
+-    );
+-    return {
+-      line,
+-      lineStart,
+-      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
+-    };
+-  };
+-
 -  const handleTab = (shift) => {
 -    if (start === end) {
 -      const { line, lineStart, lineEnd } = getCurrentLine(start);
@@ -7207,6 +7206,9 @@ index fd616029..7aa2b385 100644
 -      firstLineStart + newTextLines.join("\n").length,
 -    );
 -  };
++  // Keep the browser's applied palette/layout in sync with device-side changes.
++  // Do not overwrite a potentially unsaved Personalize form. This is the only
++  // system-info poll; tab refreshers share their own guarded schedules.
 +  setInterval(() => {
 +    if (!document.hidden && $(".dialog-background.hidden") && !_runningUpload && !otaBusy) {
 +      fetchSystemInfo(true).catch(() => {});
@@ -7282,6 +7284,7 @@ index fd616029..7aa2b385 100644
 +
 +let studioTimer = null;
 +let studioRefreshBusy = false;
++let studioRefreshQueued = false;
 +let studioLastSys = null;
 +let studioLastSecLab = null;
 +let studioLastQr = null;
@@ -7826,7 +7829,7 @@ index fd616029..7aa2b385 100644
 -      }
 -      break;
 +async function refreshStudio(){
-+  if (studioRefreshBusy) return;
++  if (studioRefreshBusy) { studioRefreshQueued = true; return; }
 +  studioRefreshBusy = true;
 +  const generation = ++studioRefreshGeneration;
 +  const msgBox=document.getElementById("st-msg");
@@ -7876,6 +7879,10 @@ index fd616029..7aa2b385 100644
 +    console.warn("refreshStudio",e);
 +  } finally {
 +    studioRefreshBusy = false;
++    if (studioRefreshQueued) {
++      studioRefreshQueued = false;
++      refreshStudio().catch(() => {});
++    }
    }
 -
 -  const nextChar = start < textarea.value.length ? textarea.value[start] : "";
