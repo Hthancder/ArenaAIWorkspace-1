@@ -18,9 +18,15 @@ on:
       - 'tests/**'
       - '.github/workflows/build-dsolution-183-2mic.yml'
   workflow_dispatch:
+    inputs:
+      build_launcher:
+        description: 'Build the separate Dual-Boot launcher'
+        type: boolean
+        default: true
 
 jobs:
   build-dualboot-launcher:
+    if: github.event_name != 'workflow_dispatch' || inputs.build_launcher
     runs-on: ubuntu-latest
     timeout-minutes: 25
     container:
@@ -115,6 +121,7 @@ jobs:
         run: |
           ./tests/radio-observation/run.sh /tmp/Bruce
           ./tests/device-ux/run.sh /tmp/Bruce
+          ./tests/badusb-autorun/run.sh /tmp/Bruce
           ./tests/sonar/run.sh /tmp/Bruce
           ./tests/wifi-menu/run.sh /tmp/Bruce
           ./tests/audio-board/run.sh /tmp/Bruce
@@ -195,7 +202,7 @@ jobs:
           while IFS= read -r line; do [ -n "$line" ] && echo "::notice title=build report::$line"; done < report.txt
 
       - name: Publish build diagnostics issue
-        if: failure() && github.ref != 'refs/heads/arena/8d69f494-arenaaiworkspace-1'
+        if: failure() && github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/arena/8d69f494-arenaaiworkspace-1'
         working-directory: /tmp/Bruce
         env:
           GH_TOKEN: ${{ github.token }}

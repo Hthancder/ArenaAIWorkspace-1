@@ -168,6 +168,11 @@ function formatUptime(sec) {
 
 let activeTab = "dashboard";
 function switchTab(tabName) {
+  if (tabName !== "files" && typeof payloadPickerActive !== "undefined" && payloadPickerActive) {
+    payloadPickerActive = false;
+    document.getElementById("payload-picker-banner")?.classList.add("hidden");
+    document.querySelectorAll(".act-pick-payload").forEach(button => button.remove());
+  }
   activeTab = tabName;
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.getAttribute("data-tab") === tabName);
@@ -184,6 +189,8 @@ function switchTab(tabName) {
   }
   if (tabName === "personalize") {
     loadPersonalizeForm();
+  } else if (tabName === "dashboard") {
+    uxLoad(true);
   }
   if (tabName === "console" && $("#console-in")) {
     $("#console-in").focus();
@@ -295,7 +302,7 @@ async function runCommand(cmd) {
 }
 
 async function quickCli(cmd) {
-  const box = $("#dash-action-status");
+  const box = activeTab === "studio" ? $("#st-msg") : activeTab === "monitor" ? $("#mon-msg") : $("#dash-action-status");
   try {
     const res = await requestPost("/cm", { cmnd: cmd, capture: "1" });
     box.className = "ota-status ok";
@@ -366,6 +373,12 @@ function renderFileRow(fileList) {
         e.querySelector(".col-name").textContent = name;
         e.querySelector(".col-name").setAttribute("title", name);
         e.querySelector(".col-size").textContent = size;
+        if (payloadPickerActive) {
+          const pick = document.createElement("button");
+          pick.type = "button"; pick.className = "btn-action act-pick-payload";
+          pick.textContent = "Dùng làm payload";
+          e.querySelector(".col-action").appendChild(pick);
+        }
         e.querySelector(".col-action").classList.add("type-file");
         let downloadUrl = (IS_DEV ? "/bruce" : "") + `/file?fs=${currentDrive}&name=${encodeURIComponent(dPath)}&action=download`;
         e.querySelector(".act-download").setAttribute("download", name);
@@ -393,6 +406,24 @@ let currentDrive;
 let currentPath;
 let lastSysInfo = {};
 let filesRequestGeneration = 0;
+let payloadPickerActive = false;
+function startPayloadPicker() {
+  payloadPickerActive = true;
+  document.getElementById("payload-picker-banner").classList.remove("hidden");
+  switchTab("files");
+  fetchFiles(currentDrive || "LittleFS", currentPath || "/");
+}
+function cancelPayloadPicker() {
+  payloadPickerActive = false;
+  document.getElementById("payload-picker-banner").classList.add("hidden");
+  document.querySelectorAll(".act-pick-payload").forEach(button => button.remove());
+  switchTab("studio"); switchStSlab("badusb");
+}
+function openRecordings(drive) {
+  payloadPickerActive = false;
+  document.getElementById("payload-picker-banner").classList.add("hidden");
+  switchTab("files"); fetchFiles(drive, "/BruceMIC");
+}
 const btnRefreshFolder = $("#refresh-folder");
 
 function updateURL(drive, path, editFile = null) {
@@ -639,7 +670,7 @@ async function scanWifiNets() {
   }
 }
 
-async function openWifiModal() {
+async function openWifiModal(selectedNetwork = null) {
   if (otaBusy) return;
   $("#wifi-conn-msg").className = "ota-status hidden";
   try {
@@ -649,6 +680,11 @@ async function openWifiModal() {
       : `Currently in AP Mode (${st.ssid} at ${st.ip}). Connect below to expose WebUI & OTA on 192.168.x.x.`;
   } catch (_) {
     $("#wifi-cur-status").textContent = "Select your router below to switch device to LAN Wi-Fi.";
+  }
+  if (selectedNetwork) {
+    $("#wifi-ssid-input").value = selectedNetwork.ssid || "";
+    $("#wifi-pwd-input").value = "";
+    $("#wifi-pwd-input").placeholder = selectedNetwork.saved ? "Saved credential (leave blank or enter new)" : "Enter Wi-Fi password";
   }
   Dialog.show("wifi");
   scanWifiNets();
@@ -1074,7 +1110,6 @@ function updateBootPreview() {
   $("#bm-title").textContent = owner;
   $("#bm-sub").textContent = tag;
   $("#bm-mdns").textContent = `http://${mdns || "bruce"}.local`;
-  $("#pers-bright-val").textContent = `${$("#pers-bright").value}%`;
   const box = $("#boot-preview");
   box.style.setProperty("--bm-pri", pri);
   box.style.setProperty("--bm-sec", sec);
@@ -1092,7 +1127,6 @@ async function loadPersonalizeForm() {
     $("#pers-pri").value = p.priColor || "#00f0ff";
     $("#pers-sec").value = p.secColor || "#50aebd";
     $("#pers-bg").value = p.bgColor || "#070d12";
-    $("#pers-bright").value = p.bright || 80;
     $("#pers-style").value = String(p.menuStyle ?? 0);
     applyThemeCss(p.priColor, p.secColor, p.bgColor, p.menuStyle);
     updateBootPreview();
@@ -1101,7 +1135,7 @@ async function loadPersonalizeForm() {
   }
 }
 
-["#pers-owner", "#pers-tag", "#pers-mdns", "#pers-pri", "#pers-sec", "#pers-bg", "#pers-bright"].forEach((sel) => {
+["#pers-owner", "#pers-tag", "#pers-mdns", "#pers-pri", "#pers-sec", "#pers-bg"].forEach((sel) => {
   $(sel)?.addEventListener("input", updateBootPreview);
 });
 
@@ -1132,7 +1166,6 @@ $("#btn-save-pers")?.addEventListener("click", async () => {
       priColor: $("#pers-pri").value,
       secColor: $("#pers-sec").value,
       bgColor: $("#pers-bg").value,
-      bright: $("#pers-bright").value,
       menuStyle: $("#pers-style").value,
     }));
     applyThemeCss(res.priColor, res.secColor, res.bgColor, res.menuStyle);
@@ -1204,12 +1237,15 @@ document.querySelectorAll(".chip-cmd").forEach((ch) => {
   ch.addEventListener("click", () => execConsoleCmd(ch.getAttribute("data-cmd")));
 });
 
+// All clock controls use the same device endpoint and local-time convention.
+async function syncBrowserTime() {
+  const localEpoch = Math.floor(Date.now() / 1000) - new Date().getTimezoneOffset() * 60;
+  await requestPost("/personalize", { epoch: String(localEpoch) });
+}
 $("#act-sync-time")?.addEventListener("click", async () => {
-  const tzOffsetSec = -new Date().getTimezoneOffset() * 60;
-  const localEpoch = Math.floor(Date.now() / 1000) + tzOffsetSec;
   const box = $("#dash-action-status");
   try {
-    await requestPost("/personalize", { epoch: String(localEpoch) });
+    await syncBrowserTime();
     box.className = "ota-status ok";
     box.textContent = "Device clock synced to browser local time!";
   } catch (err) {
@@ -1472,6 +1508,20 @@ document.querySelectorAll(".inp-uploader").forEach((el) => {
 });
 
 $("#tab-files").addEventListener("click", async (e) => {
+  const pick = e.target.closest(".act-pick-payload");
+  if (pick && payloadPickerActive) {
+    e.preventDefault();
+    const path = pick.closest(".file-row")?.getAttribute("data-file");
+    if (!path) return;
+    const fs = document.getElementById("st-badusb-fs"), field = document.getElementById("st-badusb-path");
+    fs.value = currentDrive; field.value = path;
+    fs.dataset.touched = "1"; field.dataset.touched = "1";
+    cancelPayloadPicker();
+    const msg = document.getElementById("st-badusb-msg");
+    msg.className = "ota-status"; msg.textContent = "Đã chọn file. Nhấn Set Payload để lưu; chưa chạy payload.";
+    msg.classList.remove("hidden");
+    return;
+  }
   let browseAction = e.target.closest(".act-browse");
   if (browseAction) {
     e.preventDefault();
@@ -1774,18 +1824,39 @@ let studioLastSys = null;
 let studioLastSecLab = null;
 let studioLastQr = null;
 let studioLastBadusb = null;
+let studioRefreshGeneration = 0;
 
 // BadUSB Auto-Run — WebUI controls
+const badUsbEditableFields = ["st-badusb-fs", "st-badusb-path", "st-badusb-delayMs", "st-badusb-trigger-sel", "st-badusb-confirm-toggle", "st-badusb-confirmMs", "st-badusb-once-toggle", "st-badusb-enabled-toggle"];
+badUsbEditableFields.forEach(id => {
+  const field = document.getElementById(id);
+  ["input", "change"].forEach(event => field?.addEventListener(event, () => { field.dataset.touched = "1"; }));
+});
+function badUsbFieldsSaved(...ids) {
+  ids.forEach(id => { const field = document.getElementById(id); if (field) delete field.dataset.touched; });
+}
 document.getElementById("st-badusb-set-payload")?.addEventListener("click", async ()=>{
   const fs=document.getElementById("st-badusb-fs")?.value.trim()||"LittleFS";
   const path=document.getElementById("st-badusb-path")?.value.trim();
   const msgBox=document.getElementById("st-badusb-msg");
   if(!path){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent="Enter payload path"; msgBox.classList.remove("hidden"); } return; }
-  try{ const raw=await requestPost("/badusb/autorun",{action:"setpayload", payloadFs:fs, payloadPath:path}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
+  try{ const raw=await requestPost("/badusb/autorun",{action:"setpayload", payloadFs:fs, payloadPath:path}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } if (d.ok) badUsbFieldsSaved("st-badusb-fs", "st-badusb-path"); refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
 });
 document.getElementById("st-badusb-enabled-toggle")?.addEventListener("change", async (e)=>{
-  const msgBox=document.getElementById("st-badusb-msg");
-  try{ const raw=await requestPost("/badusb/autorun",{action:"enable", enabled: e.target.checked?"1":"0"}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(err){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=err.message; msgBox.classList.remove("hidden"); } }
+  const field=e.target, msg=document.getElementById("st-badusb-msg");
+  field.disabled=true;
+  try {
+    const d=JSON.parse(await requestPost("/badusb/autorun",{action:"enable",enabled:field.checked?"1":"0"}));
+    if (!d.ok) throw new Error(d.msg || "Không thể đổi trạng thái");
+    msg.className="ota-status ok"; msg.textContent=d.msg || "Đã lưu trạng thái.";
+  } catch(err) {
+    msg.className="ota-status err"; msg.textContent=(err.message || "Không thể đổi trạng thái") + ". Kiểm tra trạng thái thiết bị sau khi kết nối lại.";
+  } finally {
+    msg.classList.remove("hidden");
+    badUsbFieldsSaved("st-badusb-enabled-toggle");
+    field.disabled=false;
+    await refreshStudio();
+  }
 });
 document.getElementById("st-badusb-test")?.addEventListener("click", async ()=>{
   const msgBox=document.getElementById("st-badusb-msg");
@@ -1793,31 +1864,45 @@ document.getElementById("st-badusb-test")?.addEventListener("click", async ()=>{
 });
 document.getElementById("st-badusb-clear")?.addEventListener("click", async ()=>{
   const msgBox=document.getElementById("st-badusb-msg");
-  try{ const raw=await requestPost("/badusb/autorun",{action:"clearpayload"}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } const pathEl=document.getElementById("st-badusb-path"); if(pathEl) pathEl.value=""; refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
+  try{ const raw=await requestPost("/badusb/autorun",{action:"clearpayload"}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } const pathEl=document.getElementById("st-badusb-path"); if(pathEl && d.ok) pathEl.value=""; if (d.ok) badUsbFieldsSaved("st-badusb-path", "st-badusb-fs"); refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
 });
-document.getElementById("st-badusb-set-delay")?.addEventListener("click", async ()=>{
-  const v=document.getElementById("st-badusb-delayMs")?.value.trim();
-  const msgBox=document.getElementById("st-badusb-msg");
-  if(!v){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent="Enter delayMs 0-10000"; msgBox.classList.remove("hidden"); } return; }
-  try{ const raw=await requestPost("/badusb/autorun",{action:"setdelay", delayMs:v}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
+document.getElementById("st-badusb-save-settings")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget, msg = document.getElementById("st-badusb-msg");
+  const el = id => document.getElementById("st-badusb-" + id);
+  const value = id => el(id).value.trim();
+  const groups = [
+    {name:"Delay", ids:["delayMs"], data:{action:"setdelay", delayMs:value("delayMs")}},
+    {name:"Trigger", ids:["trigger-sel"], data:{action:"settrigger", trigger:value("trigger-sel")}},
+    {name:"Confirm", ids:["confirm-toggle","confirmMs"], data:{action:"setconfirm", confirmWindow:el("confirm-toggle").checked?"1":"0", confirmMs:value("confirmMs")}},
+    {name:"Run once", ids:["once-toggle"], data:{action:"setrunonce", runOncePerPlug:el("once-toggle").checked?"1":"0"}}
+  ].filter(g => g.ids.some(id => el(id).dataset.touched));
+  const fail = text => { msg.className="ota-status err"; msg.textContent=text; msg.classList.remove("hidden"); };
+  if (!groups.length) { fail("Không có thay đổi cần lưu."); return; }
+  for (const g of groups) {
+    const d=g.data;
+    if ((d.action==="setdelay" && (!/^\d+$/.test(d.delayMs) || +d.delayMs>10000)) ||
+        (d.action==="setconfirm" && (!/^\d+$/.test(d.confirmMs) || +d.confirmMs<1000 || +d.confirmMs>10000)) ||
+        (d.action==="settrigger" && !["0","2"].includes(d.trigger))) {
+      fail("Giá trị không hợp lệ: " + g.name + ". Chưa lưu mục nào."); return;
+    }
+  }
+  groups.forEach(g => { g.snapshot=g.ids.map(id => el(id).type === "checkbox" ? el(id).checked : el(id).value); });
+  button.disabled=true;
+  const saved=[], failed=[];
+  for (const g of groups) {
+    try {
+      const d=JSON.parse(await requestPost("/badusb/autorun",g.data));
+      if (!d.ok) throw new Error(d.msg || "rejected");
+      saved.push(g.name);
+      g.ids.forEach((id,i) => { const f=el(id); if ((f.type === "checkbox" ? f.checked : f.value) === g.snapshot[i]) delete f.dataset.touched; });
+    } catch(e) { failed.push(g.name + ": " + (e.message || "lỗi")); }
+  }
+  button.disabled=false;
+  msg.className="ota-status " + (failed.length ? "err" : "ok");
+  msg.textContent=(saved.length ? "Đã lưu: " + saved.join(", ") + ". " : "") + (failed.length ? "Chưa xác nhận: " + failed.join("; ") + ". Kiểm tra trạng thái trước khi thử lại." : "");
+  msg.classList.remove("hidden");
+  refreshStudio();
 });
-document.getElementById("st-badusb-set-trigger")?.addEventListener("click", async ()=>{
-  const v=document.getElementById("st-badusb-trigger-sel")?.value||"0";
-  const msgBox=document.getElementById("st-badusb-msg");
-  try{ const raw=await requestPost("/badusb/autorun",{action:"settrigger", trigger:v}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
-});
-document.getElementById("st-badusb-set-confirm")?.addEventListener("click", async ()=>{
-  const cw=document.getElementById("st-badusb-confirm-toggle")?.checked?"1":"0";
-  const ms=document.getElementById("st-badusb-confirmMs")?.value.trim()||"3000";
-  const msgBox=document.getElementById("st-badusb-msg");
-  try{ const raw=await requestPost("/badusb/autorun",{action:"setconfirm", confirmWindow:cw, confirmMs:ms}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
-});
-document.getElementById("st-badusb-set-once")?.addEventListener("click", async ()=>{
-  const ro=document.getElementById("st-badusb-once-toggle")?.checked?"1":"0";
-  const msgBox=document.getElementById("st-badusb-msg");
-  try{ const raw=await requestPost("/badusb/autorun",{action:"setrunonce", runOncePerPlug:ro}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
-});
-document.getElementById("st-badusb-path")?.addEventListener("input", (e)=>{ e.target.dataset.touched="1"; });
 
 
 document.getElementById("pt-refresh")?.addEventListener("click", portalRefresh);
@@ -1888,6 +1973,7 @@ function startStudioPoll(){
 }
 function stopStudioPoll(){ if(studioTimer){ clearInterval(studioTimer); studioTimer=null; } }
 function switchStSlab(name){
+  if (!document.getElementById("stslab-" + name)) name = "overview";
   document.querySelectorAll('[id^="stslab-"]').forEach(v=>v.classList.toggle("hidden", v.id!=="stslab-"+name));
   document.querySelectorAll("[data-stslab]").forEach(b=>{ const on=b.dataset.stslab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
   try{ localStorage.setItem("studioSlab", name);}catch(e){}
@@ -1897,8 +1983,24 @@ document.querySelectorAll("[data-stslab-jump]").forEach(b=> b.addEventListener("
 try{ const savedSt=localStorage.getItem("studioSlab"); if(savedSt) switchStSlab(savedSt); }catch(e){}
 document.getElementById("st-refresh")?.addEventListener("click", ()=> refreshStudio());
 document.getElementById("st-auto")?.addEventListener("change", (e)=>{ if(e.target.checked) refreshStudio(); });
-document.getElementById("st-sync-time")?.addEventListener("click", ()=>{ const btn=document.getElementById("st-sync-time"); if(btn) btn.textContent="Syncing..."; fetch("/api/time",{method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:"t="+Math.floor(Date.now()/1000)}).then(()=>{ if(btn) btn.textContent="Synced ✔"; setTimeout(()=>{ if(btn) btn.textContent="Sync Browser Time"; },2000); }).catch(()=>{ if(btn) btn.textContent="Sync failed"; }); if(window.quickCli) quickCli("date"); refreshStudio(); });
-document.getElementById("st-clock-sync")?.addEventListener("click", ()=>{ const b=document.getElementById("st-clock-sync"); if(b) b.textContent="Syncing..."; fetch("/api/time",{method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:"t="+Math.floor(Date.now()/1000)}).then(()=>{ if(b) b.textContent="Synced ✔"; setTimeout(()=>{ if(b) b.textContent="Sync Browser Time \u2192 Device"; },2000); }).catch(()=>{ if(b) b.textContent="Sync failed"; }); });
+["st-sync-time", "st-clock-sync"].forEach(id => {
+  document.getElementById(id)?.addEventListener("click", async () => {
+    const button = document.getElementById(id);
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = "Syncing...";
+    try {
+      await syncBrowserTime();
+      button.textContent = "Synced ✔";
+      refreshStudio();
+    } catch (err) {
+      button.textContent = "Sync failed";
+    } finally {
+      button.disabled = false;
+      setTimeout(() => { button.textContent = label; }, 2000);
+    }
+  });
+});
 document.getElementById("st-qr-add")?.addEventListener("click", async ()=>{
   const nameEl=document.getElementById("st-qr-name"), contEl=document.getElementById("st-qr-content"), msg=document.getElementById("st-qr-msg");
   const name=(nameEl?.value||"").trim(), content=(contEl?.value||"").trim();
@@ -1914,7 +2016,22 @@ document.getElementById("st-dual-menu")?.addEventListener("click", ()=> requestG
 // delegated actions for QR preview/delete
 document.addEventListener("click", (e)=>{
   const t=e.target.closest("[data-st-qr-show]");
-  if(t){ e.preventDefault(); const name=t.dataset.stQrShow, content=t.dataset.stQrContent||""; const box=document.getElementById("st-qr-preview"); const title=document.getElementById("st-qr-preview-title"); const cont=document.getElementById("st-qr-preview-content"); const qb=document.getElementById("st-qr-preview-box"); if(title) title.textContent=name; if(cont) cont.textContent=content; if(qb){ const enc=encodeURIComponent(content); qb.innerHTML=`<img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${enc}" alt="QR" style="max-width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:#fff" /><div class="sl-row sl-mt" style="justify-content:center"><button type="button" class="btn-action" data-st-qr-device="${slEsc(name)}">Show on device</button></div>`; } if(box) box.classList.remove("hidden"); }
+  if (!t) return;
+  e.preventDefault();
+  const name=t.dataset.stQrShow, content=t.dataset.stQrContent || "";
+  const box=document.getElementById("st-qr-preview"), title=document.getElementById("st-qr-preview-title");
+  const cont=document.getElementById("st-qr-preview-content"), qb=document.getElementById("st-qr-preview-box");
+  if (title) title.textContent=name;
+  if (cont) cont.textContent=content;
+  if (qb) {
+    qb.replaceChildren();
+    try {
+      qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
+      const qr=qrcode(0, "M"); qr.addData(content); qr.make();
+      qb.innerHTML=qr.createImgTag(4, 16);
+    } catch (_) { qb.textContent="QR preview unavailable: content is too long or invalid."; }
+  }
+  if (box) box.classList.remove("hidden");
 });
 document.addEventListener("click", (e)=>{
   const t=e.target.closest("[data-st-qr-del]");
@@ -1924,13 +2041,10 @@ document.addEventListener("click", (e)=>{
   const t=e.target.closest("[data-st-play-wav]");
   if(t){ e.preventDefault(); const path=t.dataset.stPlayWav; const pl=document.getElementById("st-sonar-player"); if(pl && path){ pl.src=(IS_DEV?"/bruce":"")+"/file?fs=LittleFS&action=download&name="+encodeURIComponent(path); pl.classList.remove("hidden"); pl.play().catch(()=>{}); } }
 });
-document.addEventListener("click", (e)=>{
-  const t=e.target.closest("[data-st-qr-device]");
-  if(t){ e.preventDefault(); const nm=t.dataset.stQrDevice||""; if(nm && window.quickCli) quickCli("qrcode \""+nm.replace(/"/g,'\\"')+"\""); }
-});
 
 
 function switchMonSlab(name){
+  if (!document.getElementById("monslab-" + name)) name = "overview";
   document.querySelectorAll('[id^="monslab-"]').forEach(v=>v.classList.toggle("hidden", v.id!=="monslab-"+name));
   document.querySelectorAll("[data-monslab]").forEach(b=>{ const on=b.dataset.monslab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
   try{ localStorage.setItem("monitorSlab", name);}catch(e){}
@@ -2112,6 +2226,7 @@ function renderMonitorAlerts(sec){
 
 
 async function refreshStudio(){
+  const generation = ++studioRefreshGeneration;
   const msgBox=document.getElementById("st-msg");
   const lastEl=document.getElementById("st-last");
   const isPreview = window.location.hostname==="127.0.0.1" || window.location.hostname==="localhost" || window.location.port==="8002" || window.location.port==="8001";
@@ -2121,6 +2236,7 @@ async function refreshStudio(){
     const qrP = requestGet("/studio/qrcodes").then(j=>JSON.parse(j)).catch(()=>null);
     const badusbP = requestGet("/badusb/autorun").then(j=>JSON.parse(j)).catch(()=>null);
     const [sys, sec, qr, badusb] = await Promise.all([sysP, secP, qrP, badusbP]);
+    if (generation !== studioRefreshGeneration) return;
     if(sys) studioLastSys = sys;
     if(sec) studioLastSecLab = sec;
     if(qr && qr.qrcodes) studioLastQr = qr.qrcodes;
@@ -2139,7 +2255,8 @@ async function refreshStudio(){
     }
     if(!studioLastSys && !studioLastSecLab) throw new Error("no studio data");
     lastSysInfo = studioLastSys || lastSysInfo;
-    if(lastEl) lastEl.textContent = new Date().toLocaleTimeString() + (isPreview && !sys ? " \u00b7 preview mock" : "");
+    const missing = [["System",sys],["SecLab",sec],["QR",qr],["Auto-Run",badusb]].filter(x=>!x[1]).map(x=>x[0]);
+    if(lastEl) lastEl.textContent = missing.length ? "Dữ liệu có thể cũ" : "Cập nhật " + new Date().toLocaleTimeString();
     renderStudioOverview(studioLastSys, studioLastSecLab, studioLastQr);
     renderStudioMic(studioLastSys, studioLastSecLab);
     renderStudioQr(studioLastQr);
@@ -2147,9 +2264,12 @@ async function refreshStudio(){
     renderStudioBadusb(studioLastBadusb);
     if(msgBox){
       if(isPreview && !sys){ msgBox.className="ota-status ok"; msgBox.textContent="Preview mode \u2014 showing mock Studio data. Connect device for live."; msgBox.classList.remove("hidden"); }
+      else if (missing.length) { msgBox.className="ota-status err"; msgBox.textContent="Không cập nhật được: " + missing.join(", ") + ". Dữ liệu hiển thị có thể cũ; kiểm tra kết nối và thử Refresh."; msgBox.classList.remove("hidden"); }
       else msgBox.classList.add("hidden");
     }
   }catch(e){
+    if (generation !== studioRefreshGeneration) return;
+    if (lastEl) lastEl.textContent = "Không cập nhật được — dữ liệu có thể cũ";
     if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Studio refresh failed"; msgBox.classList.remove("hidden"); }
     console.warn("refreshStudio",e);
   }
@@ -2183,7 +2303,7 @@ function renderStudioOverview(sys, sec, qr){
   const micBox=document.getElementById("st-ov-mic-files");
   if(micBox){
     // try to list mic files via existing file API cache if any, else mock
-    micBox.innerHTML = `<div class="sl-item"><span>Record via device: <b>Others</b> \u2192 <b>Microphone</b> \u2192 <b>Record</b></span><span class="sl-tag ok">ES7210</span></div><div class="sl-item"><span>/BruceMIC \u00b7 LittleFS</span><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Browse</button></div>`;
+    micBox.innerHTML = `<div class="sl-item"><span>Record via device: <b>Studio</b> \u2192 <b>Microphone</b> \u2192 <b>Record</b></span><span class="sl-tag ok">ES7210</span></div><div class="sl-item"><span>/BruceMIC \u00b7 SD or LittleFS</span><button type="button" class="btn-action" onclick="switchStSlab('mic')">Chọn ổ</button></div>`;
   }
   const sonarBox=document.getElementById("st-ov-sonar-events");
   if(sonarBox){
@@ -2212,7 +2332,7 @@ function renderStudioMic(sys, sec){
   const micList=document.getElementById("st-mic-files");
   if(micList){
     // attempt to fetch file list if we have file browser cache, else show hint
-    micList.innerHTML = `<div class="sl-item muted-sm">Recent WAVs live in <code>/BruceMIC</code> & <code>/record</code>. Use <b>Files</b> tab or device <b>Record</b>.</div><div class="sl-item"><span>Quick open</span><span><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">/BruceMIC</button> <button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">/LittleFS</button></span></div>`;
+    micList.innerHTML = `<div class="sl-item muted-sm">Recordings use <code>/BruceMIC</code> on SD when mounted, otherwise LittleFS. Use <b>Files</b> or device <b>Record</b>.</div><div class="sl-item"><span>Quick open</span><span><button type="button" class="btn-action" onclick="openRecordings('LittleFS')">LittleFS</button> <button type="button" class="btn-action" onclick="openRecordings('SD')">SD</button></span></div>`;
   }
 }
 function renderStudioQr(qr){
@@ -2232,9 +2352,9 @@ function renderStudioClock(sys){
   const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
   const now=new Date();
   set("st-clock-time", now.toLocaleTimeString());
-  set("st-clock-tz", `Uptime ${formatUptime(sys.UPTIME_SEC)} \u00b7 Bright ${sys.BRIGHT||"--"}%`);
+  set("st-clock-tz", Intl.DateTimeFormat().resolvedOptions().timeZone || "Browser local");
   set("st-clock-uptime", formatUptime(sys.UPTIME_SEC));
-  set("st-clock-ntp", sys.UPTIME_SEC? "NTP via WiFi STA (if connected)":"--");
+  set("st-clock-ntp", "Sync manually or check on device");
   set("st-dual-slot", sys.OTA_SLOT||"--");
   set("st-dual-next", sys.OTA_NEXT||"--");
   set("st-dual-active", sys.DUALBOOT? "active":"--");
@@ -2251,18 +2371,23 @@ function renderStudioBadusb(b){
   set("st-badusb-enabled", enabled?"ON":"OFF");
   set("st-badusb-armed", armed?"YES":"NO");
   set("st-badusb-payload", d.payloadLabel|| (d.payloadPath? d.payloadFs+":"+d.payloadPath : "—"));
-  set("st-badusb-trigger", (d.trigger==1?"VBUS": d.trigger==2?"Delayed":"Enumeration")+" · " + (d.runOncePerPlug?"Once":"Loop"));
+  set("st-badusb-trigger", (d.trigger==1?"VBUS unavailable": d.trigger==2?"Delayed":"Enumeration")+" · " + (d.runOncePerPlug?"Once":"Loop"));
   set("st-badusb-delay", (d.delayMs||0)+"ms");
   set("st-badusb-confirm", d.confirmWindow? "ON "+(d.confirmMs||3000)+"ms":"OFF");
   badge("st-badusb-badge", running?"RUNNING": enabled? (armed?"ARMED":"IDLE"):"OFF", running?"alert": enabled?"on":"");
-  const enToggle=document.getElementById("st-badusb-enabled-toggle"); if(enToggle) enToggle.checked=enabled;
-  const cToggle=document.getElementById("st-badusb-confirm-toggle"); if(cToggle) cToggle.checked=!!d.confirmWindow;
-  const onceToggle=document.getElementById("st-badusb-once-toggle"); if(onceToggle) onceToggle.checked=!!d.runOncePerPlug;
-  const fsEl=document.getElementById("st-badusb-fs"); if(fsEl && !fsEl.value) fsEl.value=d.payloadFs||"LittleFS";
-  const pathEl=document.getElementById("st-badusb-path"); if(pathEl && !pathEl.dataset.touched) pathEl.placeholder=d.payloadPath||"/payload.txt";
-  const delayEl=document.getElementById("st-badusb-delayMs"); if(delayEl) delayEl.placeholder=String(d.delayMs||1500);
-  const trigEl=document.getElementById("st-badusb-trigger-sel"); if(trigEl) trigEl.value=String(d.trigger||0);
-  const cmEl=document.getElementById("st-badusb-confirmMs"); if(cmEl) cmEl.placeholder=String(d.confirmMs||3000);
+  const setField=(id, value, checkbox=false) => {
+    const field=document.getElementById(id);
+    if (!field || field.dataset.touched || document.activeElement === field) return;
+    if (checkbox) field.checked=!!value; else field.value=String(value ?? "");
+  };
+  setField("st-badusb-enabled-toggle", enabled, true);
+  setField("st-badusb-confirm-toggle", d.confirmWindow, true);
+  setField("st-badusb-once-toggle", d.runOncePerPlug, true);
+  setField("st-badusb-fs", d.payloadFs || "LittleFS");
+  setField("st-badusb-path", d.payloadPath || "");
+  setField("st-badusb-delayMs", d.delayMs ?? 1500);
+  setField("st-badusb-trigger-sel", d.trigger ?? 0);
+  setField("st-badusb-confirmMs", d.confirmMs ?? 3000);
 }
 
 let portalTemplates=[], portalActive="";
@@ -2336,14 +2461,14 @@ function slBusyButtons(busy) {
   if (box) box.setAttribute("aria-busy", busy ? "true" : "false");
 }
 function slBusyNaptButtons(busy) {
-  document.querySelectorAll("#sl-napt-start, #sl-napt-stop, #sl-napt-auto, #sl-napt-export, #sl-napt-clear").forEach((b) => {
+  document.querySelectorAll("#sl-napt-start, #sl-napt-stop, #sl-napt-auto, #sl-napt-export, #sl-napt-clear, #mon-napt-toggle, #mon-napt-export").forEach((b) => {
     b.disabled = busy;
   });
   const box = $("#sl-napt-msg");
   if (box) box.setAttribute("aria-busy", busy ? "true" : "false");
 }
 
-async function naptPost(params) {
+async function naptPost(params, messageBox = $("#sl-napt-msg")) {
   if (params.action === "block" || params.action === "unblock") {
     const domain = String(params.domain || "").trim();
     if (!domain) {
@@ -2356,7 +2481,7 @@ async function naptPost(params) {
   secLabNaptBusy = true;
   secLabLastNaptActionAt = Date.now();
   slBusyNaptButtons(true);
-  const box = $("#sl-napt-msg");
+  const box = messageBox;
   let ok = false;
   try {
     const raw = await requestPost("/seclab/napt", params);
@@ -3000,8 +3125,9 @@ if (typeof setInterval === "function") setInterval(() => { if (!document.hidden 
 
  // ==== SecLab compact subtabs + overview mirror (2026-11) ====
  function switchSlab(name){
-   const views=document.querySelectorAll(".slab-view");
-   const btns=document.querySelectorAll(".slab-btn");
+   if (!document.getElementById("slab-" + name)) name = "overview";
+   const views=document.querySelectorAll('[id^="slab-"]');
+   const btns=document.querySelectorAll("[data-slab]");
    views.forEach(v=>v.classList.toggle("hidden", v.id!=="slab-"+name));
    btns.forEach(b=>{ const on=b.dataset.slab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
    try{ localStorage.setItem("seclabSlab", name);}catch(e){}
@@ -3036,7 +3162,7 @@ if (typeof setInterval === "function") setInterval(() => { if (!document.hidden 
      if(ovStudioDetail){ const sig=sn.signal||"--"; ovStudioDetail.textContent=`Signal ${sig} · /usb_vault ${u.flashImgBytes? Math.round(u.flashImgBytes/1024)+"KB img":"no img"}`; }
    }catch(e){ console.warn("syncOverviewTiles",e); }
  }
- document.querySelectorAll(".slab-btn").forEach(btn=>{
+ document.querySelectorAll("[data-slab]").forEach(btn=>{
    btn.addEventListener("click", ()=> switchSlab(btn.dataset.slab));
  });
  document.querySelectorAll("[data-monslab]").forEach(btn=>{
@@ -3060,34 +3186,47 @@ if (typeof setInterval === "function") setInterval(() => { if (!document.hidden 
      renderMonitorAlerts(monLastSecLab);
    });
  });
+ document.getElementById("mon-alerts-clear")?.addEventListener("click", () => {
+   const all = document.querySelector('.mon-filter[data-filter="all"]');
+   if (all) all.click();
+ });
  document.getElementById("mon-refresh")?.addEventListener("click", ()=> refreshMonitor());
  document.getElementById("mon-auto")?.addEventListener("change", (e)=>{ if(e.target.checked) refreshMonitor(); });
- document.getElementById("mon-wifi-scan")?.addEventListener("click", async ()=>{
-   const box=document.getElementById("mon-wifi-list");
-   if(!box) return;
-   box.innerHTML='<div class="sl-item muted-sm">Scanning 2.4 GHz...</div>';
-   try{
-     const data=JSON.parse(await requestGet("/wifiscan"));
-     const nets=data.nets||[];
-     box.innerHTML = nets.slice(0,12).map(n=>`<div class="sl-item"><span>${slEsc(n.ssid)} <small class="muted-sm">${n.enc?"🔒":"🔓"} ${n.rssi}dBm</small></span><span class="sl-tag">${n.saved?"Saved":(n.enc?"WPA":"Open")}</span></div>`).join("") || '<div class="sl-item muted-sm">No APs</div>';
-   }catch(e){ box.innerHTML=`<div class="sl-item muted-sm">Scan failed: ${slEsc(e.message)}</div>`; }
- });
  document.getElementById("mon-net-scan")?.addEventListener("click", async ()=>{
    const box=document.getElementById("mon-net-scanlist");
    if(!box) return;
-   box.innerHTML='<div class="sl-item muted-sm">Scanning 2.4 GHz...</div>';
-   try{
+   box.textContent="Scanning 2.4 GHz...";
+   try {
      const data=JSON.parse(await requestGet("/wifiscan"));
-     const nets=data.nets||[];
-     box.innerHTML = nets.map(n=>`<div class="sl-item"><span>${slEsc(n.ssid)} <small class="muted-sm">CH${n.channel||"?"} ${n.enc?"🔒":"🔓"} ${n.rssi}dBm ${n.bssid||""}</small></span><button type="button" class="sl-tag" onclick="document.getElementById('mon-net-scanlist').dataset.ssid='${slEsc(n.ssid)}'">Use</button></div>`).join("") || '<div class="sl-item muted-sm">No APs</div>';
-   }catch(e){ box.innerHTML=`<div class="sl-item muted-sm">Scan failed: ${slEsc(e.message)}</div>`; }
+     box.replaceChildren();
+     const nets=data.nets || [];
+     for (const n of nets) {
+       const row=document.createElement("div"); row.className="sl-item";
+       const info=document.createElement("span");
+       info.textContent=`${n.ssid || ""} · CH${n.channel || "?"} ${n.enc ? "🔒" : "🔓"} ${n.rssi}dBm ${n.bssid || ""}`;
+       const button=document.createElement("button"); button.type="button"; button.className="sl-tag"; button.textContent="Use";
+       button.addEventListener("click", () => openWifiModal(n));
+       row.append(info, button); box.appendChild(row);
+     }
+     if (!nets.length) box.textContent="No APs";
+   } catch(e) { box.textContent=`Scan failed: ${e.message}`; }
  });
- document.getElementById("mon-napt-toggle")?.addEventListener("click", ()=>{
-   const isOn = monLastSecLab?.napt?.running;
-   if(isOn) naptPost({action:"stop"}); else naptPost({action:"start"});
-   setTimeout(refreshMonitor, 900);
+ document.getElementById("mon-napt-toggle")?.addEventListener("click", async ()=>{
+   const state = monLastSecLab?.napt;
+   const box = document.getElementById("mon-msg");
+   if (!state) { slShowMsg(box, "NAPT status unavailable; refresh first.", false, 0); return; }
+   const action = state.running || state.starting ? "stop" : "start";
+   await naptPost({action}, box);
+   // Refresh without erasing the action result shown in Monitor.
+   const cls=box?.className, message=box?.textContent;
+   await refreshMonitor();
+   if (box && message) { box.className=cls; box.textContent=message; }
  });
- document.getElementById("mon-napt-export")?.addEventListener("click", ()=> naptPost({action:"export"}));
+ document.getElementById("mon-napt-export")?.addEventListener("click", async ()=>{
+   if (await naptPost({action:"export"}, document.getElementById("mon-msg"))) {
+     openFileInEditor("LittleFS", "/napt_dns.log");
+   }
+ });
  (function(){
    let last="overview";
    try{ const v=localStorage.getItem("monitorSlab"); if(v) last=v; }catch(e){}

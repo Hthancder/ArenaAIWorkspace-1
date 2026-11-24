@@ -1,0 +1,13 @@
+const fs=require('fs'), vm=require('vm'), assert=require('assert');
+const src=fs.readFileSync(process.argv[2],'utf8');
+const a=src.indexOf('function renderStudioBadusb('), b=src.indexOf('\nfunction ', a+10);
+assert(a>=0&&b>a);
+const ids=['st-badusb-enabled','st-badusb-armed','st-badusb-payload','st-badusb-trigger','st-badusb-delay','st-badusb-confirm','st-badusb-badge','st-badusb-enabled-toggle','st-badusb-confirm-toggle','st-badusb-once-toggle','st-badusb-fs','st-badusb-path','st-badusb-delayMs','st-badusb-trigger-sel','st-badusb-confirmMs'];
+const fields=Object.fromEntries(ids.map(id=>[id,{id,value:'',checked:false,dataset:{},className:'',textContent:''}]));
+const doc={getElementById:id=>fields[id]||null,activeElement:null};const ctx={document:doc,studioLastBadusb:{}};vm.createContext(ctx);vm.runInContext(src.slice(a,b),ctx);
+ctx.renderStudioBadusb({payloadFs:'SD',payloadPath:'/test.txt',delayMs:0,trigger:2,confirmMs:4500,confirmWindow:true,runOncePerPlug:true});
+assert.equal(fields['st-badusb-fs'].value,'SD');assert.equal(fields['st-badusb-delayMs'].value,'0');assert.equal(fields['st-badusb-trigger-sel'].value,'2');assert(fields['st-badusb-confirm-toggle'].checked);
+fields['st-badusb-fs'].value='LittleFS';fields['st-badusb-fs'].dataset.touched='1';fields['st-badusb-trigger-sel'].value='1';fields['st-badusb-trigger-sel'].dataset.touched='1';
+ctx.renderStudioBadusb({payloadFs:'SD',trigger:2});assert.equal(fields['st-badusb-fs'].value,'LittleFS');assert.equal(fields['st-badusb-trigger-sel'].value,'1');
+delete fields['st-badusb-fs'].dataset.touched;ctx.renderStudioBadusb({payloadFs:'SD'});assert.equal(fields['st-badusb-fs'].value,'SD');
+console.log('Studio settings refresh and unsaved input checks passed');

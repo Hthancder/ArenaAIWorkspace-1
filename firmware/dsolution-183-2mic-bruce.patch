@@ -2758,10 +2758,10 @@ index bda7b42..0bbd995 100644
 +.monitor-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 +#mon-last { font-size:11px; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300..eb7d2cf 100644
+index 5290300b..b27bf10a 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,1258 @@
+@@ -1,700 +1,1261 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2861,10 +2861,14 @@ index 5290300..eb7d2cf 100644
 +            <button type="button" class="btn-action" onclick="switchTab('screen')">Live Screen Mirror</button>
 +            <button type="button" class="btn-action" onclick="switchTab('personalize')">Theme &amp; Identity</button>
 +            <button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi Switch</button>
-+            <button type="button" class="btn-action btn-default" onclick="openOtaModal()">WebOTA Flash</button>
-+            <button type="button" class="btn-action btn-warn act-reboot">Reboot Device</button>
-+            <button type="button" class="btn-action btn-danger act-bootloader">USB Bootloader</button>
 +          </div>
++          <details class="sl-group sl-mt"><summary>Hệ thống nâng cao</summary>
++            <div class="sl-row sl-mt">
++              <button type="button" class="btn-action btn-default" onclick="openOtaModal()">WebOTA Flash</button>
++              <button type="button" class="btn-action btn-warn act-reboot">Reboot Device</button>
++              <button type="button" class="btn-action btn-danger act-bootloader">USB Bootloader</button>
++            </div>
++          </details>
 +          <div class="ux-settings" aria-label="Device sound and display">
 +            <label><input type="checkbox" id="ux-sound" /> System sounds</label>
 +            <label><input type="checkbox" id="ux-menu-tones" /> Menu tones (off = alerts only)</label>
@@ -2971,7 +2975,7 @@ index 5290300..eb7d2cf 100644
 +          <div class="ov-tile"><strong>Alerts</strong><b id="mon-ov-alerts">0 alerts</b><small class="muted-sm" id="mon-ov-alerts-sub">WIDS · LAN Guard · Sonar · BLE</small><span id="mon-ov-alerts-badge" class="sl-badge">IDLE</span>
 +            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-monslab-jump="alerts">Xem Alerts →</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/wids_alerts.txt')">WIDS Log</button></div>
 +          </div>
-         </div>
++        </div>
 +        <div class="dash-grid sl-mt" style="padding:0">
 +          <div class="dash-card">
 +            <div class="dash-card-head"><h3>Active Chains & Tools</h3><span id="mon-ov-chain-badge" class="sl-badge">IDLE</span></div>
@@ -2979,9 +2983,8 @@ index 5290300..eb7d2cf 100644
 +            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="lan">Mở SecLab →</button><button type="button" class="btn-action" onclick="switchTab('console')">Console</button></div>
 +          </div>
 +          <div class="dash-card">
-+            <div class="dash-card-head"><h3>Quick Wi-Fi Scan</h3><span class="sl-badge" id="mon-ov-wifi-badge">2.4 GHz</span></div>
-+            <div class="sl-row"><button type="button" class="btn-action btn-default" id="mon-wifi-scan">Scan APs</button><button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi Modal</button></div>
-+            <div id="mon-wifi-list" class="sl-scroll sl-mt"></div>
++            <div class="dash-card-head"><h3>Wi-Fi Scan</h3><span class="sl-badge">2.4 GHz</span></div>
++            <div class="sl-row"><button type="button" class="btn-action btn-default" data-monslab-jump="network">Open Network &amp; Wi-Fi →</button></div>
 +          </div>
 +        </div>
 +      </div>
@@ -3018,7 +3021,7 @@ index 5290300..eb7d2cf 100644
 +          <div class="sl-split sl-mt"><div><strong class="sl-sub">Hidden & Decloaked APs</strong><div id="mon-air-hidden" class="sl-scroll"></div></div><div><strong class="sl-sub">Probe Clusters</strong><div id="mon-probe-list" class="sl-scroll"></div></div></div>
 +          <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="wifi">Mở Wi-Fi chi tiết →</button></div>
 +        </details>
-       </div>
++      </div>
 +
 +      <!-- System -->
 +      <div id="monslab-system" class="slab-view hidden">
@@ -3110,7 +3113,7 @@ index 5290300..eb7d2cf 100644
 +            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="clock">Mở Clock →</button><button type="button" class="btn-action" id="st-sync-time">Sync Browser Time</button></div>
 +          </div>
 +          <div class="ov-tile"><strong>Microphone</strong><b id="st-ov-mic">--</b><small class="muted-sm" id="st-ov-mic-sub">Spectrum / Record / dB</small><span id="st-ov-mic-badge" class="sl-badge">ES7210</span>
-+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Mic →</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Recordings →</button></div>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Mic →</button><button type="button" class="btn-action" onclick="switchStSlab('mic')">Recordings →</button></div>
 +          </div>
 +          <div class="ov-tile"><strong>Sonar Guard</strong><b id="st-ov-sonar">IDLE</b><small class="muted-sm" id="st-ov-sonar-sub">Carrier --Hz · Sens --</small><span id="st-ov-sonar-badge" class="sl-badge">IDLE</span>
 +            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Sonar →</button></div>
@@ -3119,7 +3122,7 @@ index 5290300..eb7d2cf 100644
 +            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="qr">Mở QR →</button></div>
 +          </div>
 +          <div class="ov-tile"><strong>Megalodon</strong><b id="st-ov-mega">Ready</b><small class="muted-sm" id="st-ov-mega-sub">Soundboard · shark game</small><span id="st-ov-mega-badge" class="sl-badge">♪</span>
-+            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="quickCli('megalodon')">Launch via Console</button></div>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('screen')">Open device controls</button></div>
 +          </div>
 +          <div class="ov-tile"><strong>Dual-Boot</strong><b id="st-ov-dual">--</b><small class="muted-sm" id="st-ov-dual-sub">ota_0 / ota_1</small><span id="st-ov-dual-badge" class="sl-badge">--</span>
 +            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/bruce.conf')">bruce.conf</button></div>
@@ -3127,9 +3130,9 @@ index 5290300..eb7d2cf 100644
 +        </div>
 +        <div class="dash-grid sl-mt" style="padding:0">
 +          <div class="dash-card">
-+            <div class="dash-card-head"><h3>Mic Recent Files</h3><span id="st-ov-mic-badge2" class="sl-badge">WAV</span></div>
++            <div class="dash-card-head"><h3>Mic Recordings</h3><span id="st-ov-mic-badge2" class="sl-badge">WAV</span></div>
 +            <div id="st-ov-mic-files" class="sl-scroll" style="max-height:132px"></div>
-+            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Open /BruceMIC →</button><button type="button" class="btn-action" onclick="quickCli('mic record')">CLI: mic</button></div>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchStSlab('mic')">Chọn ổ bản ghi →</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open device controls</button></div>
 +          </div>
 +          <div class="dash-card">
 +            <div class="dash-card-head"><h3>Sonar Events</h3><span id="st-ov-sonar-badge2" class="sl-badge">LIVE</span></div>
@@ -3145,12 +3148,11 @@ index 5290300..eb7d2cf 100644
 +          <div class="dash-card-head"><h3>Microphone — ES7210 Dual-Mic</h3><span class="sl-badge">48 kHz</span></div>
 +          <div class="kv-grid">
 +            <div class="kv-item"><span>Mode</span><b id="st-mic-mode">Spectrum / dB / Record</b></div>
-+            <div class="kv-item"><span>Last WAV</span><b id="st-mic-last">--</b></div>
-+            <div class="kv-item"><span>Storage</span><b id="st-mic-storage">LittleFS /BruceMIC</b></div>
++            <div class="kv-item"><span>Storage</span><b id="st-mic-storage">SD or LittleFS /BruceMIC</b></div>
 +            <div class="kv-item"><span>Gain</span><b id="st-mic-gain">24 dB</b></div>
 +          </div>
-+          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="quickCli('mic spectrum')">Spectrum (device)</button><button type="button" class="btn-action" onclick="quickCli('mic db')">dB Meter</button><button type="button" class="btn-action" onclick="quickCli('mic record')">Record WAV</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Open Recordings</button></div>
-+          <strong class="sl-sub sl-mt">Recent WAV Recordings</strong>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="switchTab('screen')">Open Studio → Microphone on device</button><button type="button" class="btn-action" onclick="openRecordings('LittleFS')">Bản ghi: LittleFS</button><button type="button" class="btn-action" onclick="openRecordings('SD')">Bản ghi: SD</button></div>
++          <strong class="sl-sub sl-mt">Recordings</strong>
 +          <div id="st-mic-files" class="sl-scroll sl-mt"></div>
 +        </div>
 +        <details class="sl-group" open>
@@ -3161,7 +3163,7 @@ index 5290300..eb7d2cf 100644
 +            <div class="kv-item"><span>Motion Peak</span><b id="st-sonar-pk">0%</b></div>
 +            <div class="kv-item"><span>Signal</span><b id="st-sonar-dir">--</b></div>
 +          </div>
-+          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="quickCli('sonar')">Launch Sonar Guard (device)</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">View Log</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Audio Clips</button></div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('screen')">Open Sonar on device</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">View Log</button><button type="button" class="btn-action" onclick="switchStSlab('mic')">Audio Clips</button></div>
 +          <audio id="st-sonar-player" class="sl-audio hidden" controls preload="none"></audio>
 +          <div id="st-sonar-events" class="sl-scroll sl-mt"></div>
 +        </details>
@@ -3187,16 +3189,16 @@ index 5290300..eb7d2cf 100644
 +      <!-- Clock & More -->
 +      <div id="stslab-clock" class="slab-view hidden">
 +        <div class="kv-grid">
-+          <div class="kv-item"><span>Device Time (NTP RTC)</span><b id="st-clock-time">--:--:--</b></div>
-+          <div class="kv-item"><span>Timezone / DST</span><b id="st-clock-tz">UTC+0 · DST off</b></div>
++          <div class="kv-item"><span>Browser Time</span><b id="st-clock-time">--:--:--</b></div>
++          <div class="kv-item"><span>Browser Timezone</span><b id="st-clock-tz">UTC+0 · DST off</b></div>
 +          <div class="kv-item"><span>Uptime</span><b id="st-clock-uptime">--</b></div>
-+          <div class="kv-item"><span>NTP Sync</span><b id="st-clock-ntp">--</b></div>
++          <div class="kv-item"><span>Device Clock</span><b id="st-clock-ntp">--</b></div>
 +        </div>
-+        <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" id="st-clock-sync">Sync Browser Time → Device</button><button type="button" class="btn-action" onclick="quickCli('date')">CLI: date</button><button type="button" class="btn-action" onclick="quickCli('timer')">Timer (device)</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open Screen Mirror</button></div>
++        <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" id="st-clock-sync">Sync Browser Time → Device</button><button type="button" class="btn-action" onclick="quickCli('date')">CLI: date</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open Clock → Timer on device</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open Screen Mirror</button></div>
 +        <details class="sl-group" open>
 +          <summary><span>Megalodon — Soundboard & Game</span><span class="sl-badge">♪</span></summary>
 +          <p class="muted-sm sl-mt">Retro shark game + soundboard trên device. Chạy trực tiếp trên màn hình 1.83″.</p>
-+          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="quickCli('megalodon')">Launch Megalodon (device)</button><button type="button" class="btn-action" onclick="quickCli('tone 1000 500')">Test Tone</button></div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="switchTab('screen')">Open Studio → Megalodon on device</button><button type="button" class="btn-action" onclick="quickCli('tone 1000 500')">Test Tone</button></div>
 +        </details>
 +        <details class="sl-group">
 +          <summary><span>Dual-Boot Switcher</span><span id="st-dual-badge" class="sl-badge">--</span></summary>
@@ -3214,7 +3216,7 @@ index 5290300..eb7d2cf 100644
 +      <div id="stslab-badusb" class="slab-view hidden">
 +        <div class="dash-card dash-card-wide">
 +          <div class="dash-card-head"><h3>BadUSB Auto-Run — Plug & Run Payload</h3><span id="st-badusb-badge" class="sl-badge">OFF</span></div>
-+          <p class="muted-sm">Cắm vào máy là chạy luôn DuckyScript đã chuẩn bị. 3s đếm ngược để hủy bằng bất kỳ nút nào. Lưu trong <code>bruce.conf</code>.</p>
++          <p class="muted-sm">Khi USB được nhận, payload có thể chạy tự động. Cửa sổ huỷ và thời gian chờ phụ thuộc cài đặt bên dưới. Chỉ dùng với thiết bị được phép. Nếu đang bật, lưu payload mới có thể làm Auto-Run chạy khi host được nhận.</p>
 +          <div class="kv-grid sl-mt">
 +            <div class="kv-item"><span>Enabled</span><b id="st-badusb-enabled">--</b></div>
 +            <div class="kv-item"><span>Armed</span><b id="st-badusb-armed">--</b></div>
@@ -3233,33 +3235,33 @@ index 5290300..eb7d2cf 100644
 +            <input type="text" id="st-badusb-path" placeholder="/payload.txt or /badusb/demo.txt" class="sl-input" style="flex:1;min-width:180px" />
 +            <button type="button" class="btn-action btn-default" id="st-badusb-set-payload">Set Payload</button>
 +          </div>
++          <details class="sl-group sl-mt"><summary>Cài đặt nâng cao</summary>
 +          <div class="sl-row sl-mt">
-+            <input type="number" id="st-badusb-delayMs" min="0" max="10000" step="100" placeholder="delayMs" class="sl-input" style="max-width:120px" />
-+            <button type="button" class="btn-action" id="st-badusb-set-delay">Set Delay (ms)</button>
-+            <select id="st-badusb-trigger-sel" class="sl-input" style="max-width:160px"><option value="0">On Enumeration</option><option value="1">On VBUS</option><option value="2">Delayed +2s</option></select>
-+            <button type="button" class="btn-action" id="st-badusb-set-trigger">Set Trigger</button>
++            <label for="st-badusb-delayMs">Delay (ms)</label><input type="number" id="st-badusb-delayMs" min="0" max="10000" step="100" placeholder="delayMs" class="sl-input" style="max-width:120px" />
++            <select id="st-badusb-trigger-sel" class="sl-input" style="max-width:160px"><option value="0">On Enumeration</option><option value="1" disabled>VBUS unavailable</option><option value="2">Delayed +2s</option></select>
 +          </div>
 +          <div class="sl-row sl-mt">
-+            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-confirm-toggle" /> Confirm 3s window</label>
++            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-confirm-toggle" /> Cửa sổ xác nhận</label>
 +            <input type="number" id="st-badusb-confirmMs" min="1000" max="10000" step="500" placeholder="confirmMs" class="sl-input" style="max-width:120px" />
-+            <button type="button" class="btn-action" id="st-badusb-set-confirm">Set Confirm</button>
 +            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-once-toggle" /> Run once per plug</label>
-+            <button type="button" class="btn-action" id="st-badusb-set-once">Set Once</button>
 +          </div>
-+          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">Browse Files → Pick payload</button><button type="button" class="btn-action" onclick="quickCli('badusb')">Open BadUSB (device)</button></div>
++          <button type="button" class="btn-action btn-default sl-mt" id="st-badusb-save-settings">Lưu cài đặt nâng cao</button>
++          <small>Chỉ lưu các mục đã thay đổi; mỗi mục được lưu riêng.</small></details>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="startPayloadPicker()">Chọn payload từ Files</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open BadUSB on device</button></div>
 +          <div id="st-badusb-msg" class="ota-status hidden" style="margin-top:8px"></div>
-+        </div>
+         </div>
 +        <details class="sl-group" open>
-+          <summary><span>How it works</span><span class="sl-badge">3s cancel</span></summary>
-+          <p class="muted-sm sl-mt">1. Chọn payload DuckyScript trong <b>LittleFS</b> hoặc <b>SD</b> (ví dụ <code>/payload.txt</code>). 2. Bật <b>Enable</b>. 3. Cắm USB vào host — firmware đợi <b>delayMs</b> sau khi <code>tud_mounted()</code>, hiện countdown <b>confirmMs</b> (mặc định 3000ms), bấm bất kỳ nút để hủy, không thì chạy <code>key_input()</code>. Lưu persistent trong <code>bruce.conf → badUsbAutoRun</code>. Trigger: Enumeration (mặc định), VBUS, hoặc Delayed thêm 2s.</p>
++          <summary><span>How it works</span><span class="sl-badge">Có thể huỷ</span></summary>
++          <p class="muted-sm sl-mt">1. Chọn payload DuckyScript trong <b>LittleFS</b> hoặc <b>SD</b> (ví dụ <code>/payload.txt</code>). 2. Bật <b>Enable</b>. 3. Cắm USB vào host — firmware đợi <b>delayMs</b> sau khi <code>tud_mounted()</code>, nếu bật xác nhận thì hiện countdown <b>confirmMs</b> (mặc định 3000ms), bấm nút để hủy, không thì chạy <code>key_input()</code>. Lưu persistent trong <code>bruce.conf → badUsbAutoRun</code>. Trigger: Enumeration (mặc định) hoặc Delayed thêm 2s. VBUS chưa hỗ trợ. Chạy lặp chỉ khi tắt Run once; mỗi lần đều kiểm tra kết nối và cửa sổ xác nhận.</p>
 +        </details>
-+      </div>
+       </div>
 +
 +    </section>
 +
 +    <!-- TAB 2: FILES -->
 +    <!-- TAB 2: FILES -->
 +    <section id="tab-files" class="tab-pane hidden">
++      <div id="payload-picker-banner" class="ota-status hidden" role="status">Chọn “Dùng làm payload” tại file cần dùng. Chưa chạy hoặc lưu tự động. <button type="button" class="btn-action" onclick="cancelPayloadPicker()">Huỷ chọn</button></div>
        <div class="free-space">
 -        <span
 -          class="btn-action act-browse block-space free-sd"
@@ -3745,7 +3747,11 @@ index 5290300..eb7d2cf 100644
 -                    stroke-linecap="round"
 -                    stroke-linejoin="round"
 -                  />
--                </svg>
++              <button type="button" class="nav nav-page-up" data-direction="NextPage" title="Next Page" aria-label="Next Page">
++                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
++                  <path d="M15.5 12L5.72 19.11V4.89L15.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
++                  <line x1="18.2" y1="4.9" x2="18.2" y2="19.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                 </svg>
 -              </div>
 -              <div class="nav nav-up" data-direction="Up" title="Up">
 -                <svg
@@ -3758,11 +3764,7 @@ index 5290300..eb7d2cf 100644
 -                    fill="currentColor"
 -                    d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"
 -                  />
-+              <button type="button" class="nav nav-page-up" data-direction="NextPage" title="Next Page" aria-label="Next Page">
-+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-+                  <path d="M15.5 12L5.72 19.11V4.89L15.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-+                  <line x1="18.2" y1="4.9" x2="18.2" y2="19.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                 </svg>
+-                </svg>
 -              </div>
 -              <div
 -                class="nav nav-menu"
@@ -3890,13 +3892,13 @@ index 5290300..eb7d2cf 100644
 +              <div class="bm-status">
 +                <span id="bm-owner-pill" class="bm-pill">DSolution</span>
 +                <span class="bm-bat">98%</span>
-+              </div>
+               </div>
 +              <div class="bm-center">
 +                <div class="bm-fin"></div>
 +                <div id="bm-title" class="bm-title">DSolution</div>
 +                <div id="bm-sub" class="bm-sub">ESP32-S3 SEC LAB</div>
 +                <div class="bm-bar"><i></i></div>
-               </div>
++              </div>
 +              <div class="bm-foot">v1.14 &bull; <span id="bm-mdns">http://bruce.local</span></div>
              </div>
 -            <div class="p-bot">
@@ -3986,18 +3988,18 @@ index 5290300..eb7d2cf 100644
 +                <input type="text" id="pers-mdns" maxlength="24" placeholder="bruce" />
 +              </div>
 +              <div class="field">
-+                <label for="pers-bright">LCD Brightness: <b id="pers-bright-val">80%</b></label>
-+                <input type="range" id="pers-bright" min="10" max="100" value="80" />
++                <span>LCD brightness is managed in Dashboard → Quick Controls.</span>
++                <button type="button" class="btn-action" onclick="switchTab('dashboard')">Open display controls</button>
 +              </div>
 +              <div class="field">
 +                <label for="pers-apssid">AP Hotspot SSID</label>
 +                <input type="text" id="pers-apssid" maxlength="32" placeholder="BruceNet" />
-+              </div>
+               </div>
 +              <div class="field">
 +                <label for="pers-appwd">AP Password (8+ chars or blank)</label>
 +                <input type="text" id="pers-appwd" maxlength="63" placeholder="brucenet" />
-               </div>
-             </div>
++              </div>
++            </div>
 +            <div class="field">
 +              <label for="pers-style">Main menu layout &amp; WebUI style</label>
 +              <select id="pers-style"><option value="0">Carousel · rounded</option><option value="1">Grid · technical</option></select>
@@ -4020,7 +4022,7 @@ index 5290300..eb7d2cf 100644
 +            <div class="pers-actions">
 +              <button type="button" class="btn-action btn-default" id="btn-save-pers">Apply &amp; Save to Flash</button>
 +              <button type="button" class="btn-action" id="btn-reload-pers">Reset Form</button>
-+            </div>
+             </div>
 +            <div id="pers-status" class="ota-status hidden"></div>
            </div>
          </div>
@@ -4118,7 +4120,7 @@ index 5290300..eb7d2cf 100644
 +          <button type="button" class="chip-cmd" data-cmd="tone 2400 120">tone 2400 120</button>
 +          <button type="button" class="chip-cmd" data-cmd="led hex 00F0FF">led hex 00F0FF</button>
 +          <button type="button" class="chip-cmd" data-cmd="led off">led off</button>
-         </div>
++        </div>
 +        <pre id="console-out" class="console-out">Bruce SecLab Serial Console Ready. Type 'help' or click a command chip above.&#10;</pre>
 +        <div class="console-input-row">
 +          <span class="mono prompt-pfx">#</span>
@@ -4140,8 +4142,11 @@ index 5290300..eb7d2cf 100644
 +        <div class="seclab-bar-actions">
 +          <button type="button" class="btn-action" id="sl-refresh">Refresh Now</button>
 +          <button type="button" class="btn-action btn-danger" data-sl-action="stop_all" data-sl-confirm="Stop all stoppable SecLab+ tools? An in-progress pairing audit will finish on its own.">Stop All</button>
-+        </div>
-+      </div>
+         </div>
+       </div>
+-      <div class="dialog editor hidden">
+-        <div class="dialog-head">
+-          Edit: <span class="editor-file-name"></span>
 +
 +      <!-- Sub-tabs inside SecLab -->
 +      <div class="seclab-subtabs" role="tablist" aria-label="SecLab sections">
@@ -4150,21 +4155,14 @@ index 5290300..eb7d2cf 100644
 +        <button type="button" class="slab-btn" data-slab="lan">LAN & HTTP</button>
 +        <button type="button" class="slab-btn" data-slab="ble">BLE & HID</button>
 +        <button type="button" class="slab-btn" data-slab="studio">USB Vault</button>
-       </div>
--      <div class="dialog editor hidden">
--        <div class="dialog-head">
--          Edit: <span class="editor-file-name"></span>
++      </div>
 +      <div id="sl-plus-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false" style="margin:10px 16px 0"></div>
 +
 +      <!-- ========== OVERVIEW ========== -->
 +      <div id="slab-overview" class="slab-view">
 +        <div class="sl-note">
 +          <strong>Authorized security audits only.</strong> Chỉ dùng trên hệ thống bạn sở hữu/được phép. 2C proxy chỉ xử lý cleartext HTTP/1.0 — TLS <code>CONNECT</code> luôn bị từ chối.
-         </div>
--        <div class="dialog-body">
--          <div class="editor-container">
--            <div class="line-numbers"></div>
--            <textarea class="file-content" style="resize: none"></textarea>
++        </div>
 +
 +        <!-- Compact status tiles — 1 line overview -->
 +        <div class="overview-grid sl-mt">
@@ -4174,7 +4172,11 @@ index 5290300..eb7d2cf 100644
 +          <div class="ov-tile"><strong>LAN Audit</strong><b id="ov-lan">0 / 0</b><small class="muted-sm">Devices / Findings</small><button type="button" class="btn-action sl-mt" data-slab-jump="lan">Mở LAN & HTTP →</button></div>
 +          <div class="ov-tile"><strong>BLE / HID</strong><b id="ov-ble">IDLE</b><small class="muted-sm"><span id="ov-ble-detail">GATT findings · LED link</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="ble">Mở BLE & HID →</button></div>
 +          <div class="ov-tile"><strong>USB Vault</strong><b id="ov-studio">IDLE · 0 files</b><small class="muted-sm"><span id="ov-studio-detail">/usb_vault · BadUSB payloads</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="studio">Mở USB Vault →</button></div>
-+        </div>
+         </div>
+-        <div class="dialog-body">
+-          <div class="editor-container">
+-            <div class="line-numbers"></div>
+-            <textarea class="file-content" style="resize: none"></textarea>
 +
 +        <!-- Hidden compact kv summary (IDs kept for JS, visually compact) -->
 +        <div class="ov-kv-compact sl-mt">
@@ -4195,8 +4197,11 @@ index 5290300..eb7d2cf 100644
 +          <div class="sl-row sl-mt">
 +            <span id="sl-plus-badge" class="sl-badge">READY</span>
 +            <small class="muted-sm">Dừng nhanh: <em>Stop All</em> không hủy pairing audit đang chạy.</small>
-+          </div>
-+        </div>
+           </div>
+         </div>
+-        <div class="dialog-footer">
+-          <button class="btn-action act-save-edit-file" title="CTRL + S">
+-            Save
 +
 +        <div class="sl-row sl-mt">
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/pmkid/all.hc22000')">PMKID Hash</button>
@@ -4228,7 +4233,7 @@ index 5290300..eb7d2cf 100644
 +            <button type="button" class="btn-action btn-default" id="sl-napt-auto" aria-pressed="true">Auto-Block Trackers: ON</button>
 +            <button type="button" class="btn-action" id="sl-napt-export">Export Log</button>
 +            <button type="button" class="btn-action" id="sl-napt-clear">Clear Feed</button>
-           </div>
++          </div>
 +          <div id="sl-napt-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false"></div>
 +          <div class="kv-grid sl-mt">
 +            <div class="kv-item"><span>Uplink Wi-Fi</span><b id="sl-napt-up">--</b></div>
@@ -4254,10 +4259,7 @@ index 5290300..eb7d2cf 100644
 +              </div>
 +            </div>
 +          </details>
-         </div>
--        <div class="dialog-footer">
--          <button class="btn-action act-save-edit-file" title="CTRL + S">
--            Save
++        </div>
 +
 +        <details class="sl-group">
 +          <summary><span>CH1–13 Estimated Load &amp; Hidden SSIDs <small class="muted-sm">— packet-based, not measured airtime</small></span><span id="sl-air-best" class="sl-badge">BEST CH --</span></summary>
@@ -4652,11 +4654,12 @@ index 5290300..eb7d2cf 100644
 +
 +  <div class="loading-area hidden"><div class="text"></div></div>
 +  <div class="upload-area hidden"></div>
++  <script src="/qr_local.js"></script>
 +  <script src="/index.js"></script>
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..64ca012 100644
+index fd616029..4da04155 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -4775,7 +4778,7 @@ index fd61602..64ca012 100644
      window.location.href = "/";
    } else {
      Dialog.loading.hide();
-@@ -132,151 +93,194 @@ function handleAuthError() {
+@@ -132,151 +93,201 @@ function handleAuthError() {
  async function requestGet(url, data) {
    return new Promise((resolve, reject) => {
      let req = new XMLHttpRequest();
@@ -4891,6 +4894,11 @@ index fd61602..64ca012 100644
 +
 +let activeTab = "dashboard";
 +function switchTab(tabName) {
++  if (tabName !== "files" && typeof payloadPickerActive !== "undefined" && payloadPickerActive) {
++    payloadPickerActive = false;
++    document.getElementById("payload-picker-banner")?.classList.add("hidden");
++    document.querySelectorAll(".act-pick-payload").forEach(button => button.remove());
++  }
 +  activeTab = tabName;
 +  document.querySelectorAll(".tab-btn").forEach((btn) => {
 +    btn.classList.toggle("active", btn.getAttribute("data-tab") === tabName);
@@ -4907,6 +4915,8 @@ index fd61602..64ca012 100644
 +  }
 +  if (tabName === "personalize") {
 +    loadPersonalizeForm();
++  } else if (tabName === "dashboard") {
++    uxLoad(true);
 +  }
 +  if (tabName === "console" && $("#console-in")) {
 +    $("#console-in").focus();
@@ -5078,7 +5088,7 @@ index fd61602..64ca012 100644
  }
  
  async function runCommand(cmd) {
-@@ -290,13 +294,21 @@ async function runCommand(cmd) {
+@@ -290,13 +301,21 @@ async function runCommand(cmd) {
    }
  }
  
@@ -5088,7 +5098,7 @@ index fd61602..64ca012 100644
 -    extension = extension[extension.length - 1].toLowerCase();
 -    return EXECUTABLE[extension];
 +async function quickCli(cmd) {
-+  const box = $("#dash-action-status");
++  const box = activeTab === "studio" ? $("#st-msg") : activeTab === "monitor" ? $("#mon-msg") : $("#dash-action-status");
 +  try {
 +    const res = await requestPost("/cm", { cmnd: cmd, capture: "1" });
 +    box.className = "ota-status ok";
@@ -5105,7 +5115,7 @@ index fd61602..64ca012 100644
    return undefined;
  }
  
-@@ -304,39 +316,25 @@ function calcHash(str) {
+@@ -304,39 +323,25 @@ function calcHash(str) {
    let hash = 5381;
    str = str.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
    for (let i = 0; i < str.length; i++) {
@@ -5151,7 +5161,7 @@ index fd61602..64ca012 100644
  }
  
  function renderFileRow(fileList) {
-@@ -346,251 +344,499 @@ function renderFileRow(fileList) {
+@@ -346,251 +351,528 @@ function renderFileRow(fileList) {
      .sort((a, b) => {
        let [aFirst, ...aRest] = a.split(":");
        let [bFirst, ...bRest] = b.split(":");
@@ -5194,6 +5204,12 @@ index fd61602..64ca012 100644
          e.querySelector(".col-name").textContent = name;
          e.querySelector(".col-name").setAttribute("title", name);
          e.querySelector(".col-size").textContent = size;
++        if (payloadPickerActive) {
++          const pick = document.createElement("button");
++          pick.type = "button"; pick.className = "btn-action act-pick-payload";
++          pick.textContent = "Dùng làm payload";
++          e.querySelector(".col-action").appendChild(pick);
++        }
          e.querySelector(".col-action").classList.add("type-file");
 -
 -        let downloadUrl = `/file?fs=${currentDrive}&name=${encodeURIComponent(dPath)}&action=download`;
@@ -5234,6 +5250,24 @@ index fd61602..64ca012 100644
  let currentPath;
 +let lastSysInfo = {};
 +let filesRequestGeneration = 0;
++let payloadPickerActive = false;
++function startPayloadPicker() {
++  payloadPickerActive = true;
++  document.getElementById("payload-picker-banner").classList.remove("hidden");
++  switchTab("files");
++  fetchFiles(currentDrive || "LittleFS", currentPath || "/");
++}
++function cancelPayloadPicker() {
++  payloadPickerActive = false;
++  document.getElementById("payload-picker-banner").classList.add("hidden");
++  document.querySelectorAll(".act-pick-payload").forEach(button => button.remove());
++  switchTab("studio"); switchStSlab("badusb");
++}
++function openRecordings(drive) {
++  payloadPickerActive = false;
++  document.getElementById("payload-picker-banner").classList.add("hidden");
++  switchTab("files"); fetchFiles(drive, "/BruceMIC");
++}
  const btnRefreshFolder = $("#refresh-folder");
  
 -// URL state management
@@ -5434,12 +5468,12 @@ index fd61602..64ca012 100644
 +    if (isModified(editor)) {
 +      await requestPost("/edit", { fs: drive, name: filename, content });
 +      editor.setAttribute("data-hash", calcHash(content));
-     }
++    }
 +    if (runFile) {
 +      if (isModified(editor)) throw new Error("File changed during save. Save again before running.");
 +      const serial = getSerialCommand(filename);
 +      if (serial !== undefined) await runCommand(serial + ' "' + filename + '"');
-+    }
+     }
 +  } catch (error) {
 +    alert("Save or run failed: " + error.message + ". Check the file before retrying.");
 +  } finally {
@@ -5539,7 +5573,7 @@ index fd61602..64ca012 100644
 +  }
 +}
 +
-+async function openWifiModal() {
++async function openWifiModal(selectedNetwork = null) {
 +  if (otaBusy) return;
 +  $("#wifi-conn-msg").className = "ota-status hidden";
 +  try {
@@ -5549,6 +5583,11 @@ index fd61602..64ca012 100644
 +      : `Currently in AP Mode (${st.ssid} at ${st.ip}). Connect below to expose WebUI & OTA on 192.168.x.x.`;
 +  } catch (_) {
 +    $("#wifi-cur-status").textContent = "Select your router below to switch device to LAN Wi-Fi.";
++  }
++  if (selectedNetwork) {
++    $("#wifi-ssid-input").value = selectedNetwork.ssid || "";
++    $("#wifi-pwd-input").value = "";
++    $("#wifi-pwd-input").placeholder = selectedNetwork.saved ? "Saved credential (leave blank or enter new)" : "Enter Wi-Fi password";
 +  }
 +  Dialog.show("wifi");
 +  scanWifiNets();
@@ -5787,7 +5826,7 @@ index fd61602..64ca012 100644
      });
    };
  
-@@ -599,7 +845,6 @@ async function renderTFT(data) {
+@@ -599,7 +881,6 @@ async function renderTFT(data) {
      let img = await loadImage(img_url);
      let drawX = input.x;
      let drawY = input.y;
@@ -5795,7 +5834,7 @@ index fd61602..64ca012 100644
      if (input.center === 1) {
        drawX += (canvas.width - img.width) / 2;
        drawY += (canvas.height - img.height) / 2;
-@@ -607,12 +852,7 @@ async function renderTFT(data) {
+@@ -607,12 +888,7 @@ async function renderTFT(data) {
      ctx.drawImage(img, drawX, drawY);
    };
  
@@ -5809,7 +5848,7 @@ index fd61602..64ca012 100644
  
    const drawRoundRect = (ctx, input, fill) => {
      const { x, y, w, h, r } = input;
-@@ -629,60 +869,45 @@ async function renderTFT(data) {
+@@ -629,60 +905,45 @@ async function renderTFT(data) {
  
    let startData = 0;
    const getByteValue = (dataType) => {
@@ -5893,7 +5932,7 @@ index fd61602..64ca012 100644
        }
      }
      return r;
-@@ -690,279 +915,570 @@ async function renderTFT(data) {
+@@ -690,279 +951,584 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6178,9 +6217,15 @@ index fd61602..64ca012 100644
 -  e.preventDefault();
 -  autoReloadScreen();
 -  sessionStorage.setItem("autoReload", eConfigAutoReload.value);
+-});
 +  $("#screen-status").textContent = "Navigating…";
 +}
-+
+ 
+-btnForceReload.addEventListener("click", async (e) => {
+-  e.preventDefault();
+-  drawCanvasLoading();
+-  await reloadScreen();
+-});
 +function updateBootPreview() {
 +  const owner = ($("#pers-owner").value || "DSolution").trim();
 +  const tag = ($("#pers-tag").value || "ESP32-S3 SEC LAB").trim();
@@ -6192,7 +6237,6 @@ index fd61602..64ca012 100644
 +  $("#bm-title").textContent = owner;
 +  $("#bm-sub").textContent = tag;
 +  $("#bm-mdns").textContent = `http://${mdns || "bruce"}.local`;
-+  $("#pers-bright-val").textContent = `${$("#pers-bright").value}%`;
 +  const box = $("#boot-preview");
 +  box.style.setProperty("--bm-pri", pri);
 +  box.style.setProperty("--bm-sec", sec);
@@ -6210,7 +6254,6 @@ index fd61602..64ca012 100644
 +    $("#pers-pri").value = p.priColor || "#00f0ff";
 +    $("#pers-sec").value = p.secColor || "#50aebd";
 +    $("#pers-bg").value = p.bgColor || "#070d12";
-+    $("#pers-bright").value = p.bright || 80;
 +    $("#pers-style").value = String(p.menuStyle ?? 0);
 +    applyThemeCss(p.priColor, p.secColor, p.bgColor, p.menuStyle);
 +    updateBootPreview();
@@ -6219,14 +6262,10 @@ index fd61602..64ca012 100644
 +  }
 +}
 +
-+["#pers-owner", "#pers-tag", "#pers-mdns", "#pers-pri", "#pers-sec", "#pers-bg", "#pers-bright"].forEach((sel) => {
++["#pers-owner", "#pers-tag", "#pers-mdns", "#pers-pri", "#pers-sec", "#pers-bg"].forEach((sel) => {
 +  $(sel)?.addEventListener("input", updateBootPreview);
- });
- 
--btnForceReload.addEventListener("click", async (e) => {
--  e.preventDefault();
--  drawCanvasLoading();
--  await reloadScreen();
++});
++
 +document.querySelectorAll(".preset-chip").forEach((chip) => {
 +  chip.addEventListener("click", () => {
 +    $("#pers-pri").value = chip.getAttribute("data-pri").toLowerCase();
@@ -6234,9 +6273,8 @@ index fd61602..64ca012 100644
 +    $("#pers-bg").value = chip.getAttribute("data-bg").toLowerCase();
 +    updateBootPreview();
 +  });
- });
- 
--window.ondragenter = () => $(".upload-area").classList.remove("hidden");
++});
++
 +$("#btn-reload-pers")?.addEventListener("click", loadPersonalizeForm);
 +$("#btn-save-pers")?.addEventListener("click", async () => {
 +  const pwd = $("#pers-appwd").value;
@@ -6255,7 +6293,6 @@ index fd61602..64ca012 100644
 +      priColor: $("#pers-pri").value,
 +      secColor: $("#pers-sec").value,
 +      bgColor: $("#pers-bg").value,
-+      bright: $("#pers-bright").value,
 +      menuStyle: $("#pers-style").value,
 +    }));
 +    applyThemeCss(res.priColor, res.secColor, res.bgColor, res.menuStyle);
@@ -6326,13 +6363,17 @@ index fd61602..64ca012 100644
 +document.querySelectorAll(".chip-cmd").forEach((ch) => {
 +  ch.addEventListener("click", () => execConsoleCmd(ch.getAttribute("data-cmd")));
 +});
-+
+ 
+-window.ondragenter = () => $(".upload-area").classList.remove("hidden");
++// All clock controls use the same device endpoint and local-time convention.
++async function syncBrowserTime() {
++  const localEpoch = Math.floor(Date.now() / 1000) - new Date().getTimezoneOffset() * 60;
++  await requestPost("/personalize", { epoch: String(localEpoch) });
++}
 +$("#act-sync-time")?.addEventListener("click", async () => {
-+  const tzOffsetSec = -new Date().getTimezoneOffset() * 60;
-+  const localEpoch = Math.floor(Date.now() / 1000) + tzOffsetSec;
 +  const box = $("#dash-action-status");
 +  try {
-+    await requestPost("/personalize", { epoch: String(localEpoch) });
++    await syncBrowserTime();
 +    box.className = "ota-status ok";
 +    box.textContent = "Device clock synced to browser local time!";
 +  } catch (err) {
@@ -6614,6 +6655,20 @@ index fd61602..64ca012 100644
  
 -$(".container").addEventListener("click", async (e) => {
 +$("#tab-files").addEventListener("click", async (e) => {
++  const pick = e.target.closest(".act-pick-payload");
++  if (pick && payloadPickerActive) {
++    e.preventDefault();
++    const path = pick.closest(".file-row")?.getAttribute("data-file");
++    if (!path) return;
++    const fs = document.getElementById("st-badusb-fs"), field = document.getElementById("st-badusb-path");
++    fs.value = currentDrive; field.value = path;
++    fs.dataset.touched = "1"; field.dataset.touched = "1";
++    cancelPayloadPicker();
++    const msg = document.getElementById("st-badusb-msg");
++    msg.className = "ota-status"; msg.textContent = "Đã chọn file. Nhấn Set Payload để lưu; chưa chạy payload.";
++    msg.classList.remove("hidden");
++    return;
++  }
    let browseAction = e.target.closest(".act-browse");
    if (browseAction) {
      e.preventDefault();
@@ -6631,7 +6686,7 @@ index fd61602..64ca012 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1486,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1536,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6670,7 +6725,7 @@ index fd61602..64ca012 100644
      return;
    }
  
-@@ -1009,24 +1496,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1546,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6700,7 +6755,7 @@ index fd61602..64ca012 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1514,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1564,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6737,7 +6792,7 @@ index fd61602..64ca012 100644
      return;
    }
  
-@@ -1062,662 +1531,1569 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1581,1665 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7028,20 +7083,6 @@ index fd61602..64ca012 100644
 -    } else {
 -      textarea.setSelectionRange(newStart, newStart);
 -    }
--  };
--
--  const getCurrentLine = (pos) => {
--    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
--    const lineEnd = textarea.value.indexOf("\n", pos);
--    const line = textarea.value.slice(
--      lineStart,
--      lineEnd === -1 ? undefined : lineEnd,
--    );
--    return {
--      line,
--      lineStart,
--      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
--    };
 +    textarea.setSelectionRange(newStart, newEnd);
    };
 +  if (e.key === "Tab") {
@@ -7064,6 +7105,20 @@ index fd61602..64ca012 100644
 +  }
 +});
  
+-  const getCurrentLine = (pos) => {
+-    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
+-    const lineEnd = textarea.value.indexOf("\n", pos);
+-    const line = textarea.value.slice(
+-      lineStart,
+-      lineEnd === -1 ? undefined : lineEnd,
+-    );
+-    return {
+-      line,
+-      lineStart,
+-      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
+-    };
+-  };
+-
 -  const handleTab = (shift) => {
 -    if (start === end) {
 -      const { line, lineStart, lineEnd } = getCurrentLine(start);
@@ -7219,18 +7274,39 @@ index fd61602..64ca012 100644
 +let studioLastSecLab = null;
 +let studioLastQr = null;
 +let studioLastBadusb = null;
++let studioRefreshGeneration = 0;
 +
 +// BadUSB Auto-Run — WebUI controls
++const badUsbEditableFields = ["st-badusb-fs", "st-badusb-path", "st-badusb-delayMs", "st-badusb-trigger-sel", "st-badusb-confirm-toggle", "st-badusb-confirmMs", "st-badusb-once-toggle", "st-badusb-enabled-toggle"];
++badUsbEditableFields.forEach(id => {
++  const field = document.getElementById(id);
++  ["input", "change"].forEach(event => field?.addEventListener(event, () => { field.dataset.touched = "1"; }));
++});
++function badUsbFieldsSaved(...ids) {
++  ids.forEach(id => { const field = document.getElementById(id); if (field) delete field.dataset.touched; });
++}
 +document.getElementById("st-badusb-set-payload")?.addEventListener("click", async ()=>{
 +  const fs=document.getElementById("st-badusb-fs")?.value.trim()||"LittleFS";
 +  const path=document.getElementById("st-badusb-path")?.value.trim();
 +  const msgBox=document.getElementById("st-badusb-msg");
 +  if(!path){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent="Enter payload path"; msgBox.classList.remove("hidden"); } return; }
-+  try{ const raw=await requestPost("/badusb/autorun",{action:"setpayload", payloadFs:fs, payloadPath:path}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++  try{ const raw=await requestPost("/badusb/autorun",{action:"setpayload", payloadFs:fs, payloadPath:path}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } if (d.ok) badUsbFieldsSaved("st-badusb-fs", "st-badusb-path"); refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
 +});
 +document.getElementById("st-badusb-enabled-toggle")?.addEventListener("change", async (e)=>{
-+  const msgBox=document.getElementById("st-badusb-msg");
-+  try{ const raw=await requestPost("/badusb/autorun",{action:"enable", enabled: e.target.checked?"1":"0"}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(err){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=err.message; msgBox.classList.remove("hidden"); } }
++  const field=e.target, msg=document.getElementById("st-badusb-msg");
++  field.disabled=true;
++  try {
++    const d=JSON.parse(await requestPost("/badusb/autorun",{action:"enable",enabled:field.checked?"1":"0"}));
++    if (!d.ok) throw new Error(d.msg || "Không thể đổi trạng thái");
++    msg.className="ota-status ok"; msg.textContent=d.msg || "Đã lưu trạng thái.";
++  } catch(err) {
++    msg.className="ota-status err"; msg.textContent=(err.message || "Không thể đổi trạng thái") + ". Kiểm tra trạng thái thiết bị sau khi kết nối lại.";
++  } finally {
++    msg.classList.remove("hidden");
++    badUsbFieldsSaved("st-badusb-enabled-toggle");
++    field.disabled=false;
++    await refreshStudio();
++  }
 +});
 +document.getElementById("st-badusb-test")?.addEventListener("click", async ()=>{
 +  const msgBox=document.getElementById("st-badusb-msg");
@@ -7238,31 +7314,45 @@ index fd61602..64ca012 100644
 +});
 +document.getElementById("st-badusb-clear")?.addEventListener("click", async ()=>{
 +  const msgBox=document.getElementById("st-badusb-msg");
-+  try{ const raw=await requestPost("/badusb/autorun",{action:"clearpayload"}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } const pathEl=document.getElementById("st-badusb-path"); if(pathEl) pathEl.value=""; refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++  try{ const raw=await requestPost("/badusb/autorun",{action:"clearpayload"}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } const pathEl=document.getElementById("st-badusb-path"); if(pathEl && d.ok) pathEl.value=""; if (d.ok) badUsbFieldsSaved("st-badusb-path", "st-badusb-fs"); refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
 +});
-+document.getElementById("st-badusb-set-delay")?.addEventListener("click", async ()=>{
-+  const v=document.getElementById("st-badusb-delayMs")?.value.trim();
-+  const msgBox=document.getElementById("st-badusb-msg");
-+  if(!v){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent="Enter delayMs 0-10000"; msgBox.classList.remove("hidden"); } return; }
-+  try{ const raw=await requestPost("/badusb/autorun",{action:"setdelay", delayMs:v}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++document.getElementById("st-badusb-save-settings")?.addEventListener("click", async (event) => {
++  const button = event.currentTarget, msg = document.getElementById("st-badusb-msg");
++  const el = id => document.getElementById("st-badusb-" + id);
++  const value = id => el(id).value.trim();
++  const groups = [
++    {name:"Delay", ids:["delayMs"], data:{action:"setdelay", delayMs:value("delayMs")}},
++    {name:"Trigger", ids:["trigger-sel"], data:{action:"settrigger", trigger:value("trigger-sel")}},
++    {name:"Confirm", ids:["confirm-toggle","confirmMs"], data:{action:"setconfirm", confirmWindow:el("confirm-toggle").checked?"1":"0", confirmMs:value("confirmMs")}},
++    {name:"Run once", ids:["once-toggle"], data:{action:"setrunonce", runOncePerPlug:el("once-toggle").checked?"1":"0"}}
++  ].filter(g => g.ids.some(id => el(id).dataset.touched));
++  const fail = text => { msg.className="ota-status err"; msg.textContent=text; msg.classList.remove("hidden"); };
++  if (!groups.length) { fail("Không có thay đổi cần lưu."); return; }
++  for (const g of groups) {
++    const d=g.data;
++    if ((d.action==="setdelay" && (!/^\d+$/.test(d.delayMs) || +d.delayMs>10000)) ||
++        (d.action==="setconfirm" && (!/^\d+$/.test(d.confirmMs) || +d.confirmMs<1000 || +d.confirmMs>10000)) ||
++        (d.action==="settrigger" && !["0","2"].includes(d.trigger))) {
++      fail("Giá trị không hợp lệ: " + g.name + ". Chưa lưu mục nào."); return;
++    }
++  }
++  groups.forEach(g => { g.snapshot=g.ids.map(id => el(id).type === "checkbox" ? el(id).checked : el(id).value); });
++  button.disabled=true;
++  const saved=[], failed=[];
++  for (const g of groups) {
++    try {
++      const d=JSON.parse(await requestPost("/badusb/autorun",g.data));
++      if (!d.ok) throw new Error(d.msg || "rejected");
++      saved.push(g.name);
++      g.ids.forEach((id,i) => { const f=el(id); if ((f.type === "checkbox" ? f.checked : f.value) === g.snapshot[i]) delete f.dataset.touched; });
++    } catch(e) { failed.push(g.name + ": " + (e.message || "lỗi")); }
++  }
++  button.disabled=false;
++  msg.className="ota-status " + (failed.length ? "err" : "ok");
++  msg.textContent=(saved.length ? "Đã lưu: " + saved.join(", ") + ". " : "") + (failed.length ? "Chưa xác nhận: " + failed.join("; ") + ". Kiểm tra trạng thái trước khi thử lại." : "");
++  msg.classList.remove("hidden");
++  refreshStudio();
 +});
-+document.getElementById("st-badusb-set-trigger")?.addEventListener("click", async ()=>{
-+  const v=document.getElementById("st-badusb-trigger-sel")?.value||"0";
-+  const msgBox=document.getElementById("st-badusb-msg");
-+  try{ const raw=await requestPost("/badusb/autorun",{action:"settrigger", trigger:v}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
-+});
-+document.getElementById("st-badusb-set-confirm")?.addEventListener("click", async ()=>{
-+  const cw=document.getElementById("st-badusb-confirm-toggle")?.checked?"1":"0";
-+  const ms=document.getElementById("st-badusb-confirmMs")?.value.trim()||"3000";
-+  const msgBox=document.getElementById("st-badusb-msg");
-+  try{ const raw=await requestPost("/badusb/autorun",{action:"setconfirm", confirmWindow:cw, confirmMs:ms}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
-+});
-+document.getElementById("st-badusb-set-once")?.addEventListener("click", async ()=>{
-+  const ro=document.getElementById("st-badusb-once-toggle")?.checked?"1":"0";
-+  const msgBox=document.getElementById("st-badusb-msg");
-+  try{ const raw=await requestPost("/badusb/autorun",{action:"setrunonce", runOncePerPlug:ro}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
-+});
-+document.getElementById("st-badusb-path")?.addEventListener("input", (e)=>{ e.target.dataset.touched="1"; });
  
 -  const handleAutoPair = (key) => {
 -    const pairs = {
@@ -7356,6 +7446,7 @@ index fd61602..64ca012 100644
 +}
 +function stopStudioPoll(){ if(studioTimer){ clearInterval(studioTimer); studioTimer=null; } }
 +function switchStSlab(name){
++  if (!document.getElementById("stslab-" + name)) name = "overview";
 +  document.querySelectorAll('[id^="stslab-"]').forEach(v=>v.classList.toggle("hidden", v.id!=="stslab-"+name));
 +  document.querySelectorAll("[data-stslab]").forEach(b=>{ const on=b.dataset.stslab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
 +  try{ localStorage.setItem("studioSlab", name);}catch(e){}
@@ -7365,8 +7456,24 @@ index fd61602..64ca012 100644
 +try{ const savedSt=localStorage.getItem("studioSlab"); if(savedSt) switchStSlab(savedSt); }catch(e){}
 +document.getElementById("st-refresh")?.addEventListener("click", ()=> refreshStudio());
 +document.getElementById("st-auto")?.addEventListener("change", (e)=>{ if(e.target.checked) refreshStudio(); });
-+document.getElementById("st-sync-time")?.addEventListener("click", ()=>{ const btn=document.getElementById("st-sync-time"); if(btn) btn.textContent="Syncing..."; fetch("/api/time",{method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:"t="+Math.floor(Date.now()/1000)}).then(()=>{ if(btn) btn.textContent="Synced ✔"; setTimeout(()=>{ if(btn) btn.textContent="Sync Browser Time"; },2000); }).catch(()=>{ if(btn) btn.textContent="Sync failed"; }); if(window.quickCli) quickCli("date"); refreshStudio(); });
-+document.getElementById("st-clock-sync")?.addEventListener("click", ()=>{ const b=document.getElementById("st-clock-sync"); if(b) b.textContent="Syncing..."; fetch("/api/time",{method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:"t="+Math.floor(Date.now()/1000)}).then(()=>{ if(b) b.textContent="Synced ✔"; setTimeout(()=>{ if(b) b.textContent="Sync Browser Time \u2192 Device"; },2000); }).catch(()=>{ if(b) b.textContent="Sync failed"; }); });
++["st-sync-time", "st-clock-sync"].forEach(id => {
++  document.getElementById(id)?.addEventListener("click", async () => {
++    const button = document.getElementById(id);
++    const label = button.textContent;
++    button.disabled = true;
++    button.textContent = "Syncing...";
++    try {
++      await syncBrowserTime();
++      button.textContent = "Synced ✔";
++      refreshStudio();
++    } catch (err) {
++      button.textContent = "Sync failed";
++    } finally {
++      button.disabled = false;
++      setTimeout(() => { button.textContent = label; }, 2000);
++    }
++  });
++});
 +document.getElementById("st-qr-add")?.addEventListener("click", async ()=>{
 +  const nameEl=document.getElementById("st-qr-name"), contEl=document.getElementById("st-qr-content"), msg=document.getElementById("st-qr-msg");
 +  const name=(nameEl?.value||"").trim(), content=(contEl?.value||"").trim();
@@ -7404,7 +7511,22 @@ index fd61602..64ca012 100644
 +// delegated actions for QR preview/delete
 +document.addEventListener("click", (e)=>{
 +  const t=e.target.closest("[data-st-qr-show]");
-+  if(t){ e.preventDefault(); const name=t.dataset.stQrShow, content=t.dataset.stQrContent||""; const box=document.getElementById("st-qr-preview"); const title=document.getElementById("st-qr-preview-title"); const cont=document.getElementById("st-qr-preview-content"); const qb=document.getElementById("st-qr-preview-box"); if(title) title.textContent=name; if(cont) cont.textContent=content; if(qb){ const enc=encodeURIComponent(content); qb.innerHTML=`<img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${enc}" alt="QR" style="max-width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:#fff" /><div class="sl-row sl-mt" style="justify-content:center"><button type="button" class="btn-action" data-st-qr-device="${slEsc(name)}">Show on device</button></div>`; } if(box) box.classList.remove("hidden"); }
++  if (!t) return;
++  e.preventDefault();
++  const name=t.dataset.stQrShow, content=t.dataset.stQrContent || "";
++  const box=document.getElementById("st-qr-preview"), title=document.getElementById("st-qr-preview-title");
++  const cont=document.getElementById("st-qr-preview-content"), qb=document.getElementById("st-qr-preview-box");
++  if (title) title.textContent=name;
++  if (cont) cont.textContent=content;
++  if (qb) {
++    qb.replaceChildren();
++    try {
++      qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
++      const qr=qrcode(0, "M"); qr.addData(content); qr.make();
++      qb.innerHTML=qr.createImgTag(4, 16);
++    } catch (_) { qb.textContent="QR preview unavailable: content is too long or invalid."; }
++  }
++  if (box) box.classList.remove("hidden");
 +});
 +document.addEventListener("click", (e)=>{
 +  const t=e.target.closest("[data-st-qr-del]");
@@ -7413,10 +7535,6 @@ index fd61602..64ca012 100644
 +document.addEventListener("click", (e)=>{
 +  const t=e.target.closest("[data-st-play-wav]");
 +  if(t){ e.preventDefault(); const path=t.dataset.stPlayWav; const pl=document.getElementById("st-sonar-player"); if(pl && path){ pl.src=(IS_DEV?"/bruce":"")+"/file?fs=LittleFS&action=download&name="+encodeURIComponent(path); pl.classList.remove("hidden"); pl.play().catch(()=>{}); } }
-+});
-+document.addEventListener("click", (e)=>{
-+  const t=e.target.closest("[data-st-qr-device]");
-+  if(t){ e.preventDefault(); const nm=t.dataset.stQrDevice||""; if(nm && window.quickCli) quickCli("qrcode \""+nm.replace(/"/g,'\\"')+"\""); }
 +});
  
 -    const isCommented = (line) => {
@@ -7433,6 +7551,7 @@ index fd61602..64ca012 100644
 -      const { line, lineStart, lineEnd } = getCurrentLine(start);
 -      const { line: newLine, offset: cursorOffset } = toggleComment(line);
 +function switchMonSlab(name){
++  if (!document.getElementById("monslab-" + name)) name = "overview";
 +  document.querySelectorAll('[id^="monslab-"]').forEach(v=>v.classList.toggle("hidden", v.id!=="monslab-"+name));
 +  document.querySelectorAll("[data-monslab]").forEach(b=>{ const on=b.dataset.monslab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
 +  try{ localStorage.setItem("monitorSlab", name);}catch(e){}
@@ -7502,6 +7621,13 @@ index fd61602..64ca012 100644
 +  // napt
 +  set("mon-ov-napt", n.running ? `ON (${ (n.clients||[]).length }c/${n.total||0}q)` : n.starting?"STARTING":"OFF");
 +  set("mon-ov-napt-sub", `Clients ${(n.clients||[]).length} · Queries ${n.total||0} · Blocked ${n.blocked||0} · Trackers ${n.trackers||0}`);
++  const monNaptBtn = document.getElementById("mon-napt-toggle");
++  if (monNaptBtn) {
++    const active = !!(n.running || n.starting);
++    monNaptBtn.textContent = active ? "Stop NAPT" : "Start NAPT";
++    monNaptBtn.classList.toggle("btn-danger", active);
++    monNaptBtn.classList.toggle("btn-default", !active);
++  }
 +  // alerts
 +  const lg = sec?.lanGuard||{}, rp=sec?.responderPlus||{}, hi=sec?.httpInspector||{}, sn=sec?.sonar||{};
 +  const alertCount = (lg.alerts? lg.alerts.length:0) + (hi.findings? hi.findings.length:0) + (sn.events? sn.events.length:0) + (rp.running?1:0);
@@ -7684,6 +7810,7 @@ index fd61602..64ca012 100644
 -      }
 -      break;
 +async function refreshStudio(){
++  const generation = ++studioRefreshGeneration;
 +  const msgBox=document.getElementById("st-msg");
 +  const lastEl=document.getElementById("st-last");
 +  const isPreview = window.location.hostname==="127.0.0.1" || window.location.hostname==="localhost" || window.location.port==="8002" || window.location.port==="8001";
@@ -7693,6 +7820,7 @@ index fd61602..64ca012 100644
 +    const qrP = requestGet("/studio/qrcodes").then(j=>JSON.parse(j)).catch(()=>null);
 +    const badusbP = requestGet("/badusb/autorun").then(j=>JSON.parse(j)).catch(()=>null);
 +    const [sys, sec, qr, badusb] = await Promise.all([sysP, secP, qrP, badusbP]);
++    if (generation !== studioRefreshGeneration) return;
 +    if(sys) studioLastSys = sys;
 +    if(sec) studioLastSecLab = sec;
 +    if(qr && qr.qrcodes) studioLastQr = qr.qrcodes;
@@ -7711,7 +7839,8 @@ index fd61602..64ca012 100644
 +    }
 +    if(!studioLastSys && !studioLastSecLab) throw new Error("no studio data");
 +    lastSysInfo = studioLastSys || lastSysInfo;
-+    if(lastEl) lastEl.textContent = new Date().toLocaleTimeString() + (isPreview && !sys ? " \u00b7 preview mock" : "");
++    const missing = [["System",sys],["SecLab",sec],["QR",qr],["Auto-Run",badusb]].filter(x=>!x[1]).map(x=>x[0]);
++    if(lastEl) lastEl.textContent = missing.length ? "Dữ liệu có thể cũ" : "Cập nhật " + new Date().toLocaleTimeString();
 +    renderStudioOverview(studioLastSys, studioLastSecLab, studioLastQr);
 +    renderStudioMic(studioLastSys, studioLastSecLab);
 +    renderStudioQr(studioLastQr);
@@ -7719,9 +7848,12 @@ index fd61602..64ca012 100644
 +    renderStudioBadusb(studioLastBadusb);
 +    if(msgBox){
 +      if(isPreview && !sys){ msgBox.className="ota-status ok"; msgBox.textContent="Preview mode \u2014 showing mock Studio data. Connect device for live."; msgBox.classList.remove("hidden"); }
++      else if (missing.length) { msgBox.className="ota-status err"; msgBox.textContent="Không cập nhật được: " + missing.join(", ") + ". Dữ liệu hiển thị có thể cũ; kiểm tra kết nối và thử Refresh."; msgBox.classList.remove("hidden"); }
 +      else msgBox.classList.add("hidden");
 +    }
 +  }catch(e){
++    if (generation !== studioRefreshGeneration) return;
++    if (lastEl) lastEl.textContent = "Không cập nhật được — dữ liệu có thể cũ";
 +    if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Studio refresh failed"; msgBox.classList.remove("hidden"); }
 +    console.warn("refreshStudio",e);
    }
@@ -7761,7 +7893,7 @@ index fd61602..64ca012 100644
 +  const micBox=document.getElementById("st-ov-mic-files");
 +  if(micBox){
 +    // try to list mic files via existing file API cache if any, else mock
-+    micBox.innerHTML = `<div class="sl-item"><span>Record via device: <b>Others</b> \u2192 <b>Microphone</b> \u2192 <b>Record</b></span><span class="sl-tag ok">ES7210</span></div><div class="sl-item"><span>/BruceMIC \u00b7 LittleFS</span><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Browse</button></div>`;
++    micBox.innerHTML = `<div class="sl-item"><span>Record via device: <b>Studio</b> \u2192 <b>Microphone</b> \u2192 <b>Record</b></span><span class="sl-tag ok">ES7210</span></div><div class="sl-item"><span>/BruceMIC \u00b7 SD or LittleFS</span><button type="button" class="btn-action" onclick="switchStSlab('mic')">Chọn ổ</button></div>`;
 +  }
 +  const sonarBox=document.getElementById("st-ov-sonar-events");
 +  if(sonarBox){
@@ -7790,7 +7922,7 @@ index fd61602..64ca012 100644
 +  const micList=document.getElementById("st-mic-files");
 +  if(micList){
 +    // attempt to fetch file list if we have file browser cache, else show hint
-+    micList.innerHTML = `<div class="sl-item muted-sm">Recent WAVs live in <code>/BruceMIC</code> & <code>/record</code>. Use <b>Files</b> tab or device <b>Record</b>.</div><div class="sl-item"><span>Quick open</span><span><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">/BruceMIC</button> <button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">/LittleFS</button></span></div>`;
++    micList.innerHTML = `<div class="sl-item muted-sm">Recordings use <code>/BruceMIC</code> on SD when mounted, otherwise LittleFS. Use <b>Files</b> or device <b>Record</b>.</div><div class="sl-item"><span>Quick open</span><span><button type="button" class="btn-action" onclick="openRecordings('LittleFS')">LittleFS</button> <button type="button" class="btn-action" onclick="openRecordings('SD')">SD</button></span></div>`;
 +  }
 +}
 +function renderStudioQr(qr){
@@ -7810,9 +7942,9 @@ index fd61602..64ca012 100644
 +  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
 +  const now=new Date();
 +  set("st-clock-time", now.toLocaleTimeString());
-+  set("st-clock-tz", `Uptime ${formatUptime(sys.UPTIME_SEC)} \u00b7 Bright ${sys.BRIGHT||"--"}%`);
++  set("st-clock-tz", Intl.DateTimeFormat().resolvedOptions().timeZone || "Browser local");
 +  set("st-clock-uptime", formatUptime(sys.UPTIME_SEC));
-+  set("st-clock-ntp", sys.UPTIME_SEC? "NTP via WiFi STA (if connected)":"--");
++  set("st-clock-ntp", "Sync manually or check on device");
 +  set("st-dual-slot", sys.OTA_SLOT||"--");
 +  set("st-dual-next", sys.OTA_NEXT||"--");
 +  set("st-dual-active", sys.DUALBOOT? "active":"--");
@@ -7829,11 +7961,6 @@ index fd61602..64ca012 100644
 -    "'": "'",
 -    "`": "`",
 -    "<": ">",
--  };
--  if (e.key in pairs) {
--    e.preventDefault();
--    handleAutoPair(e.key);
--    return;
 +function renderStudioBadusb(b){
 +  const d=b||studioLastBadusb||{};
 +  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
@@ -7842,18 +7969,27 @@ index fd61602..64ca012 100644
 +  set("st-badusb-enabled", enabled?"ON":"OFF");
 +  set("st-badusb-armed", armed?"YES":"NO");
 +  set("st-badusb-payload", d.payloadLabel|| (d.payloadPath? d.payloadFs+":"+d.payloadPath : "—"));
-+  set("st-badusb-trigger", (d.trigger==1?"VBUS": d.trigger==2?"Delayed":"Enumeration")+" · " + (d.runOncePerPlug?"Once":"Loop"));
++  set("st-badusb-trigger", (d.trigger==1?"VBUS unavailable": d.trigger==2?"Delayed":"Enumeration")+" · " + (d.runOncePerPlug?"Once":"Loop"));
 +  set("st-badusb-delay", (d.delayMs||0)+"ms");
 +  set("st-badusb-confirm", d.confirmWindow? "ON "+(d.confirmMs||3000)+"ms":"OFF");
 +  badge("st-badusb-badge", running?"RUNNING": enabled? (armed?"ARMED":"IDLE"):"OFF", running?"alert": enabled?"on":"");
-+  const enToggle=document.getElementById("st-badusb-enabled-toggle"); if(enToggle) enToggle.checked=enabled;
-+  const cToggle=document.getElementById("st-badusb-confirm-toggle"); if(cToggle) cToggle.checked=!!d.confirmWindow;
-+  const onceToggle=document.getElementById("st-badusb-once-toggle"); if(onceToggle) onceToggle.checked=!!d.runOncePerPlug;
-+  const fsEl=document.getElementById("st-badusb-fs"); if(fsEl && !fsEl.value) fsEl.value=d.payloadFs||"LittleFS";
-+  const pathEl=document.getElementById("st-badusb-path"); if(pathEl && !pathEl.dataset.touched) pathEl.placeholder=d.payloadPath||"/payload.txt";
-+  const delayEl=document.getElementById("st-badusb-delayMs"); if(delayEl) delayEl.placeholder=String(d.delayMs||1500);
-+  const trigEl=document.getElementById("st-badusb-trigger-sel"); if(trigEl) trigEl.value=String(d.trigger||0);
-+  const cmEl=document.getElementById("st-badusb-confirmMs"); if(cmEl) cmEl.placeholder=String(d.confirmMs||3000);
++  const setField=(id, value, checkbox=false) => {
++    const field=document.getElementById(id);
++    if (!field || field.dataset.touched || document.activeElement === field) return;
++    if (checkbox) field.checked=!!value; else field.value=String(value ?? "");
+   };
+-  if (e.key in pairs) {
+-    e.preventDefault();
+-    handleAutoPair(e.key);
+-    return;
++  setField("st-badusb-enabled-toggle", enabled, true);
++  setField("st-badusb-confirm-toggle", d.confirmWindow, true);
++  setField("st-badusb-once-toggle", d.runOncePerPlug, true);
++  setField("st-badusb-fs", d.payloadFs || "LittleFS");
++  setField("st-badusb-path", d.payloadPath || "");
++  setField("st-badusb-delayMs", d.delayMs ?? 1500);
++  setField("st-badusb-trigger-sel", d.trigger ?? 0);
++  setField("st-badusb-confirmMs", d.confirmMs ?? 3000);
 +}
 +
 +let portalTemplates=[], portalActive="";
@@ -7934,7 +8070,7 @@ index fd61602..64ca012 100644
 +  if (box) box.setAttribute("aria-busy", busy ? "true" : "false");
 +}
 +function slBusyNaptButtons(busy) {
-+  document.querySelectorAll("#sl-napt-start, #sl-napt-stop, #sl-napt-auto, #sl-napt-export, #sl-napt-clear").forEach((b) => {
++  document.querySelectorAll("#sl-napt-start, #sl-napt-stop, #sl-napt-auto, #sl-napt-export, #sl-napt-clear, #mon-napt-toggle, #mon-napt-export").forEach((b) => {
 +    b.disabled = busy;
 +  });
 +  const box = $("#sl-napt-msg");
@@ -7945,7 +8081,7 @@ index fd61602..64ca012 100644
 -  if ($(".dialog.editor:not(.hidden)")) {
 -    // Sync scrolling between textarea and line numbers
 -    syncScrolling();
-+async function naptPost(params) {
++async function naptPost(params, messageBox = $("#sl-napt-msg")) {
 +  if (params.action === "block" || params.action === "unblock") {
 +    const domain = String(params.domain || "").trim();
 +    if (!domain) {
@@ -7959,7 +8095,7 @@ index fd61602..64ca012 100644
 +  secLabNaptBusy = true;
 +  secLabLastNaptActionAt = Date.now();
 +  slBusyNaptButtons(true);
-+  const box = $("#sl-napt-msg");
++  const box = messageBox;
 +  let ok = false;
 +  try {
 +    const raw = await requestPost("/seclab/napt", params);
@@ -8030,7 +8166,7 @@ index fd61602..64ca012 100644
 +  const key = btn.dataset.slToggle;
 +  if (key && Object.prototype.hasOwnProperty.call(secLabPlusState, key)) {
 +    p.enable = secLabPlusState[key] ? "0" : "1";
-+  }
+   }
 +  if (action === "os_profile") {
 +    p.profile = $("#sl-plus-os")?.value || "windows";
 +  } else if (action === "lan_start") {
@@ -8065,7 +8201,7 @@ index fd61602..64ca012 100644
 +    p.addr = addr;
 +    p.type = $("#sl-plus-pair-type")?.value || "0";
 +    p.justworks = ($("#sl-plus-pair-mode")?.value || "justworks") === "justworks" ? "1" : "0";
-   }
++  }
 +  return p;
 +}
 +
@@ -8724,8 +8860,9 @@ index fd61602..64ca012 100644
 +
 + // ==== SecLab compact subtabs + overview mirror (2026-11) ====
 + function switchSlab(name){
-+   const views=document.querySelectorAll(".slab-view");
-+   const btns=document.querySelectorAll(".slab-btn");
++   if (!document.getElementById("slab-" + name)) name = "overview";
++   const views=document.querySelectorAll('[id^="slab-"]');
++   const btns=document.querySelectorAll("[data-slab]");
 +   views.forEach(v=>v.classList.toggle("hidden", v.id!=="slab-"+name));
 +   btns.forEach(b=>{ const on=b.dataset.slab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
 +   try{ localStorage.setItem("seclabSlab", name);}catch(e){}
@@ -8760,7 +8897,7 @@ index fd61602..64ca012 100644
 +     if(ovStudioDetail){ const sig=sn.signal||"--"; ovStudioDetail.textContent=`Signal ${sig} · /usb_vault ${u.flashImgBytes? Math.round(u.flashImgBytes/1024)+"KB img":"no img"}`; }
 +   }catch(e){ console.warn("syncOverviewTiles",e); }
 + }
-+ document.querySelectorAll(".slab-btn").forEach(btn=>{
++ document.querySelectorAll("[data-slab]").forEach(btn=>{
 +   btn.addEventListener("click", ()=> switchSlab(btn.dataset.slab));
 + });
 + document.querySelectorAll("[data-monslab]").forEach(btn=>{
@@ -8784,34 +8921,47 @@ index fd61602..64ca012 100644
 +     renderMonitorAlerts(monLastSecLab);
 +   });
 + });
++ document.getElementById("mon-alerts-clear")?.addEventListener("click", () => {
++   const all = document.querySelector('.mon-filter[data-filter="all"]');
++   if (all) all.click();
++ });
 + document.getElementById("mon-refresh")?.addEventListener("click", ()=> refreshMonitor());
 + document.getElementById("mon-auto")?.addEventListener("change", (e)=>{ if(e.target.checked) refreshMonitor(); });
-+ document.getElementById("mon-wifi-scan")?.addEventListener("click", async ()=>{
-+   const box=document.getElementById("mon-wifi-list");
-+   if(!box) return;
-+   box.innerHTML='<div class="sl-item muted-sm">Scanning 2.4 GHz...</div>';
-+   try{
-+     const data=JSON.parse(await requestGet("/wifiscan"));
-+     const nets=data.nets||[];
-+     box.innerHTML = nets.slice(0,12).map(n=>`<div class="sl-item"><span>${slEsc(n.ssid)} <small class="muted-sm">${n.enc?"🔒":"🔓"} ${n.rssi}dBm</small></span><span class="sl-tag">${n.saved?"Saved":(n.enc?"WPA":"Open")}</span></div>`).join("") || '<div class="sl-item muted-sm">No APs</div>';
-+   }catch(e){ box.innerHTML=`<div class="sl-item muted-sm">Scan failed: ${slEsc(e.message)}</div>`; }
-+ });
 + document.getElementById("mon-net-scan")?.addEventListener("click", async ()=>{
 +   const box=document.getElementById("mon-net-scanlist");
 +   if(!box) return;
-+   box.innerHTML='<div class="sl-item muted-sm">Scanning 2.4 GHz...</div>';
-+   try{
++   box.textContent="Scanning 2.4 GHz...";
++   try {
 +     const data=JSON.parse(await requestGet("/wifiscan"));
-+     const nets=data.nets||[];
-+     box.innerHTML = nets.map(n=>`<div class="sl-item"><span>${slEsc(n.ssid)} <small class="muted-sm">CH${n.channel||"?"} ${n.enc?"🔒":"🔓"} ${n.rssi}dBm ${n.bssid||""}</small></span><button type="button" class="sl-tag" onclick="document.getElementById('mon-net-scanlist').dataset.ssid='${slEsc(n.ssid)}'">Use</button></div>`).join("") || '<div class="sl-item muted-sm">No APs</div>';
-+   }catch(e){ box.innerHTML=`<div class="sl-item muted-sm">Scan failed: ${slEsc(e.message)}</div>`; }
++     box.replaceChildren();
++     const nets=data.nets || [];
++     for (const n of nets) {
++       const row=document.createElement("div"); row.className="sl-item";
++       const info=document.createElement("span");
++       info.textContent=`${n.ssid || ""} · CH${n.channel || "?"} ${n.enc ? "🔒" : "🔓"} ${n.rssi}dBm ${n.bssid || ""}`;
++       const button=document.createElement("button"); button.type="button"; button.className="sl-tag"; button.textContent="Use";
++       button.addEventListener("click", () => openWifiModal(n));
++       row.append(info, button); box.appendChild(row);
++     }
++     if (!nets.length) box.textContent="No APs";
++   } catch(e) { box.textContent=`Scan failed: ${e.message}`; }
 + });
-+ document.getElementById("mon-napt-toggle")?.addEventListener("click", ()=>{
-+   const isOn = monLastSecLab?.napt?.running;
-+   if(isOn) naptPost({action:"stop"}); else naptPost({action:"start"});
-+   setTimeout(refreshMonitor, 900);
++ document.getElementById("mon-napt-toggle")?.addEventListener("click", async ()=>{
++   const state = monLastSecLab?.napt;
++   const box = document.getElementById("mon-msg");
++   if (!state) { slShowMsg(box, "NAPT status unavailable; refresh first.", false, 0); return; }
++   const action = state.running || state.starting ? "stop" : "start";
++   await naptPost({action}, box);
++   // Refresh without erasing the action result shown in Monitor.
++   const cls=box?.className, message=box?.textContent;
++   await refreshMonitor();
++   if (box && message) { box.className=cls; box.textContent=message; }
 + });
-+ document.getElementById("mon-napt-export")?.addEventListener("click", ()=> naptPost({action:"export"}));
++ document.getElementById("mon-napt-export")?.addEventListener("click", async ()=>{
++   if (await naptPost({action:"export"}, document.getElementById("mon-msg"))) {
++     openFileInEditor("LittleFS", "/napt_dns.log");
++   }
++ });
 + (function(){
 +   let last="overview";
 +   try{ const v=localStorage.getItem("monitorSlab"); if(v) last=v; }catch(e){}
@@ -9414,7 +9564,7 @@ index e7ceca1..3bc596c 100644
      if (!_mifareKeysLoaded) {
          MifareKeysManager::ensureLoaded(mifareKeys);
 diff --git a/src/core/config.h b/src/core/config.h
-index 72d69eb..6277583 100644
+index 72d69eba..7fbd4ede 100644
 --- a/src/core/config.h
 +++ b/src/core/config.h
 @@ -17,12 +17,77 @@
@@ -9464,7 +9614,7 @@ index 72d69eb..6277583 100644
 +    bool confirmWindow = true;    // show 3s countdown to cancel
 +    uint16_t confirmMs = 3000;    // countdown duration
 +    bool runOncePerPlug = true;   // run once per physical plug, not loop
-+    uint8_t trigger = 0;          // 0=on enumeration (tud_mounted), 1=on VBUS, 2=delayed (extra 2s)
++    uint8_t trigger = 0;          // 0=enumeration, 1=legacy VBUS (unsupported), 2=enumeration + 2s
 +};
 +
  class BruceConfig : public BruceTheme {
@@ -12310,7 +12460,7 @@ index 1854faa..dbbb659 100644
      void audioMenu(void);
      void systemMenu(void);
 diff --git a/src/core/menu_items/FileMenu.cpp b/src/core/menu_items/FileMenu.cpp
-index 443e395..4c4346f 100644
+index 443e395c..97ea605b 100644
 --- a/src/core/menu_items/FileMenu.cpp
 +++ b/src/core/menu_items/FileMenu.cpp
 @@ -3,6 +3,7 @@
@@ -12321,14 +12471,29 @@ index 443e395..4c4346f 100644
  #include "core/wifi/webInterface.h"
  #include "core/connect/file_sharing.h"
  #include "core/connect/serial_commands.h"
-@@ -26,8 +27,10 @@ void FileMenu::optionsMenu() {
+@@ -13,21 +14,23 @@ void FileMenu::optionsMenu() {
+     options.push_back({"LittleFS", [=]() { loopSD(LittleFS); }});
+     options.push_back({"WebUI", loopOptionsWebUi});
+ 
+-#if !defined(LITE_VERSION)
++#if !defined(LITE_VERSION) && !defined(DSOLUTION_183_2MIC)
+     options.push_back({"Connect", [=]() {
+         std::vector<Option> connectOpts = {
+             {"Send File", [=]() { FileSharing().sendFile(); }        },
+             {"Recv File", [=]() { FileSharing().receiveFile(); }     },
+             {"Send Cmds", [=]() { EspSerialCmd().sendCommands(); }   },
+             {"Recv Cmds", [=]() { EspSerialCmd().receiveCommands(); }},
+-            {"Back",      [=]() { optionsMenu(); }                   }
++            {"Back",      []() {}                                    }
+         };
+         loopOptions(connectOpts, MENU_TYPE_SUBMENU, "Connect");
      }});
  #endif
  
 -#if defined(SOC_USB_OTG_SUPPORTED)
 +#if defined(SOC_USB_OTG_SUPPORTED) && !defined(DSOLUTION_NO_EXT_HW)
      options.push_back({"Mass Storage", [=]() { MassStorage(); }});
-+#elif defined(SOC_USB_OTG_SUPPORTED) && !defined(LITE_VERSION)
++#elif defined(SOC_USB_OTG_SUPPORTED) && !defined(LITE_VERSION) && !defined(DSOLUTION_183_2MIC)
 +    options.push_back({"Virtual USB Drive", [=]() { virtual_msc_setup(false); }});
  #endif
      addOptionToMainMenu();
@@ -12537,10 +12702,10 @@ index 0000000..d4117a2
 +#endif
 diff --git a/src/core/menu_items/StudioMenu.cpp b/src/core/menu_items/StudioMenu.cpp
 new file mode 100644
-index 0000000..cb5ab38
+index 00000000..aefceeae
 --- /dev/null
 +++ b/src/core/menu_items/StudioMenu.cpp
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,70 @@
 +#include "StudioMenu.h"
 +#include "core/main_menu.h"
 +#include "core/display.h"
@@ -12555,29 +12720,30 @@ index 0000000..cb5ab38
 +#include "modules/others/timer.h"
 +
 +void StudioMenu::optionsMenu() {
-+    options = {
++    returnToMenu = false;
++    while (!returnToMenu) {
++    std::vector<Option> studioOptions = {
 +        {"Clock",      []() { mainMenu.clockMenu.optionsMenu(); }},
 +        {"QRCodes",    qrcode_menu},
 +        {"Megalodon",  shark_setup},
 +#if defined(HAS_MICROPHONE)
 +        {"Microphone", [this]() { micMenu(); }},
-+#if !defined(LITE_VERSION)
-+        {"Sonar Guard", sonar_guard_setup},
-+#endif
 +#endif
 +    };
 +
 +    if (isDualBootActive()) {
-+        options.insert(options.begin(), {"Dual-Boot Menu", []() { rebootToBootMenu(true); }});
-+        options.insert(options.begin(), {"Boot XiaoZhi", []() { rebootToXiaoZhi(true); }});
++        studioOptions.insert(studioOptions.begin(), {"Dual-Boot Menu", []() { rebootToBootMenu(true); }});
++        studioOptions.insert(studioOptions.begin(), {"Boot XiaoZhi", []() { rebootToXiaoZhi(true); }});
 +    }
 +
-+    addOptionToMainMenu();
-+    loopOptions(options, MENU_TYPE_SUBMENU, "Studio");
++    studioOptions.push_back({"Main Menu", backToMenu});
++    int selected = loopOptions(studioOptions, MENU_TYPE_SUBMENU, "Studio");
++    if (selected < 0) break;
++    }
 +}
 +
 +void StudioMenu::micMenu() {
-+    options = {
++    std::vector<Option> micOptions = {
 +#if defined(HAS_MICROPHONE)
 +        {"Spectrum",       mic_test},
 +        {"Audio dB Meter", mic_db_meter},
@@ -12586,9 +12752,9 @@ index 0000000..cb5ab38
 +        {"Sonar Motion Guard", sonar_guard_setup},
 +#endif
 +#endif
-+        {"Back",           [this]() { optionsMenu(); }},
++        {"Back",           []() {}},
 +    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "Microphone");
++    loopOptions(micOptions, MENU_TYPE_SUBMENU, "Microphone");
 +}
 +
 +void StudioMenu::drawIcon(float scale) {
@@ -14364,17 +14530,22 @@ index 95c54ce..7e3efce 100644
      // Command responderCmd = cli->addCommand("responder", responderCallback); TODO
  }
 diff --git a/src/core/serialcmds.cpp b/src/core/serialcmds.cpp
-index 908c2c3..570d528 100644
+index 908c2c31..1675e1ef 100644
 --- a/src/core/serialcmds.cpp
 +++ b/src/core/serialcmds.cpp
-@@ -9,8 +9,71 @@ QueueHandle_t cmdQueue = nullptr;
+@@ -9,8 +9,77 @@ QueueHandle_t cmdQueue = nullptr;
  QueueHandle_t rspQueue = nullptr;
  TaskHandle_t serialcmdsTaskHandle;
  
 +namespace {
 +static SemaphoreHandle_t s_capMtx = nullptr;
 +static SemaphoreHandle_t s_capDoneSem = nullptr;
-+static String *volatile s_capTarget = nullptr;
++// The worker owns its capture buffer. The caller may time out while a command
++// is still running, so never hand the worker a pointer to the caller's stack.
++static SemaphoreHandle_t s_capResultMtx = nullptr;
++static String s_capResult;
++static uint32_t s_capGeneration = 0;
++static bool s_capActive = false;
 +
 +class TeeSerialDevice : public SerialDevice {
 +public:
@@ -14436,10 +14607,11 @@ index 908c2c3..570d528 100644
  struct CmdPacket {
      char text[512]; // command size
 +    bool capture;
++    uint32_t captureId;
  };
  bool parseSerialCommand(const String &command, bool waitForResponse) {
      if (!cmdQueue || !rspQueue) {
-@@ -20,6 +83,7 @@ bool parseSerialCommand(const String &command, bool waitForResponse) {
+@@ -20,6 +89,7 @@ bool parseSerialCommand(const String &command, bool waitForResponse) {
      CmdPacket packet;
      memset(&packet, 0, sizeof(packet));
      strncpy(packet.text, command.c_str(), sizeof(packet.text) - 1);
@@ -14447,33 +14619,34 @@ index 908c2c3..570d528 100644
  
      // Enqueue the command packet for processing
      if (xQueueSend(cmdQueue, &packet, 0) != pdTRUE) {
-@@ -34,12 +98,49 @@ bool parseSerialCommand(const String &command, bool waitForResponse) {
+@@ -34,12 +104,57 @@ bool parseSerialCommand(const String &command, bool waitForResponse) {
      return false;
  }
  
 +bool parseSerialCommandCapture(const String &command, String &output, uint32_t timeoutMs) {
 +    output = "";
-+    if (!cmdQueue || !s_capMtx || !s_capDoneSem) { return parseSerialCommand(command, false); }
++    if (!cmdQueue || !s_capMtx || !s_capDoneSem || !s_capResultMtx) return false;
 +    if (xSemaphoreTake(s_capMtx, pdMS_TO_TICKS(500)) != pdTRUE) return false;
-+
 +    while (xSemaphoreTake(s_capDoneSem, 0) == pdTRUE) {}
-+    String capBuf;
-+    capBuf.reserve(512);
-+    s_capTarget = &capBuf;
 +
-+    CmdPacket packet;
-+    memset(&packet, 0, sizeof(packet));
++    xSemaphoreTake(s_capResultMtx, portMAX_DELAY);
++    const uint32_t id = ++s_capGeneration;
++    s_capActive = true;
++    s_capResult = "";
++    xSemaphoreGive(s_capResultMtx);
++
++    CmdPacket packet{};
 +    strncpy(packet.text, command.c_str(), sizeof(packet.text) - 1);
 +    packet.capture = true;
-+
-+    bool ok = false;
-+    if (xQueueSend(cmdQueue, &packet, pdMS_TO_TICKS(100)) == pdTRUE) {
-+        if (xSemaphoreTake(s_capDoneSem, pdMS_TO_TICKS(timeoutMs)) == pdTRUE) {
-+            ok = true;
-+            output = capBuf;
-+        }
-+    }
-+    s_capTarget = nullptr;
++    packet.captureId = id;
++    bool ok = xQueueSend(cmdQueue, &packet, pdMS_TO_TICKS(100)) == pdTRUE &&
++              xSemaphoreTake(s_capDoneSem, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
++    xSemaphoreTake(s_capResultMtx, portMAX_DELAY);
++    if (ok && s_capActive && s_capGeneration == id) output = s_capResult;
++    else ok = false;
++    s_capActive = false;
++    s_capResult = "";
++    xSemaphoreGive(s_capResultMtx);
 +    xSemaphoreGive(s_capMtx);
 +    return ok;
 +}
@@ -14485,13 +14658,20 @@ index 908c2c3..570d528 100644
 -            bool result = serialCli.parse(String(packet.text));
 -            xQueueSend(rspQueue, &result, 0);
 +            bool result = false;
-+            if (packet.capture && s_capTarget != nullptr) {
++            if (packet.capture) {
++                String capture;
++                capture.reserve(512);
 +                SerialDevice *saved = serialDevice;
-+                TeeSerialDevice tee(saved, s_capTarget);
++                TeeSerialDevice tee(saved, &capture);
 +                serialDevice = &tee;
 +                result = serialCli.parse(String(packet.text));
 +                serialDevice = saved;
-+                if (s_capDoneSem) xSemaphoreGive(s_capDoneSem);
++                xSemaphoreTake(s_capResultMtx, portMAX_DELAY);
++                if (s_capActive && s_capGeneration == packet.captureId) {
++                    s_capResult = capture;
++                    xSemaphoreGive(s_capDoneSem);
++                }
++                xSemaphoreGive(s_capResultMtx);
 +            } else {
 +                result = serialCli.parse(String(packet.text));
 +                xQueueSend(rspQueue, &result, 0);
@@ -14499,12 +14679,13 @@ index 908c2c3..570d528 100644
              Serial.println("COMMAND: " + String(packet.text));
              Serial.printf("[CLI] Result: %s\n", result ? "TRUE" : "FALSE");
          }
-@@ -74,6 +175,8 @@ void startSerialCommandsHandlerTask(bool initQueues) {
+@@ -74,6 +189,9 @@ void startSerialCommandsHandlerTask(bool initQueues) {
      if (initQueues) {
          cmdQueue = xQueueCreate(2, sizeof(CmdPacket));
          rspQueue = xQueueCreate(2, sizeof(bool));
 +        if (!s_capMtx) s_capMtx = xSemaphoreCreateMutex();
 +        if (!s_capDoneSem) s_capDoneSem = xSemaphoreCreateBinary();
++        if (!s_capResultMtx) s_capResultMtx = xSemaphoreCreateMutex();
      }
  
      xTaskCreatePinnedToCore(
@@ -16547,7 +16728,7 @@ index 0000000..a28c8b5
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..ddef479 100644
+index a8679bd6..c64f5717 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,49 @@
@@ -16600,7 +16781,7 @@ index a8679bd..ddef479 100644
  #include <globals.h>
  
  File uploadFile;
-@@ -22,12 +51,601 @@ FS _webFS = LittleFS;
+@@ -22,12 +52,601 @@ FS _webFS = LittleFS;
  const int default_webserverporthttp = 80;
  
  // WiFi as an Access Point
@@ -17204,7 +17385,7 @@ index a8679bd..ddef479 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +660,73 @@ String generateToken(int length = 24) {
+@@ -42,36 +661,73 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -17293,7 +17474,7 @@ index a8679bd..ddef479 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,30 +737,41 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,30 +738,41 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -17352,7 +17533,7 @@ index a8679bd..ddef479 100644
  }
  
  /**********************************************************************
-@@ -127,6 +793,7 @@ String humanReadableSize(uint64_t bytes) {
+@@ -127,6 +794,7 @@ String humanReadableSize(uint64_t bytes) {
  String listFiles(FS &fs, const String &folder) {
      // log_i("Listfiles Start");
      String returnText = "pa:" + folder + ":0\n";
@@ -17360,7 +17541,7 @@ index a8679bd..ddef479 100644
      // Serial.println("Listing files stored on SD");
  
      _webFS = fs;
-@@ -168,19 +835,26 @@ String listFiles(FS &fs, const String &folder) {
+@@ -168,19 +836,26 @@ String listFiles(FS &fs, const String &folder) {
  ** used by server->on functions to discern whether a user has the correct
  ** httpapitoken OR is authenticated by username and password
  **********************************************************************/
@@ -17399,7 +17580,7 @@ index a8679bd..ddef479 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -220,49 +894,68 @@ void createDirRecursive(const String &path, FS fs) {
+@@ -220,49 +895,68 @@ void createDirRecursive(const String &path, FS fs) {
  **  Function: handleUpload
  ** handles uploads to the filserver
  **********************************************************************/
@@ -17507,7 +17688,7 @@ index a8679bd..ddef479 100644
      }
  }
  
-@@ -272,43 +965,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +966,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -17584,16 +17765,13 @@ index a8679bd..ddef479 100644
 +    tft.setTextSize(1);
 +    tft.setTextColor(TFT_WHITE, cardBg);
 +    tft.drawCentreString(progLine, tftWidth / 2, boxY + 68, 1);
- 
--    tft.setCursor(padX, currentY);
--    if (mdnsRunning) tft.print("Url: http://bruce.local");
--    currentY += LH * FP + 6;
++
 +    tft.setTextColor(bruceConfig.secColor, cardBg);
 +    tft.drawCentreString("Do not power off device", tftWidth / 2, boxY + 84, 1);
 +}
  
 -    tft.setCursor(padX, currentY);
--    tft.print("IP:  " + txt);
+-    if (mdnsRunning) tft.print("Url: http://bruce.local");
 -    currentY += LH * FP + 6;
 +#if defined(DSOLUTION_183_2MIC)
 +bool otaUiConsumeRedraw() {
@@ -17604,7 +17782,7 @@ index a8679bd..ddef479 100644
 +}
  
 -    tft.setCursor(padX, currentY);
--    tft.print("Usr: " + String(bruceConfig.webUI.user));
+-    tft.print("IP:  " + txt);
 -    currentY += LH * FP + 6;
 +void otaUiCheckpoint() {
 +    if (!uxIsMenuTask() || !isOtaInProgress()) return;
@@ -17634,18 +17812,21 @@ index a8679bd..ddef479 100644
 +#endif
  
 -    tft.setCursor(padX, currentY);
--    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
+-    tft.print("Usr: " + String(bruceConfig.webUI.user));
+-    currentY += LH * FP + 6;
 +void drawWebUiScreen(bool mode_ap) {
 +    drawMainBorderWithTitle(mode_ap ? "WebUI (AP)" : "WebUI (LAN)", true);
  
--    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
--    tft.setTextSize(FP);
--    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
+-    tft.setCursor(padX, currentY);
+-    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
 +    String ip = activeWifiIpString();
 +    wifiIP = ip;
 +    int padX = 14;
 +    int y = tftHeight <= 240 ? 44 : 52;
-+
+ 
+-    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+-    tft.setTextSize(FP);
+-    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
 +    if (mode_ap) {
 +        drawWebUiFittedText(
 +            padX, y, "AP: " + bruceConfig.wifiAp.ssid + " / " + bruceConfig.wifiAp.pwd,
@@ -17696,7 +17877,7 @@ index a8679bd..ddef479 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -379,11 +1191,12 @@ void serveWebUIFile(
+@@ -379,11 +1192,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -17711,7 +17892,14 @@ index a8679bd..ddef479 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1273,971 @@ void configureWebServer() {
+@@ -456,63 +1270,1009 @@ void configureWebServer() {
+     server->on("/index.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+         serveWebUIFile(request, "index.js", "text/javascript", true, index_js, index_js_size);
+     });
++    server->on("/qr_local.js", HTTP_GET, [](AsyncWebServerRequest *request) {
++        serveWebUIFile(request, "qr_local.js", "text/javascript", true, qr_local_js, qr_local_js_size);
++    });
+ 
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -17900,6 +18088,14 @@ index a8679bd..ddef479 100644
 +    });
 +    server->on("/badusb/autorun", HTTP_POST, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
++        auto parseBounded = [request](const char *key, long lo, long hi, long &out) {
++            if (!request->hasArg(key)) return false;
++            String value = request->arg(key); value.trim();
++            if (value.isEmpty()) return false;
++            char *end = nullptr;
++            out = strtol(value.c_str(), &end, 10);
++            return end && *end == '\0' && out >= lo && out <= hi;
++        };
 +        String act = request->hasArg("action") ? request->arg("action") : "";
 +        act.trim(); act.toLowerCase();
 +        if (act == "enable" && request->hasArg("enabled")) {
@@ -17913,21 +18109,27 @@ index a8679bd..ddef479 100644
 +            if (fs != "LittleFS" && fs != "SD") { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"payloadFs must be LittleFS or SD\"}"); return; }
 +            if (path.isEmpty() || path.length()>128) { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid payloadPath\"}"); return; }
 +            bruceConfig.setBadUsbAutoRunPayload(fs, path);
-+            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Payload set to \"" + jsonEscape(fs+":"+path) + "\"\"}");
++            if (bruceConfig.badUsbAutoRun.enabled) badUsbAutoRunStartTask();
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Payload set to " + jsonEscape(fs+":"+path) + "\"}");
 +        } else if (act == "setdelay" && request->hasArg("delayMs")) {
-+            int v = request->arg("delayMs").toInt();
-+            if (v<0) v=0; if (v>10000) v=10000;
++            long v = 0;
++            if (!parseBounded("delayMs", 0, 10000, v)) {
++                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"delayMs must be 0..10000\"}"); return;
++            }
 +            bruceConfig.setBadUsbAutoRunDelayMs((uint16_t)v);
 +            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Delay set\"}");
 +        } else if (act == "setconfirm" && request->hasArg("confirmWindow")) {
 +            bool cw = request->arg("confirmWindow")=="1" || request->arg("confirmWindow").equalsIgnoreCase("true");
-+            uint16_t ms = 0;
-+            if (request->hasArg("confirmMs")) { int m=request->arg("confirmMs").toInt(); if(m>=1000 && m<=10000) ms=(uint16_t)m; }
-+            bruceConfig.setBadUsbAutoRunConfirm(cw, ms);
++            long ms = 0;
++            if (request->hasArg("confirmMs") && !parseBounded("confirmMs", 1000, 10000, ms)) {
++                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"confirmMs must be 1000..10000\"}"); return;
++            }
++            bruceConfig.setBadUsbAutoRunConfirm(cw, (uint16_t)ms);
 +            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Confirm window updated\"}");
 +        } else if (act == "settrigger" && request->hasArg("trigger")) {
-+            int tr=request->arg("trigger").toInt();
-+            if (tr<0||tr>2) { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"trigger 0..2\"}"); return; }
++            long tr = 0;
++            if (!parseBounded("trigger", 0, 2, tr)) { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"trigger 0..2\"}"); return; }
++            if (tr == 1) { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"VBUS trigger is not supported on this board\"}"); return; }
 +            bruceConfig.setBadUsbAutoRunTrigger((uint8_t)tr);
 +            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Trigger set\"}");
 +        } else if (act == "setrunonce" && request->hasArg("runOncePerPlug")) {
@@ -17937,9 +18139,15 @@ index a8679bd..ddef479 100644
 +            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"RunOnce updated\"}");
 +        } else if (act == "testrun") {
 +            if (!badUsbAutoRunIsArmed()) { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"No payload set\"}"); return; }
-+            // Don't block HTTP task — schedule via quick display hint
++#if defined(USB_as_HID)
++            if (xTaskCreate(badUsbAutoRunTestTask, "badUsbAutoTest", 6144, nullptr, 1, nullptr) != pdPASS) {
++                request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Unable to schedule test\"}");
++                return;
++            }
 +            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Test run triggered — watch device screen\"}");
-+            xTaskCreate(badUsbAutoRunTestTask, "badUsbAutoTest", 6144, nullptr, 1, nullptr);
++#else
++            request->send(501, "application/json", "{\"ok\":false,\"msg\":\"USB HID unavailable\"}");
++#endif
 +        } else if (act == "clearpayload") {
 +            bruceConfig.setBadUsbAutoRunPayload("LittleFS", "");
 +            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Payload cleared\"}");
@@ -17982,6 +18190,17 @@ index a8679bd..ddef479 100644
 +
 +    server->on("/personalize", HTTP_POST, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
++        if (request->hasArg("epoch")) {
++#if defined(HAS_RTC)
++            request->send(501, "application/json", "{\"ok\":false,\"msg\":\"Clock sync unavailable on this board\"}");
++            return;
++#else
++            if (atoll(request->arg("epoch").c_str()) <= 1700000000LL) {
++                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid clock value\"}");
++                return;
++            }
++#endif
++        }
 +        String prevMdns = bruceConfig.mdnsHost;
 +
 +        if (request->hasArg("ownerName")) {
@@ -18219,7 +18438,7 @@ index a8679bd..ddef479 100644
 +        if (s_otaRestartPending || s_wifiSwitchBusy) {
 +            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Restart or WiFi change in progress\"}");
 +            return;
-+        }
+         }
 +        if (s_otaInProgress) {
 +            if (isOtaInProgress()) {
 +                request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Another OTA transfer is active\"}");
@@ -18241,7 +18460,7 @@ index a8679bd..ddef479 100644
 +            otaReleaseLock(true);
 +            request->send(500, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
 +            return;
-         }
++        }
 +        s_otaValid = true;
 +        String ok = "{\"ok\":true,\"chunkSize\":" + String((unsigned long)kOtaChunkCap) +
 +                    ",\"maxSize\":" + String((unsigned long)nextPart->size) +
@@ -18329,10 +18548,11 @@ index a8679bd..ddef479 100644
 +                        400, "application/json",
 +                        "{\"ok\":false,\"msg\":\"Invalid OTA image! Upload ota.bin, not factory.bin.\"}"
 +                    );
-+                    return;
-+                }
-+            }
-+
+                     return;
+                 }
+-                screenBinBufferSize = desiredSize;
+             }
+ 
 +            if (offset > s_otaTotal || chunkLen > s_otaTotal - offset) {
 +                Update.abort();
 +                otaReleaseLock(true);
@@ -18530,9 +18750,8 @@ index a8679bd..ddef479 100644
 +                if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
 +                    snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
 +                    otaReleaseLock(true);
-                     return;
-                 }
--                screenBinBufferSize = desiredSize;
++                    return;
++                }
 +                s_otaLegacyOwner = request;
 +                st->started = true;
 +                s_otaValid = true;
@@ -18566,7 +18785,7 @@ index a8679bd..ddef479 100644
 +                        s_otaLastActivityMs = millis();
 +                    }
 +                }
-             }
++            }
 +            if (final) {
 +                if (s_otaLegacyBufLen > 0) {
 +                    if (Update.write(s_otaLegacyBuf, s_otaLegacyBufLen) != s_otaLegacyBufLen) {
@@ -18590,7 +18809,7 @@ index a8679bd..ddef479 100644
 +            }
 +        }
 +    );
- 
++
 +    // Software USB ROM Bootloader trigger
 +    auto handleBootloaderReq = [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
@@ -18708,10 +18927,8 @@ index a8679bd..ddef479 100644
 +            );
 +            if (!response) {
 +                request->send(503, "text/plain", "Insufficient memory for screen response");
-+                return;
-+            }
--                return;
--            }
+                 return;
+             }
 -            request->send(200, "application/octet-stream", (const uint8_t *)screenBinBuffer, binSize);
 +            response->addHeader("Cache-Control", "no-store");
 +            response->addHeader("X-Screen-Logging", logging ? "active" : "inactive");
@@ -18723,7 +18940,7 @@ index a8679bd..ddef479 100644
          }
      });
  
-@@ -544,25 +2262,70 @@ void configureWebServer() {
+@@ -544,25 +2304,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -18813,7 +19030,7 @@ index a8679bd..ddef479 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2339,28 @@ void configureWebServer() {
+@@ -576,9 +2381,28 @@ void configureWebServer() {
          }
      });
  
@@ -18844,7 +19061,7 @@ index a8679bd..ddef479 100644
      });
  
      // List files
-@@ -632,6 +2414,11 @@ void configureWebServer() {
+@@ -632,6 +2456,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -18856,7 +19073,7 @@ index a8679bd..ddef479 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2487,7 @@ void configureWebServer() {
+@@ -700,7 +2529,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -18865,7 +19082,7 @@ index a8679bd..ddef479 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2507,13 @@ void configureWebServer() {
+@@ -720,7 +2549,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -18880,7 +19097,7 @@ index a8679bd..ddef479 100644
          handleUpload
      );
  
-@@ -737,6 +2530,427 @@ void configureWebServer() {
+@@ -737,6 +2572,427 @@ void configureWebServer() {
              }
          }
      });
@@ -19308,7 +19525,7 @@ index a8679bd..ddef479 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +2959,78 @@ void configureWebServer() {
+@@ -745,25 +3001,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -19396,7 +19613,7 @@ index a8679bd..ddef479 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +3038,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +3080,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -20326,10 +20543,10 @@ index eebc4a9..c3d0478 100644
      if (bruceConfig.startupApp != "" && !startupApp.startApp(bruceConfig.startupApp)) {
 diff --git a/src/modules/badusb_ble/badusb_autorun.cpp b/src/modules/badusb_ble/badusb_autorun.cpp
 new file mode 100644
-index 0000000..62d2bea
+index 00000000..5d50f8ff
 --- /dev/null
 +++ b/src/modules/badusb_ble/badusb_autorun.cpp
-@@ -0,0 +1,350 @@
+@@ -0,0 +1,359 @@
 +#if !defined(LITE_VERSION)
 +#include "badusb_autorun.h"
 +#include "ducky_typer.h"
@@ -20356,6 +20573,7 @@ index 0000000..62d2bea
 +#endif
 +
 +static TaskHandle_t s_task = nullptr;
++static bool s_taskStarted = false;
 +static volatile bool s_running = false;
 +static volatile bool s_armed = false;
 +static bool s_lastMounted = false;
@@ -20375,6 +20593,8 @@ index 0000000..62d2bea
 +
 +bool badUsbAutoRunIsArmed() {
 +    if (!bruceConfig.badUsbAutoRun.enabled) return false;
++    // No verified VBUS sensing on this board. Never treat enumeration as VBUS.
++    if (bruceConfig.badUsbAutoRun.trigger == 1) return false;
 +    if (bruceConfig.badUsbAutoRun.payloadPath.isEmpty()) return false;
 +    FS *fs = nullptr;
 +    String p = bruceConfig.badUsbAutoRun.payloadPath;
@@ -20389,7 +20609,7 @@ index 0000000..62d2bea
 +    return fs->exists(p);
 +}
 +
-+bool badUsbAutoRunIsRunning() { return s_running; }
++bool badUsbAutoRunIsRunning() { return __atomic_load_n(&s_running, __ATOMIC_ACQUIRE); }
 +
 +String badUsbAutoRunGetPayloadLabel() {
 +    if (bruceConfig.badUsbAutoRun.payloadPath.isEmpty()) return String("—");
@@ -20401,7 +20621,7 @@ index 0000000..62d2bea
 +    String j = "{";
 +    j += "\"enabled\":" + String(bruceConfig.badUsbAutoRun.enabled ? "true" : "false") + ",";
 +    j += "\"armed\":" + String(badUsbAutoRunIsArmed() ? "true" : "false") + ",";
-+    j += "\"running\":" + String(s_running ? "true" : "false") + ",";
++    j += "\"running\":" + String(badUsbAutoRunIsRunning() ? "true" : "false") + ",";
 +    j += "\"payloadFs\":\"" + jsonEscapeLocal(bruceConfig.badUsbAutoRun.payloadFs) + "\",";
 +    j += "\"payloadPath\":\"" + jsonEscapeLocal(bruceConfig.badUsbAutoRun.payloadPath) + "\",";
 +    j += "\"payloadLabel\":\"" + jsonEscapeLocal(label) + "\",";
@@ -20419,19 +20639,20 @@ index 0000000..62d2bea
 +void badUsbAutoRunInit() {
 +    bruceConfig.validateBadUsbAutoRun();
 +    s_armed = badUsbAutoRunIsArmed();
-+    if (s_armed) badUsbAutoRunStartTask();
++    if (bruceConfig.badUsbAutoRun.enabled) badUsbAutoRunStartTask();
 +}
 +
 +void badUsbAutoRunStartTask() {
-+    if (s_task) return;
 +    if (!bruceConfig.badUsbAutoRun.enabled) return;
-+    xTaskCreate(badUsbAutoRunTask, "badUsbAutoRun", 6144, nullptr, 1, &s_task);
++    if (__atomic_exchange_n(&s_taskStarted, true, __ATOMIC_ACQ_REL)) return;
++    if (xTaskCreate(badUsbAutoRunTask, "badUsbAutoRun", 6144, nullptr, 1, &s_task) != pdPASS) {
++        __atomic_store_n(&s_taskStarted, false, __ATOMIC_RELEASE);
++    }
 +}
 +
 +void badUsbAutoRunStopTask() {
-+    if (s_task) { vTaskDelete(s_task); s_task = nullptr; }
-+    s_usbInitialized = false;
-+    s_lastMounted = false;
++    // The task observes enabled=false and exits its current wait. Do not delete
++    // it asynchronously: it may own the display/input lock or a file handle.
 +    s_armed = false;
 +}
 +
@@ -20459,6 +20680,7 @@ index 0000000..62d2bea
 +    inputUnlock();
 +    bool cancelled=false;
 +    while (millis() < end) {
++        if (!bruceConfig.badUsbAutoRun.enabled) { cancelled = true; break; }
 +        unsigned long now=millis();
 +        int remainingMs=(int)(end-now);
 +        int sec=(remainingMs+999)/1000;
@@ -20497,90 +20719,95 @@ index 0000000..62d2bea
 +    return true;
 +}
 +
++static bool autoRunShouldStop() {
++    if (!bruceConfig.badUsbAutoRun.enabled) return true;
++#if defined(USB_as_HID)
++    return !tud_mounted();
++#else
++    return true;
++#endif
++}
++
++static bool waitAutoRunConnected(uint32_t durationMs) {
++    uint32_t start = millis();
++    while ((uint32_t)(millis() - start) < durationMs) {
++        if (autoRunShouldStop()) return false;
++        vTaskDelay(pdMS_TO_TICKS(50));
++    }
++    return !autoRunShouldStop();
++}
++
 +static bool runPayloadFile(const String &fsName, const String &path) {
++    if (__atomic_exchange_n(&s_running, true, __ATOMIC_ACQUIRE)) return false;
 +    FS *fs = nullptr;
 +    if (fsName == "SD") {
-+        if (!setupSdCard()) { inputLock(); displayError("SD not found", true); inputUnlock(); return false; }
++        if (!setupSdCard()) { inputLock(); displayError("SD not found", true); inputUnlock(); __atomic_store_n(&s_running, false, __ATOMIC_RELEASE); return false; }
 +        fs = &SD;
 +    } else {
 +        fs = &LittleFS;
 +    }
-+    if (!fs || !fs->exists(path)) { inputLock(); displayError("Payload not found: " + path, true); inputUnlock(); return false; }
-+    s_running = true;
-+    if (!ensureUsbHidReady()) { inputLock(); displayError("USB HID init failed", true); inputUnlock(); s_running=false; return false; }
++    if (!fs || !fs->exists(path)) { inputLock(); displayError("Payload not found: " + path, true); inputUnlock(); __atomic_store_n(&s_running, false, __ATOMIC_RELEASE); return false; }
++    if (!ensureUsbHidReady()) { inputLock(); displayError("USB HID init failed", true); inputUnlock(); __atomic_store_n(&s_running, false, __ATOMIC_RELEASE); return false; }
 +#if defined(USB_as_HID)
 +    unsigned long t0=millis();
 +    inputLock(); printStatusBadUSBBLE("Waiting USB Host..."); inputUnlock();
 +    while (!tud_mounted() && millis()-t0 < 10000) {
 +        vTaskDelay(pdMS_TO_TICKS(100));
 +        inputLock(); bool cancel=EscPress||AnyKeyPress; inputUnlock();
-+        if (cancel) { inputLock(); displayInfo("Cancelled — host not ready", true); inputUnlock(); s_running=false; return false; }
++        if (cancel) { inputLock(); displayInfo("Cancelled — host not ready", true); inputUnlock(); __atomic_store_n(&s_running, false, __ATOMIC_RELEASE); return false; }
 +    }
-+    if (!tud_mounted()) { inputLock(); displayError("USB host not connected", true); inputUnlock(); s_running=false; return false; }
++    if (!tud_mounted()) { inputLock(); displayError("USB host not connected", true); inputUnlock(); __atomic_store_n(&s_running, false, __ATOMIC_RELEASE); return false; }
 +    uint16_t delayMs=bruceConfig.badUsbAutoRun.delayMs;
-+    if (delayMs) { inputLock(); printStatusBadUSBBLE("Host connected, delay "+String(delayMs)+"ms"); inputUnlock(); vTaskDelay(pdMS_TO_TICKS(delayMs)); }
++    if (delayMs) {
++        inputLock(); printStatusBadUSBBLE("Host connected, delay "+String(delayMs)+"ms"); inputUnlock();
++        if (!waitAutoRunConnected(delayMs)) { __atomic_store_n(&s_running, false, __ATOMIC_RELEASE); return false; }
++    }
++    if (autoRunShouldStop()) { __atomic_store_n(&s_running, false, __ATOMIC_RELEASE); return false; }
 +#endif
 +    inputLock(); printHeaderBadUSBBLE(path); printStatusBadUSBBLE("Running Auto-Run..."); inputUnlock();
 +    // key_input takes FS by value
-+    key_input(*fs, path, hid_usb);
-+    inputLock(); displayInfo("Auto-Run Done", true); delay(1000); inputUnlock();
-+    s_running=false;
-+    return true;
++    bool completed = key_input(*fs, path, hid_usb, autoRunShouldStop) && !autoRunShouldStop();
++    inputLock(); displayInfo(completed ? "Auto-Run Done" : "Auto-Run stopped", true); delay(1000); inputUnlock();
++    __atomic_store_n(&s_running, false, __ATOMIC_RELEASE);
++    return completed;
 +}
 +
 +static void badUsbAutoRunTask(void *param) {
++    (void)param;
 +    vTaskDelay(pdMS_TO_TICKS(2000));
-+    if (bruceConfig.badUsbAutoRun.enabled && bruceConfig.badUsbAutoRun.trigger==0) ensureUsbHidReady();
 +    while (true) {
-+        if (!bruceConfig.badUsbAutoRun.enabled) { vTaskDelay(pdMS_TO_TICKS(1000)); continue; }
-+        if (!badUsbAutoRunIsArmed()) { s_armed=false; vTaskDelay(pdMS_TO_TICKS(1000)); continue; }
-+        s_armed=true;
-+        bool mounted=false;
++        if (!badUsbAutoRunIsArmed()) {
++            s_armed = false;
++            s_lastMounted = false;
++            vTaskDelay(pdMS_TO_TICKS(1000));
++            continue;
++        }
++        s_armed = true;
++        bool mounted = false;
 +#if defined(USB_as_HID)
 +        if (!s_usbInitialized) ensureUsbHidReady();
-+        mounted=tud_mounted();
++        mounted = tud_mounted();
 +#endif
 +        if (mounted && !s_lastMounted) {
-+            s_lastPlugMs=millis();
-+            uint8_t trig=bruceConfig.badUsbAutoRun.trigger;
-+            if (trig==2) {
-+                vTaskDelay(pdMS_TO_TICKS(2000));
-+#if defined(USB_as_HID)
-+                if (!tud_mounted()) { s_lastMounted=false; vTaskDelay(pdMS_TO_TICKS(500)); continue; }
-+#endif
-+            }
-+            bool shouldRun=true;
-+            if (bruceConfig.badUsbAutoRun.confirmWindow) {
-+                shouldRun=doConfirmCountdown(bruceConfig.badUsbAutoRun.confirmMs);
-+            }
-+            if (shouldRun) {
-+                runPayloadFile(bruceConfig.badUsbAutoRun.payloadFs, bruceConfig.badUsbAutoRun.payloadPath);
-+                if (bruceConfig.badUsbAutoRun.runOncePerPlug) {
-+                    while (true) {
-+#if defined(USB_as_HID)
-+                        if (!tud_mounted()) break;
-+                        vTaskDelay(pdMS_TO_TICKS(500));
-+#else
-+                        break;
-+#endif
-+                    }
-+                    vTaskDelay(pdMS_TO_TICKS(1000));
-+                } else {
-+                    vTaskDelay(pdMS_TO_TICKS(2000));
-+                }
-+            } else {
-+                while (true) {
-+#if defined(USB_as_HID)
-+                    if (!tud_mounted()) break;
-+                    vTaskDelay(pdMS_TO_TICKS(500));
-+#else
-+                    break;
-+#endif
-+                }
-+                vTaskDelay(pdMS_TO_TICKS(1000));
-+            }
++            s_lastMounted = true;
++            s_lastPlugMs = millis();
++            do {
++                if (!badUsbAutoRunIsArmed() || autoRunShouldStop()) break;
++                if (bruceConfig.badUsbAutoRun.trigger == 2 && !waitAutoRunConnected(2000)) break;
++                if (bruceConfig.badUsbAutoRun.confirmWindow && !doConfirmCountdown(bruceConfig.badUsbAutoRun.confirmMs)) break;
++                if (autoRunShouldStop()) break;
++                if (!runPayloadFile(bruceConfig.badUsbAutoRun.payloadFs, bruceConfig.badUsbAutoRun.payloadPath)) break;
++                if (bruceConfig.badUsbAutoRun.runOncePerPlug) break;
++                // Explicit repeat mode: recheck connection, enabled state and
++                // confirmation on every cycle. Stop on cancel, failure or unplug.
++                if (!waitAutoRunConnected(2000)) break;
++            } while (true);
 +        }
-+        s_lastMounted=mounted;
++#if defined(USB_as_HID)
++        s_lastMounted = tud_mounted();
++#else
++        s_lastMounted = false;
++#endif
 +        vTaskDelay(pdMS_TO_TICKS(300));
 +    }
 +}
@@ -20613,7 +20840,7 @@ index 0000000..62d2bea
 +    txt+="Payload: "+badUsbAutoRunGetPayloadLabel()+"\n";
 +    txt+="Delay: "+String(bruceConfig.badUsbAutoRun.delayMs)+"ms\n";
 +    txt+="Confirm: "+String(bruceConfig.badUsbAutoRun.confirmWindow? "ON ("+String(bruceConfig.badUsbAutoRun.confirmMs)+"ms)":"OFF")+"\n";
-+    txt+="Trigger: "+String(bruceConfig.badUsbAutoRun.trigger==0?"Enumeration":bruceConfig.badUsbAutoRun.trigger==1?"VBUS":"Delayed")+"\n";
++    txt+="Trigger: "+String(bruceConfig.badUsbAutoRun.trigger==0?"Enumeration":bruceConfig.badUsbAutoRun.trigger==1?"VBUS unavailable":"Delayed")+"\n";
 +    txt+="OncePerPlug: "+String(bruceConfig.badUsbAutoRun.runOncePerPlug?"YES":"NO")+"\n";
 +    txt+="Running: "+String(s_running?"YES":"NO");
 +    displayInfo(txt, true);
@@ -20626,7 +20853,7 @@ index 0000000..62d2bea
 +        String payloadLabel="Payload: "+(bruceConfig.badUsbAutoRun.payloadPath.isEmpty()?"Not set":bruceConfig.badUsbAutoRun.payloadPath);
 +        String delayLabel="Delay: "+String(bruceConfig.badUsbAutoRun.delayMs)+"ms";
 +        String confirmLabel="Confirm Window: "+String(bruceConfig.badUsbAutoRun.confirmWindow?"ON":"OFF");
-+        String triggerLabel="Trigger: "+String(bruceConfig.badUsbAutoRun.trigger==0?"Enumeration":bruceConfig.badUsbAutoRun.trigger==1?"VBUS":"Delayed");
++        String triggerLabel="Trigger: "+String(bruceConfig.badUsbAutoRun.trigger==0?"Enumeration":bruceConfig.badUsbAutoRun.trigger==1?"VBUS unavailable":"Delayed");
 +        String onceLabel="Run Once Per Plug: "+String(bruceConfig.badUsbAutoRun.runOncePerPlug?"ON":"OFF");
 +        options.push_back({enLabel, [](){
 +            bruceConfig.setBadUsbAutoRunEnabled(!bruceConfig.badUsbAutoRun.enabled);
@@ -20655,7 +20882,6 @@ index 0000000..62d2bea
 +        options.push_back({triggerLabel, [](){
 +            options={
 +                {"On Enumeration", [](){ bruceConfig.setBadUsbAutoRunTrigger(0); }},
-+                {"On VBUS", [](){ bruceConfig.setBadUsbAutoRunTrigger(1); }},
 +                {"Delayed (enum+2s)", [](){ bruceConfig.setBadUsbAutoRunTrigger(2); }},
 +                {"Back", [](){}}
 +            };
@@ -20712,7 +20938,7 @@ index 0000000..2779eda
 +
 +#endif
 diff --git a/src/modules/badusb_ble/ducky_typer.cpp b/src/modules/badusb_ble/ducky_typer.cpp
-index c6fd084..b6f39cf 100644
+index c6fd084b..faae9b38 100644
 --- a/src/modules/badusb_ble/ducky_typer.cpp
 +++ b/src/modules/badusb_ble/ducky_typer.cpp
 @@ -6,6 +6,7 @@
@@ -20744,6 +20970,20 @@ index c6fd084..b6f39cf 100644
      {"ALTCHAR",               0,                DuckyCommandType_AltChar           },
      {"ALTSTRING",             0,                DuckyCommandType_AltString         },
      {"ALTCODE",               0,                DuckyCommandType_AltString         },
+@@ -853,10 +859,10 @@ EXIT:
+ // KEY_INPUT - Main Ducky script parser
+ // ============================================================================
+ 
+-void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+-    if (!fs.exists(bad_script) || bad_script == "") return;
++bool key_input(FS fs, const String &bad_script, HIDInterface *_hid, bool (*shouldStop)()) {
++    if (!fs.exists(bad_script) || bad_script == "") return false;
+     File payloadFile = fs.open(bad_script, "r");
+-    if (!payloadFile) return;
++    if (!payloadFile) return false;
+     String lineContent = "";
+     String Command = "";
+     char Cmd[25];
 @@ -867,6 +873,11 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
      static int nextStringDelay = -1;
      static int defaultStringDelay = bruceConfig.badUSBBLEKeyDelay;
@@ -20756,7 +20996,29 @@ index c6fd084..b6f39cf 100644
  
      _hid->releaseAll();
  
-@@ -949,6 +960,19 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+@@ -895,10 +906,12 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+ 
+     uint32_t startMillisBADUSBBLE = millis();
+ 
++    bool interrupted = false;
+     while (payloadFile.available()) {
++        if (shouldStop && shouldStop()) { interrupted = true; goto EXIT; }
+         previousMillis = millis();
+         if (check(SelPress)) {
+-            if (!handlePauseResume()) { goto EXIT; }
++            if (!handlePauseResume()) { interrupted = true; goto EXIT; }
+         }
+         lineContent = payloadFile.readStringUntil('\n');
+         if (lineContent.endsWith("\r")) lineContent.remove(lineContent.length() - 1);
+@@ -935,6 +948,7 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+         uint16_t i;
+         uint16_t repeatCount = RepeatTmp.toInt();
+         for (i = 0; i < repeatCount; i++) {
++            if (shouldStop && shouldStop()) { interrupted = true; goto EXIT; }
+             DuckyCommandLookup *PriCmd = findDuckyCommand(Cmd);
+             DuckyCommandLookup *ArgCmd = findDuckyCommand(Argument.c_str());
+ 
+@@ -949,10 +963,24 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
                      if (strcmp(PriCmd->command, "STRINGLN") == 0) _hid->println();
  
                      if (nextStringDelay >= 0) { nextStringDelay = -1; }
@@ -20776,8 +21038,21 @@ index c6fd084..b6f39cf 100644
                  } else if (PriCmd->type == DuckyCommandType_WaitForButtonPress) {
                      printStatusBadUSBBLE("Waiting for button press");
                      bool waitSelect = false;
+                     while (!waitSelect) {
++                        if (shouldStop && shouldStop()) { interrupted = true; goto EXIT; }
+                         waitSelect = check(SelPress);
+                         delay(50);
+                     }
+@@ -1023,6 +1051,7 @@ EXIT:
+     tft.setTextSize(FP);
+     payloadFile.close();
+     _hid->releaseAll();
++    return !interrupted;
+ }
+ 
+ // ============================================================================
 diff --git a/src/modules/badusb_ble/ducky_typer.h b/src/modules/badusb_ble/ducky_typer.h
-index bb5aeb4..3b18bbd 100644
+index bb5aeb4f..f0460124 100644
 --- a/src/modules/badusb_ble/ducky_typer.h
 +++ b/src/modules/badusb_ble/ducky_typer.h
 @@ -16,6 +16,7 @@
@@ -20788,6 +21063,15 @@ index bb5aeb4..3b18bbd 100644
  
  struct DuckyCommand;
  struct DuckyCommandLookup;
+@@ -29,7 +30,7 @@ void ducky_setup(HIDInterface *&hid, bool ble = false);
+ void ducky_startKb(HIDInterface *&hid, bool ble, int functionId = 0);
+ 
+ // Parses a file to run in the badUSB
+-void key_input(FS fs, const String &bad_script, HIDInterface *hid);
++bool key_input(FS fs, const String &bad_script, HIDInterface *hid, bool (*shouldStop)() = nullptr);
+ 
+ // Sends a simple command through USB
+ void key_input_from_string(const String &text);
 diff --git a/src/modules/badusb_ble/smart_badusb.cpp b/src/modules/badusb_ble/smart_badusb.cpp
 new file mode 100644
 index 0000000..b5be732
@@ -33303,7 +33587,7 @@ new file mode 100644
 index 0000000..9067c2a
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.cpp
-@@ -0,0 +1,410 @@
+@@ -0,0 +1,401 @@
 +#include "portal_napt.h"
 +#if !defined(LITE_VERSION)
 +
@@ -36124,3 +36408,2319 @@ index 327074a..8cf95db 100644
                  if(force || info!=paintedInfo || status!=paintedStatus) {
                      tft.fillRect(left,footer,width,34,bruceConfig.bgColor);
                      tft.setTextColor(bruceConfig.priColor,bruceConfig.bgColor);
+diff --git a/embedded_resources/web_interface/qr_local.js b/embedded_resources/web_interface/qr_local.js
+new file mode 100644
+index 00000000..212b519d
+--- /dev/null
++++ b/embedded_resources/web_interface/qr_local.js
+@@ -0,0 +1,2310 @@
++/* QR Code Generator for JavaScript, Copyright (c) 2009 Kazuhiko Arase.
++MIT License: Permission is hereby granted, free of charge, to any person obtaining
++ a copy of this software and associated documentation files (the "Software"), to deal
++ in the Software without restriction, including without limitation the rights to use,
++ copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
++ and to permit persons to whom the Software is furnished to do so, subject to the following
++ conditions: The above copyright notice and this permission notice shall be included in all
++ copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT
++ WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
++ THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
++ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
++//---------------------------------------------------------------------
++//
++// QR Code Generator for JavaScript
++//
++// Copyright (c) 2009 Kazuhiko Arase
++//
++// URL: http://www.d-project.com/
++//
++// Licensed under the MIT license:
++//  http://www.opensource.org/licenses/mit-license.php
++//
++// The word 'QR Code' is registered trademark of
++// DENSO WAVE INCORPORATED
++//  http://www.denso-wave.com/qrcode/faqpatent-e.html
++//
++//---------------------------------------------------------------------
++
++var qrcode = function() {
++
++  //---------------------------------------------------------------------
++  // qrcode
++  //---------------------------------------------------------------------
++
++  /**
++   * qrcode
++   * @param typeNumber 1 to 40
++   * @param errorCorrectionLevel 'L','M','Q','H'
++   */
++  var qrcode = function(typeNumber, errorCorrectionLevel) {
++
++    var PAD0 = 0xEC;
++    var PAD1 = 0x11;
++
++    var _typeNumber = typeNumber;
++    var _errorCorrectionLevel = QRErrorCorrectionLevel[errorCorrectionLevel];
++    var _modules = null;
++    var _moduleCount = 0;
++    var _dataCache = null;
++    var _dataList = [];
++
++    var _this = {};
++
++    var makeImpl = function(test, maskPattern) {
++
++      _moduleCount = _typeNumber * 4 + 17;
++      _modules = function(moduleCount) {
++        var modules = new Array(moduleCount);
++        for (var row = 0; row < moduleCount; row += 1) {
++          modules[row] = new Array(moduleCount);
++          for (var col = 0; col < moduleCount; col += 1) {
++            modules[row][col] = null;
++          }
++        }
++        return modules;
++      }(_moduleCount);
++
++      setupPositionProbePattern(0, 0);
++      setupPositionProbePattern(_moduleCount - 7, 0);
++      setupPositionProbePattern(0, _moduleCount - 7);
++      setupPositionAdjustPattern();
++      setupTimingPattern();
++      setupTypeInfo(test, maskPattern);
++
++      if (_typeNumber >= 7) {
++        setupTypeNumber(test);
++      }
++
++      if (_dataCache == null) {
++        _dataCache = createData(_typeNumber, _errorCorrectionLevel, _dataList);
++      }
++
++      mapData(_dataCache, maskPattern);
++    };
++
++    var setupPositionProbePattern = function(row, col) {
++
++      for (var r = -1; r <= 7; r += 1) {
++
++        if (row + r <= -1 || _moduleCount <= row + r) continue;
++
++        for (var c = -1; c <= 7; c += 1) {
++
++          if (col + c <= -1 || _moduleCount <= col + c) continue;
++
++          if ( (0 <= r && r <= 6 && (c == 0 || c == 6) )
++              || (0 <= c && c <= 6 && (r == 0 || r == 6) )
++              || (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
++            _modules[row + r][col + c] = true;
++          } else {
++            _modules[row + r][col + c] = false;
++          }
++        }
++      }
++    };
++
++    var getBestMaskPattern = function() {
++
++      var minLostPoint = 0;
++      var pattern = 0;
++
++      for (var i = 0; i < 8; i += 1) {
++
++        makeImpl(true, i);
++
++        var lostPoint = QRUtil.getLostPoint(_this);
++
++        if (i == 0 || minLostPoint > lostPoint) {
++          minLostPoint = lostPoint;
++          pattern = i;
++        }
++      }
++
++      return pattern;
++    };
++
++    var setupTimingPattern = function() {
++
++      for (var r = 8; r < _moduleCount - 8; r += 1) {
++        if (_modules[r][6] != null) {
++          continue;
++        }
++        _modules[r][6] = (r % 2 == 0);
++      }
++
++      for (var c = 8; c < _moduleCount - 8; c += 1) {
++        if (_modules[6][c] != null) {
++          continue;
++        }
++        _modules[6][c] = (c % 2 == 0);
++      }
++    };
++
++    var setupPositionAdjustPattern = function() {
++
++      var pos = QRUtil.getPatternPosition(_typeNumber);
++
++      for (var i = 0; i < pos.length; i += 1) {
++
++        for (var j = 0; j < pos.length; j += 1) {
++
++          var row = pos[i];
++          var col = pos[j];
++
++          if (_modules[row][col] != null) {
++            continue;
++          }
++
++          for (var r = -2; r <= 2; r += 1) {
++
++            for (var c = -2; c <= 2; c += 1) {
++
++              if (r == -2 || r == 2 || c == -2 || c == 2
++                  || (r == 0 && c == 0) ) {
++                _modules[row + r][col + c] = true;
++              } else {
++                _modules[row + r][col + c] = false;
++              }
++            }
++          }
++        }
++      }
++    };
++
++    var setupTypeNumber = function(test) {
++
++      var bits = QRUtil.getBCHTypeNumber(_typeNumber);
++
++      for (var i = 0; i < 18; i += 1) {
++        var mod = (!test && ( (bits >> i) & 1) == 1);
++        _modules[Math.floor(i / 3)][i % 3 + _moduleCount - 8 - 3] = mod;
++      }
++
++      for (var i = 0; i < 18; i += 1) {
++        var mod = (!test && ( (bits >> i) & 1) == 1);
++        _modules[i % 3 + _moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
++      }
++    };
++
++    var setupTypeInfo = function(test, maskPattern) {
++
++      var data = (_errorCorrectionLevel << 3) | maskPattern;
++      var bits = QRUtil.getBCHTypeInfo(data);
++
++      // vertical
++      for (var i = 0; i < 15; i += 1) {
++
++        var mod = (!test && ( (bits >> i) & 1) == 1);
++
++        if (i < 6) {
++          _modules[i][8] = mod;
++        } else if (i < 8) {
++          _modules[i + 1][8] = mod;
++        } else {
++          _modules[_moduleCount - 15 + i][8] = mod;
++        }
++      }
++
++      // horizontal
++      for (var i = 0; i < 15; i += 1) {
++
++        var mod = (!test && ( (bits >> i) & 1) == 1);
++
++        if (i < 8) {
++          _modules[8][_moduleCount - i - 1] = mod;
++        } else if (i < 9) {
++          _modules[8][15 - i - 1 + 1] = mod;
++        } else {
++          _modules[8][15 - i - 1] = mod;
++        }
++      }
++
++      // fixed module
++      _modules[_moduleCount - 8][8] = (!test);
++    };
++
++    var mapData = function(data, maskPattern) {
++
++      var inc = -1;
++      var row = _moduleCount - 1;
++      var bitIndex = 7;
++      var byteIndex = 0;
++      var maskFunc = QRUtil.getMaskFunction(maskPattern);
++
++      for (var col = _moduleCount - 1; col > 0; col -= 2) {
++
++        if (col == 6) col -= 1;
++
++        while (true) {
++
++          for (var c = 0; c < 2; c += 1) {
++
++            if (_modules[row][col - c] == null) {
++
++              var dark = false;
++
++              if (byteIndex < data.length) {
++                dark = ( ( (data[byteIndex] >>> bitIndex) & 1) == 1);
++              }
++
++              var mask = maskFunc(row, col - c);
++
++              if (mask) {
++                dark = !dark;
++              }
++
++              _modules[row][col - c] = dark;
++              bitIndex -= 1;
++
++              if (bitIndex == -1) {
++                byteIndex += 1;
++                bitIndex = 7;
++              }
++            }
++          }
++
++          row += inc;
++
++          if (row < 0 || _moduleCount <= row) {
++            row -= inc;
++            inc = -inc;
++            break;
++          }
++        }
++      }
++    };
++
++    var createBytes = function(buffer, rsBlocks) {
++
++      var offset = 0;
++
++      var maxDcCount = 0;
++      var maxEcCount = 0;
++
++      var dcdata = new Array(rsBlocks.length);
++      var ecdata = new Array(rsBlocks.length);
++
++      for (var r = 0; r < rsBlocks.length; r += 1) {
++
++        var dcCount = rsBlocks[r].dataCount;
++        var ecCount = rsBlocks[r].totalCount - dcCount;
++
++        maxDcCount = Math.max(maxDcCount, dcCount);
++        maxEcCount = Math.max(maxEcCount, ecCount);
++
++        dcdata[r] = new Array(dcCount);
++
++        for (var i = 0; i < dcdata[r].length; i += 1) {
++          dcdata[r][i] = 0xff & buffer.getBuffer()[i + offset];
++        }
++        offset += dcCount;
++
++        var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
++        var rawPoly = qrPolynomial(dcdata[r], rsPoly.getLength() - 1);
++
++        var modPoly = rawPoly.mod(rsPoly);
++        ecdata[r] = new Array(rsPoly.getLength() - 1);
++        for (var i = 0; i < ecdata[r].length; i += 1) {
++          var modIndex = i + modPoly.getLength() - ecdata[r].length;
++          ecdata[r][i] = (modIndex >= 0)? modPoly.getAt(modIndex) : 0;
++        }
++      }
++
++      var totalCodeCount = 0;
++      for (var i = 0; i < rsBlocks.length; i += 1) {
++        totalCodeCount += rsBlocks[i].totalCount;
++      }
++
++      var data = new Array(totalCodeCount);
++      var index = 0;
++
++      for (var i = 0; i < maxDcCount; i += 1) {
++        for (var r = 0; r < rsBlocks.length; r += 1) {
++          if (i < dcdata[r].length) {
++            data[index] = dcdata[r][i];
++            index += 1;
++          }
++        }
++      }
++
++      for (var i = 0; i < maxEcCount; i += 1) {
++        for (var r = 0; r < rsBlocks.length; r += 1) {
++          if (i < ecdata[r].length) {
++            data[index] = ecdata[r][i];
++            index += 1;
++          }
++        }
++      }
++
++      return data;
++    };
++
++    var createData = function(typeNumber, errorCorrectionLevel, dataList) {
++
++      var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
++
++      var buffer = qrBitBuffer();
++
++      for (var i = 0; i < dataList.length; i += 1) {
++        var data = dataList[i];
++        buffer.put(data.getMode(), 4);
++        buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
++        data.write(buffer);
++      }
++
++      // calc num max data.
++      var totalDataCount = 0;
++      for (var i = 0; i < rsBlocks.length; i += 1) {
++        totalDataCount += rsBlocks[i].dataCount;
++      }
++
++      if (buffer.getLengthInBits() > totalDataCount * 8) {
++        throw 'code length overflow. ('
++          + buffer.getLengthInBits()
++          + '>'
++          + totalDataCount * 8
++          + ')';
++      }
++
++      // end code
++      if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
++        buffer.put(0, 4);
++      }
++
++      // padding
++      while (buffer.getLengthInBits() % 8 != 0) {
++        buffer.putBit(false);
++      }
++
++      // padding
++      while (true) {
++
++        if (buffer.getLengthInBits() >= totalDataCount * 8) {
++          break;
++        }
++        buffer.put(PAD0, 8);
++
++        if (buffer.getLengthInBits() >= totalDataCount * 8) {
++          break;
++        }
++        buffer.put(PAD1, 8);
++      }
++
++      return createBytes(buffer, rsBlocks);
++    };
++
++    _this.addData = function(data, mode) {
++
++      mode = mode || 'Byte';
++
++      var newData = null;
++
++      switch(mode) {
++      case 'Numeric' :
++        newData = qrNumber(data);
++        break;
++      case 'Alphanumeric' :
++        newData = qrAlphaNum(data);
++        break;
++      case 'Byte' :
++        newData = qr8BitByte(data);
++        break;
++      case 'Kanji' :
++        newData = qrKanji(data);
++        break;
++      default :
++        throw 'mode:' + mode;
++      }
++
++      _dataList.push(newData);
++      _dataCache = null;
++    };
++
++    _this.isDark = function(row, col) {
++      if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
++        throw row + ',' + col;
++      }
++      return _modules[row][col];
++    };
++
++    _this.getModuleCount = function() {
++      return _moduleCount;
++    };
++
++    _this.make = function() {
++      if (_typeNumber < 1) {
++        var typeNumber = 1;
++
++        for (; typeNumber < 40; typeNumber++) {
++          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
++          var buffer = qrBitBuffer();
++
++          for (var i = 0; i < _dataList.length; i++) {
++            var data = _dataList[i];
++            buffer.put(data.getMode(), 4);
++            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
++            data.write(buffer);
++          }
++
++          var totalDataCount = 0;
++          for (var i = 0; i < rsBlocks.length; i++) {
++            totalDataCount += rsBlocks[i].dataCount;
++          }
++
++          if (buffer.getLengthInBits() <= totalDataCount * 8) {
++            break;
++          }
++        }
++
++        _typeNumber = typeNumber;
++      }
++
++      makeImpl(false, getBestMaskPattern() );
++    };
++
++    _this.createTableTag = function(cellSize, margin) {
++
++      cellSize = cellSize || 2;
++      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
++
++      var qrHtml = '';
++
++      qrHtml += '<table style="';
++      qrHtml += ' border-width: 0px; border-style: none;';
++      qrHtml += ' border-collapse: collapse;';
++      qrHtml += ' padding: 0px; margin: ' + margin + 'px;';
++      qrHtml += '">';
++      qrHtml += '<tbody>';
++
++      for (var r = 0; r < _this.getModuleCount(); r += 1) {
++
++        qrHtml += '<tr>';
++
++        for (var c = 0; c < _this.getModuleCount(); c += 1) {
++          qrHtml += '<td style="';
++          qrHtml += ' border-width: 0px; border-style: none;';
++          qrHtml += ' border-collapse: collapse;';
++          qrHtml += ' padding: 0px; margin: 0px;';
++          qrHtml += ' width: ' + cellSize + 'px;';
++          qrHtml += ' height: ' + cellSize + 'px;';
++          qrHtml += ' background-color: ';
++          qrHtml += _this.isDark(r, c)? '#000000' : '#ffffff';
++          qrHtml += ';';
++          qrHtml += '"/>';
++        }
++
++        qrHtml += '</tr>';
++      }
++
++      qrHtml += '</tbody>';
++      qrHtml += '</table>';
++
++      return qrHtml;
++    };
++
++    _this.createSvgTag = function(cellSize, margin, alt, title) {
++
++      var opts = {};
++      if (typeof arguments[0] == 'object') {
++        // Called by options.
++        opts = arguments[0];
++        // overwrite cellSize and margin.
++        cellSize = opts.cellSize;
++        margin = opts.margin;
++        alt = opts.alt;
++        title = opts.title;
++      }
++
++      cellSize = cellSize || 2;
++      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
++
++      // Compose alt property surrogate
++      alt = (typeof alt === 'string') ? {text: alt} : alt || {};
++      alt.text = alt.text || null;
++      alt.id = (alt.text) ? alt.id || 'qrcode-description' : null;
++
++      // Compose title property surrogate
++      title = (typeof title === 'string') ? {text: title} : title || {};
++      title.text = title.text || null;
++      title.id = (title.text) ? title.id || 'qrcode-title' : null;
++
++      var size = _this.getModuleCount() * cellSize + margin * 2;
++      var c, mc, r, mr, qrSvg='', rect;
++
++      rect = 'l' + cellSize + ',0 0,' + cellSize +
++        ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
++
++      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
++      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
++      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
++      qrSvg += ' preserveAspectRatio="xMinYMin meet"';
++      qrSvg += (title.text || alt.text) ? ' role="img" aria-labelledby="' +
++          escapeXml([title.id, alt.id].join(' ').trim() ) + '"' : '';
++      qrSvg += '>';
++      qrSvg += (title.text) ? '<title id="' + escapeXml(title.id) + '">' +
++          escapeXml(title.text) + '</title>' : '';
++      qrSvg += (alt.text) ? '<description id="' + escapeXml(alt.id) + '">' +
++          escapeXml(alt.text) + '</description>' : '';
++      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
++      qrSvg += '<path d="';
++
++      for (r = 0; r < _this.getModuleCount(); r += 1) {
++        mr = r * cellSize + margin;
++        for (c = 0; c < _this.getModuleCount(); c += 1) {
++          if (_this.isDark(r, c) ) {
++            mc = c*cellSize+margin;
++            qrSvg += 'M' + mc + ',' + mr + rect;
++          }
++        }
++      }
++
++      qrSvg += '" stroke="transparent" fill="black"/>';
++      qrSvg += '</svg>';
++
++      return qrSvg;
++    };
++
++    _this.createDataURL = function(cellSize, margin) {
++
++      cellSize = cellSize || 2;
++      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
++
++      var size = _this.getModuleCount() * cellSize + margin * 2;
++      var min = margin;
++      var max = size - margin;
++
++      return createDataURL(size, size, function(x, y) {
++        if (min <= x && x < max && min <= y && y < max) {
++          var c = Math.floor( (x - min) / cellSize);
++          var r = Math.floor( (y - min) / cellSize);
++          return _this.isDark(r, c)? 0 : 1;
++        } else {
++          return 1;
++        }
++      } );
++    };
++
++    _this.createImgTag = function(cellSize, margin, alt) {
++
++      cellSize = cellSize || 2;
++      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
++
++      var size = _this.getModuleCount() * cellSize + margin * 2;
++
++      var img = '';
++      img += '<img';
++      img += '\u0020src="';
++      img += _this.createDataURL(cellSize, margin);
++      img += '"';
++      img += '\u0020width="';
++      img += size;
++      img += '"';
++      img += '\u0020height="';
++      img += size;
++      img += '"';
++      if (alt) {
++        img += '\u0020alt="';
++        img += escapeXml(alt);
++        img += '"';
++      }
++      img += '/>';
++
++      return img;
++    };
++
++    var escapeXml = function(s) {
++      var escaped = '';
++      for (var i = 0; i < s.length; i += 1) {
++        var c = s.charAt(i);
++        switch(c) {
++        case '<': escaped += '&lt;'; break;
++        case '>': escaped += '&gt;'; break;
++        case '&': escaped += '&amp;'; break;
++        case '"': escaped += '&quot;'; break;
++        default : escaped += c; break;
++        }
++      }
++      return escaped;
++    };
++
++    var _createHalfASCII = function(margin) {
++      var cellSize = 1;
++      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
++
++      var size = _this.getModuleCount() * cellSize + margin * 2;
++      var min = margin;
++      var max = size - margin;
++
++      var y, x, r1, r2, p;
++
++      var blocks = {
++        '██': '█',
++        '█ ': '▀',
++        ' █': '▄',
++        '  ': ' '
++      };
++
++      var blocksLastLineNoMargin = {
++        '██': '▀',
++        '█ ': '▀',
++        ' █': ' ',
++        '  ': ' '
++      };
++
++      var ascii = '';
++      for (y = 0; y < size; y += 2) {
++        r1 = Math.floor((y - min) / cellSize);
++        r2 = Math.floor((y + 1 - min) / cellSize);
++        for (x = 0; x < size; x += 1) {
++          p = '█';
++
++          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
++            p = ' ';
++          }
++
++          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
++            p += ' ';
++          }
++          else {
++            p += '█';
++          }
++
++          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
++          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
++        }
++
++        ascii += '\n';
++      }
++
++      if (size % 2 && margin > 0) {
++        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
++      }
++
++      return ascii.substring(0, ascii.length-1);
++    };
++
++    _this.createASCII = function(cellSize, margin) {
++      cellSize = cellSize || 1;
++
++      if (cellSize < 2) {
++        return _createHalfASCII(margin);
++      }
++
++      cellSize -= 1;
++      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
++
++      var size = _this.getModuleCount() * cellSize + margin * 2;
++      var min = margin;
++      var max = size - margin;
++
++      var y, x, r, p;
++
++      var white = Array(cellSize+1).join('██');
++      var black = Array(cellSize+1).join('  ');
++
++      var ascii = '';
++      var line = '';
++      for (y = 0; y < size; y += 1) {
++        r = Math.floor( (y - min) / cellSize);
++        line = '';
++        for (x = 0; x < size; x += 1) {
++          p = 1;
++
++          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
++            p = 0;
++          }
++
++          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
++          line += p ? white : black;
++        }
++
++        for (r = 0; r < cellSize; r += 1) {
++          ascii += line + '\n';
++        }
++      }
++
++      return ascii.substring(0, ascii.length-1);
++    };
++
++    _this.renderTo2dContext = function(context, cellSize) {
++      cellSize = cellSize || 2;
++      var length = _this.getModuleCount();
++      for (var row = 0; row < length; row++) {
++        for (var col = 0; col < length; col++) {
++          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
++          context.fillRect(row * cellSize, col * cellSize, cellSize, cellSize);
++        }
++      }
++    }
++
++    return _this;
++  };
++
++  //---------------------------------------------------------------------
++  // qrcode.stringToBytes
++  //---------------------------------------------------------------------
++
++  qrcode.stringToBytesFuncs = {
++    'default' : function(s) {
++      var bytes = [];
++      for (var i = 0; i < s.length; i += 1) {
++        var c = s.charCodeAt(i);
++        bytes.push(c & 0xff);
++      }
++      return bytes;
++    }
++  };
++
++  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
++
++  //---------------------------------------------------------------------
++  // qrcode.createStringToBytes
++  //---------------------------------------------------------------------
++
++  /**
++   * @param unicodeData base64 string of byte array.
++   * [16bit Unicode],[16bit Bytes], ...
++   * @param numChars
++   */
++  qrcode.createStringToBytes = function(unicodeData, numChars) {
++
++    // create conversion map.
++
++    var unicodeMap = function() {
++
++      var bin = base64DecodeInputStream(unicodeData);
++      var read = function() {
++        var b = bin.read();
++        if (b == -1) throw 'eof';
++        return b;
++      };
++
++      var count = 0;
++      var unicodeMap = {};
++      while (true) {
++        var b0 = bin.read();
++        if (b0 == -1) break;
++        var b1 = read();
++        var b2 = read();
++        var b3 = read();
++        var k = String.fromCharCode( (b0 << 8) | b1);
++        var v = (b2 << 8) | b3;
++        unicodeMap[k] = v;
++        count += 1;
++      }
++      if (count != numChars) {
++        throw count + ' != ' + numChars;
++      }
++
++      return unicodeMap;
++    }();
++
++    var unknownChar = '?'.charCodeAt(0);
++
++    return function(s) {
++      var bytes = [];
++      for (var i = 0; i < s.length; i += 1) {
++        var c = s.charCodeAt(i);
++        if (c < 128) {
++          bytes.push(c);
++        } else {
++          var b = unicodeMap[s.charAt(i)];
++          if (typeof b == 'number') {
++            if ( (b & 0xff) == b) {
++              // 1byte
++              bytes.push(b);
++            } else {
++              // 2bytes
++              bytes.push(b >>> 8);
++              bytes.push(b & 0xff);
++            }
++          } else {
++            bytes.push(unknownChar);
++          }
++        }
++      }
++      return bytes;
++    };
++  };
++
++  //---------------------------------------------------------------------
++  // QRMode
++  //---------------------------------------------------------------------
++
++  var QRMode = {
++    MODE_NUMBER :    1 << 0,
++    MODE_ALPHA_NUM : 1 << 1,
++    MODE_8BIT_BYTE : 1 << 2,
++    MODE_KANJI :     1 << 3
++  };
++
++  //---------------------------------------------------------------------
++  // QRErrorCorrectionLevel
++  //---------------------------------------------------------------------
++
++  var QRErrorCorrectionLevel = {
++    L : 1,
++    M : 0,
++    Q : 3,
++    H : 2
++  };
++
++  //---------------------------------------------------------------------
++  // QRMaskPattern
++  //---------------------------------------------------------------------
++
++  var QRMaskPattern = {
++    PATTERN000 : 0,
++    PATTERN001 : 1,
++    PATTERN010 : 2,
++    PATTERN011 : 3,
++    PATTERN100 : 4,
++    PATTERN101 : 5,
++    PATTERN110 : 6,
++    PATTERN111 : 7
++  };
++
++  //---------------------------------------------------------------------
++  // QRUtil
++  //---------------------------------------------------------------------
++
++  var QRUtil = function() {
++
++    var PATTERN_POSITION_TABLE = [
++      [],
++      [6, 18],
++      [6, 22],
++      [6, 26],
++      [6, 30],
++      [6, 34],
++      [6, 22, 38],
++      [6, 24, 42],
++      [6, 26, 46],
++      [6, 28, 50],
++      [6, 30, 54],
++      [6, 32, 58],
++      [6, 34, 62],
++      [6, 26, 46, 66],
++      [6, 26, 48, 70],
++      [6, 26, 50, 74],
++      [6, 30, 54, 78],
++      [6, 30, 56, 82],
++      [6, 30, 58, 86],
++      [6, 34, 62, 90],
++      [6, 28, 50, 72, 94],
++      [6, 26, 50, 74, 98],
++      [6, 30, 54, 78, 102],
++      [6, 28, 54, 80, 106],
++      [6, 32, 58, 84, 110],
++      [6, 30, 58, 86, 114],
++      [6, 34, 62, 90, 118],
++      [6, 26, 50, 74, 98, 122],
++      [6, 30, 54, 78, 102, 126],
++      [6, 26, 52, 78, 104, 130],
++      [6, 30, 56, 82, 108, 134],
++      [6, 34, 60, 86, 112, 138],
++      [6, 30, 58, 86, 114, 142],
++      [6, 34, 62, 90, 118, 146],
++      [6, 30, 54, 78, 102, 126, 150],
++      [6, 24, 50, 76, 102, 128, 154],
++      [6, 28, 54, 80, 106, 132, 158],
++      [6, 32, 58, 84, 110, 136, 162],
++      [6, 26, 54, 82, 110, 138, 166],
++      [6, 30, 58, 86, 114, 142, 170]
++    ];
++    var G15 = (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0);
++    var G18 = (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0);
++    var G15_MASK = (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1);
++
++    var _this = {};
++
++    var getBCHDigit = function(data) {
++      var digit = 0;
++      while (data != 0) {
++        digit += 1;
++        data >>>= 1;
++      }
++      return digit;
++    };
++
++    _this.getBCHTypeInfo = function(data) {
++      var d = data << 10;
++      while (getBCHDigit(d) - getBCHDigit(G15) >= 0) {
++        d ^= (G15 << (getBCHDigit(d) - getBCHDigit(G15) ) );
++      }
++      return ( (data << 10) | d) ^ G15_MASK;
++    };
++
++    _this.getBCHTypeNumber = function(data) {
++      var d = data << 12;
++      while (getBCHDigit(d) - getBCHDigit(G18) >= 0) {
++        d ^= (G18 << (getBCHDigit(d) - getBCHDigit(G18) ) );
++      }
++      return (data << 12) | d;
++    };
++
++    _this.getPatternPosition = function(typeNumber) {
++      return PATTERN_POSITION_TABLE[typeNumber - 1];
++    };
++
++    _this.getMaskFunction = function(maskPattern) {
++
++      switch (maskPattern) {
++
++      case QRMaskPattern.PATTERN000 :
++        return function(i, j) { return (i + j) % 2 == 0; };
++      case QRMaskPattern.PATTERN001 :
++        return function(i, j) { return i % 2 == 0; };
++      case QRMaskPattern.PATTERN010 :
++        return function(i, j) { return j % 3 == 0; };
++      case QRMaskPattern.PATTERN011 :
++        return function(i, j) { return (i + j) % 3 == 0; };
++      case QRMaskPattern.PATTERN100 :
++        return function(i, j) { return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 == 0; };
++      case QRMaskPattern.PATTERN101 :
++        return function(i, j) { return (i * j) % 2 + (i * j) % 3 == 0; };
++      case QRMaskPattern.PATTERN110 :
++        return function(i, j) { return ( (i * j) % 2 + (i * j) % 3) % 2 == 0; };
++      case QRMaskPattern.PATTERN111 :
++        return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
++
++      default :
++        throw 'bad maskPattern:' + maskPattern;
++      }
++    };
++
++    _this.getErrorCorrectPolynomial = function(errorCorrectLength) {
++      var a = qrPolynomial([1], 0);
++      for (var i = 0; i < errorCorrectLength; i += 1) {
++        a = a.multiply(qrPolynomial([1, QRMath.gexp(i)], 0) );
++      }
++      return a;
++    };
++
++    _this.getLengthInBits = function(mode, type) {
++
++      if (1 <= type && type < 10) {
++
++        // 1 - 9
++
++        switch(mode) {
++        case QRMode.MODE_NUMBER    : return 10;
++        case QRMode.MODE_ALPHA_NUM : return 9;
++        case QRMode.MODE_8BIT_BYTE : return 8;
++        case QRMode.MODE_KANJI     : return 8;
++        default :
++          throw 'mode:' + mode;
++        }
++
++      } else if (type < 27) {
++
++        // 10 - 26
++
++        switch(mode) {
++        case QRMode.MODE_NUMBER    : return 12;
++        case QRMode.MODE_ALPHA_NUM : return 11;
++        case QRMode.MODE_8BIT_BYTE : return 16;
++        case QRMode.MODE_KANJI     : return 10;
++        default :
++          throw 'mode:' + mode;
++        }
++
++      } else if (type < 41) {
++
++        // 27 - 40
++
++        switch(mode) {
++        case QRMode.MODE_NUMBER    : return 14;
++        case QRMode.MODE_ALPHA_NUM : return 13;
++        case QRMode.MODE_8BIT_BYTE : return 16;
++        case QRMode.MODE_KANJI     : return 12;
++        default :
++          throw 'mode:' + mode;
++        }
++
++      } else {
++        throw 'type:' + type;
++      }
++    };
++
++    _this.getLostPoint = function(qrcode) {
++
++      var moduleCount = qrcode.getModuleCount();
++
++      var lostPoint = 0;
++
++      // LEVEL1
++
++      for (var row = 0; row < moduleCount; row += 1) {
++        for (var col = 0; col < moduleCount; col += 1) {
++
++          var sameCount = 0;
++          var dark = qrcode.isDark(row, col);
++
++          for (var r = -1; r <= 1; r += 1) {
++
++            if (row + r < 0 || moduleCount <= row + r) {
++              continue;
++            }
++
++            for (var c = -1; c <= 1; c += 1) {
++
++              if (col + c < 0 || moduleCount <= col + c) {
++                continue;
++              }
++
++              if (r == 0 && c == 0) {
++                continue;
++              }
++
++              if (dark == qrcode.isDark(row + r, col + c) ) {
++                sameCount += 1;
++              }
++            }
++          }
++
++          if (sameCount > 5) {
++            lostPoint += (3 + sameCount - 5);
++          }
++        }
++      };
++
++      // LEVEL2
++
++      for (var row = 0; row < moduleCount - 1; row += 1) {
++        for (var col = 0; col < moduleCount - 1; col += 1) {
++          var count = 0;
++          if (qrcode.isDark(row, col) ) count += 1;
++          if (qrcode.isDark(row + 1, col) ) count += 1;
++          if (qrcode.isDark(row, col + 1) ) count += 1;
++          if (qrcode.isDark(row + 1, col + 1) ) count += 1;
++          if (count == 0 || count == 4) {
++            lostPoint += 3;
++          }
++        }
++      }
++
++      // LEVEL3
++
++      for (var row = 0; row < moduleCount; row += 1) {
++        for (var col = 0; col < moduleCount - 6; col += 1) {
++          if (qrcode.isDark(row, col)
++              && !qrcode.isDark(row, col + 1)
++              &&  qrcode.isDark(row, col + 2)
++              &&  qrcode.isDark(row, col + 3)
++              &&  qrcode.isDark(row, col + 4)
++              && !qrcode.isDark(row, col + 5)
++              &&  qrcode.isDark(row, col + 6) ) {
++            lostPoint += 40;
++          }
++        }
++      }
++
++      for (var col = 0; col < moduleCount; col += 1) {
++        for (var row = 0; row < moduleCount - 6; row += 1) {
++          if (qrcode.isDark(row, col)
++              && !qrcode.isDark(row + 1, col)
++              &&  qrcode.isDark(row + 2, col)
++              &&  qrcode.isDark(row + 3, col)
++              &&  qrcode.isDark(row + 4, col)
++              && !qrcode.isDark(row + 5, col)
++              &&  qrcode.isDark(row + 6, col) ) {
++            lostPoint += 40;
++          }
++        }
++      }
++
++      // LEVEL4
++
++      var darkCount = 0;
++
++      for (var col = 0; col < moduleCount; col += 1) {
++        for (var row = 0; row < moduleCount; row += 1) {
++          if (qrcode.isDark(row, col) ) {
++            darkCount += 1;
++          }
++        }
++      }
++
++      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
++      lostPoint += ratio * 10;
++
++      return lostPoint;
++    };
++
++    return _this;
++  }();
++
++  //---------------------------------------------------------------------
++  // QRMath
++  //---------------------------------------------------------------------
++
++  var QRMath = function() {
++
++    var EXP_TABLE = new Array(256);
++    var LOG_TABLE = new Array(256);
++
++    // initialize tables
++    for (var i = 0; i < 8; i += 1) {
++      EXP_TABLE[i] = 1 << i;
++    }
++    for (var i = 8; i < 256; i += 1) {
++      EXP_TABLE[i] = EXP_TABLE[i - 4]
++        ^ EXP_TABLE[i - 5]
++        ^ EXP_TABLE[i - 6]
++        ^ EXP_TABLE[i - 8];
++    }
++    for (var i = 0; i < 255; i += 1) {
++      LOG_TABLE[EXP_TABLE[i] ] = i;
++    }
++
++    var _this = {};
++
++    _this.glog = function(n) {
++
++      if (n < 1) {
++        throw 'glog(' + n + ')';
++      }
++
++      return LOG_TABLE[n];
++    };
++
++    _this.gexp = function(n) {
++
++      while (n < 0) {
++        n += 255;
++      }
++
++      while (n >= 256) {
++        n -= 255;
++      }
++
++      return EXP_TABLE[n];
++    };
++
++    return _this;
++  }();
++
++  //---------------------------------------------------------------------
++  // qrPolynomial
++  //---------------------------------------------------------------------
++
++  function qrPolynomial(num, shift) {
++
++    if (typeof num.length == 'undefined') {
++      throw num.length + '/' + shift;
++    }
++
++    var _num = function() {
++      var offset = 0;
++      while (offset < num.length && num[offset] == 0) {
++        offset += 1;
++      }
++      var _num = new Array(num.length - offset + shift);
++      for (var i = 0; i < num.length - offset; i += 1) {
++        _num[i] = num[i + offset];
++      }
++      return _num;
++    }();
++
++    var _this = {};
++
++    _this.getAt = function(index) {
++      return _num[index];
++    };
++
++    _this.getLength = function() {
++      return _num.length;
++    };
++
++    _this.multiply = function(e) {
++
++      var num = new Array(_this.getLength() + e.getLength() - 1);
++
++      for (var i = 0; i < _this.getLength(); i += 1) {
++        for (var j = 0; j < e.getLength(); j += 1) {
++          num[i + j] ^= QRMath.gexp(QRMath.glog(_this.getAt(i) ) + QRMath.glog(e.getAt(j) ) );
++        }
++      }
++
++      return qrPolynomial(num, 0);
++    };
++
++    _this.mod = function(e) {
++
++      if (_this.getLength() - e.getLength() < 0) {
++        return _this;
++      }
++
++      var ratio = QRMath.glog(_this.getAt(0) ) - QRMath.glog(e.getAt(0) );
++
++      var num = new Array(_this.getLength() );
++      for (var i = 0; i < _this.getLength(); i += 1) {
++        num[i] = _this.getAt(i);
++      }
++
++      for (var i = 0; i < e.getLength(); i += 1) {
++        num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i) ) + ratio);
++      }
++
++      // recursive call
++      return qrPolynomial(num, 0).mod(e);
++    };
++
++    return _this;
++  };
++
++  //---------------------------------------------------------------------
++  // QRRSBlock
++  //---------------------------------------------------------------------
++
++  var QRRSBlock = function() {
++
++    var RS_BLOCK_TABLE = [
++
++      // L
++      // M
++      // Q
++      // H
++
++      // 1
++      [1, 26, 19],
++      [1, 26, 16],
++      [1, 26, 13],
++      [1, 26, 9],
++
++      // 2
++      [1, 44, 34],
++      [1, 44, 28],
++      [1, 44, 22],
++      [1, 44, 16],
++
++      // 3
++      [1, 70, 55],
++      [1, 70, 44],
++      [2, 35, 17],
++      [2, 35, 13],
++
++      // 4
++      [1, 100, 80],
++      [2, 50, 32],
++      [2, 50, 24],
++      [4, 25, 9],
++
++      // 5
++      [1, 134, 108],
++      [2, 67, 43],
++      [2, 33, 15, 2, 34, 16],
++      [2, 33, 11, 2, 34, 12],
++
++      // 6
++      [2, 86, 68],
++      [4, 43, 27],
++      [4, 43, 19],
++      [4, 43, 15],
++
++      // 7
++      [2, 98, 78],
++      [4, 49, 31],
++      [2, 32, 14, 4, 33, 15],
++      [4, 39, 13, 1, 40, 14],
++
++      // 8
++      [2, 121, 97],
++      [2, 60, 38, 2, 61, 39],
++      [4, 40, 18, 2, 41, 19],
++      [4, 40, 14, 2, 41, 15],
++
++      // 9
++      [2, 146, 116],
++      [3, 58, 36, 2, 59, 37],
++      [4, 36, 16, 4, 37, 17],
++      [4, 36, 12, 4, 37, 13],
++
++      // 10
++      [2, 86, 68, 2, 87, 69],
++      [4, 69, 43, 1, 70, 44],
++      [6, 43, 19, 2, 44, 20],
++      [6, 43, 15, 2, 44, 16],
++
++      // 11
++      [4, 101, 81],
++      [1, 80, 50, 4, 81, 51],
++      [4, 50, 22, 4, 51, 23],
++      [3, 36, 12, 8, 37, 13],
++
++      // 12
++      [2, 116, 92, 2, 117, 93],
++      [6, 58, 36, 2, 59, 37],
++      [4, 46, 20, 6, 47, 21],
++      [7, 42, 14, 4, 43, 15],
++
++      // 13
++      [4, 133, 107],
++      [8, 59, 37, 1, 60, 38],
++      [8, 44, 20, 4, 45, 21],
++      [12, 33, 11, 4, 34, 12],
++
++      // 14
++      [3, 145, 115, 1, 146, 116],
++      [4, 64, 40, 5, 65, 41],
++      [11, 36, 16, 5, 37, 17],
++      [11, 36, 12, 5, 37, 13],
++
++      // 15
++      [5, 109, 87, 1, 110, 88],
++      [5, 65, 41, 5, 66, 42],
++      [5, 54, 24, 7, 55, 25],
++      [11, 36, 12, 7, 37, 13],
++
++      // 16
++      [5, 122, 98, 1, 123, 99],
++      [7, 73, 45, 3, 74, 46],
++      [15, 43, 19, 2, 44, 20],
++      [3, 45, 15, 13, 46, 16],
++
++      // 17
++      [1, 135, 107, 5, 136, 108],
++      [10, 74, 46, 1, 75, 47],
++      [1, 50, 22, 15, 51, 23],
++      [2, 42, 14, 17, 43, 15],
++
++      // 18
++      [5, 150, 120, 1, 151, 121],
++      [9, 69, 43, 4, 70, 44],
++      [17, 50, 22, 1, 51, 23],
++      [2, 42, 14, 19, 43, 15],
++
++      // 19
++      [3, 141, 113, 4, 142, 114],
++      [3, 70, 44, 11, 71, 45],
++      [17, 47, 21, 4, 48, 22],
++      [9, 39, 13, 16, 40, 14],
++
++      // 20
++      [3, 135, 107, 5, 136, 108],
++      [3, 67, 41, 13, 68, 42],
++      [15, 54, 24, 5, 55, 25],
++      [15, 43, 15, 10, 44, 16],
++
++      // 21
++      [4, 144, 116, 4, 145, 117],
++      [17, 68, 42],
++      [17, 50, 22, 6, 51, 23],
++      [19, 46, 16, 6, 47, 17],
++
++      // 22
++      [2, 139, 111, 7, 140, 112],
++      [17, 74, 46],
++      [7, 54, 24, 16, 55, 25],
++      [34, 37, 13],
++
++      // 23
++      [4, 151, 121, 5, 152, 122],
++      [4, 75, 47, 14, 76, 48],
++      [11, 54, 24, 14, 55, 25],
++      [16, 45, 15, 14, 46, 16],
++
++      // 24
++      [6, 147, 117, 4, 148, 118],
++      [6, 73, 45, 14, 74, 46],
++      [11, 54, 24, 16, 55, 25],
++      [30, 46, 16, 2, 47, 17],
++
++      // 25
++      [8, 132, 106, 4, 133, 107],
++      [8, 75, 47, 13, 76, 48],
++      [7, 54, 24, 22, 55, 25],
++      [22, 45, 15, 13, 46, 16],
++
++      // 26
++      [10, 142, 114, 2, 143, 115],
++      [19, 74, 46, 4, 75, 47],
++      [28, 50, 22, 6, 51, 23],
++      [33, 46, 16, 4, 47, 17],
++
++      // 27
++      [8, 152, 122, 4, 153, 123],
++      [22, 73, 45, 3, 74, 46],
++      [8, 53, 23, 26, 54, 24],
++      [12, 45, 15, 28, 46, 16],
++
++      // 28
++      [3, 147, 117, 10, 148, 118],
++      [3, 73, 45, 23, 74, 46],
++      [4, 54, 24, 31, 55, 25],
++      [11, 45, 15, 31, 46, 16],
++
++      // 29
++      [7, 146, 116, 7, 147, 117],
++      [21, 73, 45, 7, 74, 46],
++      [1, 53, 23, 37, 54, 24],
++      [19, 45, 15, 26, 46, 16],
++
++      // 30
++      [5, 145, 115, 10, 146, 116],
++      [19, 75, 47, 10, 76, 48],
++      [15, 54, 24, 25, 55, 25],
++      [23, 45, 15, 25, 46, 16],
++
++      // 31
++      [13, 145, 115, 3, 146, 116],
++      [2, 74, 46, 29, 75, 47],
++      [42, 54, 24, 1, 55, 25],
++      [23, 45, 15, 28, 46, 16],
++
++      // 32
++      [17, 145, 115],
++      [10, 74, 46, 23, 75, 47],
++      [10, 54, 24, 35, 55, 25],
++      [19, 45, 15, 35, 46, 16],
++
++      // 33
++      [17, 145, 115, 1, 146, 116],
++      [14, 74, 46, 21, 75, 47],
++      [29, 54, 24, 19, 55, 25],
++      [11, 45, 15, 46, 46, 16],
++
++      // 34
++      [13, 145, 115, 6, 146, 116],
++      [14, 74, 46, 23, 75, 47],
++      [44, 54, 24, 7, 55, 25],
++      [59, 46, 16, 1, 47, 17],
++
++      // 35
++      [12, 151, 121, 7, 152, 122],
++      [12, 75, 47, 26, 76, 48],
++      [39, 54, 24, 14, 55, 25],
++      [22, 45, 15, 41, 46, 16],
++
++      // 36
++      [6, 151, 121, 14, 152, 122],
++      [6, 75, 47, 34, 76, 48],
++      [46, 54, 24, 10, 55, 25],
++      [2, 45, 15, 64, 46, 16],
++
++      // 37
++      [17, 152, 122, 4, 153, 123],
++      [29, 74, 46, 14, 75, 47],
++      [49, 54, 24, 10, 55, 25],
++      [24, 45, 15, 46, 46, 16],
++
++      // 38
++      [4, 152, 122, 18, 153, 123],
++      [13, 74, 46, 32, 75, 47],
++      [48, 54, 24, 14, 55, 25],
++      [42, 45, 15, 32, 46, 16],
++
++      // 39
++      [20, 147, 117, 4, 148, 118],
++      [40, 75, 47, 7, 76, 48],
++      [43, 54, 24, 22, 55, 25],
++      [10, 45, 15, 67, 46, 16],
++
++      // 40
++      [19, 148, 118, 6, 149, 119],
++      [18, 75, 47, 31, 76, 48],
++      [34, 54, 24, 34, 55, 25],
++      [20, 45, 15, 61, 46, 16]
++    ];
++
++    var qrRSBlock = function(totalCount, dataCount) {
++      var _this = {};
++      _this.totalCount = totalCount;
++      _this.dataCount = dataCount;
++      return _this;
++    };
++
++    var _this = {};
++
++    var getRsBlockTable = function(typeNumber, errorCorrectionLevel) {
++
++      switch(errorCorrectionLevel) {
++      case QRErrorCorrectionLevel.L :
++        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
++      case QRErrorCorrectionLevel.M :
++        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
++      case QRErrorCorrectionLevel.Q :
++        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
++      case QRErrorCorrectionLevel.H :
++        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
++      default :
++        return undefined;
++      }
++    };
++
++    _this.getRSBlocks = function(typeNumber, errorCorrectionLevel) {
++
++      var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
++
++      if (typeof rsBlock == 'undefined') {
++        throw 'bad rs block @ typeNumber:' + typeNumber +
++            '/errorCorrectionLevel:' + errorCorrectionLevel;
++      }
++
++      var length = rsBlock.length / 3;
++
++      var list = [];
++
++      for (var i = 0; i < length; i += 1) {
++
++        var count = rsBlock[i * 3 + 0];
++        var totalCount = rsBlock[i * 3 + 1];
++        var dataCount = rsBlock[i * 3 + 2];
++
++        for (var j = 0; j < count; j += 1) {
++          list.push(qrRSBlock(totalCount, dataCount) );
++        }
++      }
++
++      return list;
++    };
++
++    return _this;
++  }();
++
++  //---------------------------------------------------------------------
++  // qrBitBuffer
++  //---------------------------------------------------------------------
++
++  var qrBitBuffer = function() {
++
++    var _buffer = [];
++    var _length = 0;
++
++    var _this = {};
++
++    _this.getBuffer = function() {
++      return _buffer;
++    };
++
++    _this.getAt = function(index) {
++      var bufIndex = Math.floor(index / 8);
++      return ( (_buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
++    };
++
++    _this.put = function(num, length) {
++      for (var i = 0; i < length; i += 1) {
++        _this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
++      }
++    };
++
++    _this.getLengthInBits = function() {
++      return _length;
++    };
++
++    _this.putBit = function(bit) {
++
++      var bufIndex = Math.floor(_length / 8);
++      if (_buffer.length <= bufIndex) {
++        _buffer.push(0);
++      }
++
++      if (bit) {
++        _buffer[bufIndex] |= (0x80 >>> (_length % 8) );
++      }
++
++      _length += 1;
++    };
++
++    return _this;
++  };
++
++  //---------------------------------------------------------------------
++  // qrNumber
++  //---------------------------------------------------------------------
++
++  var qrNumber = function(data) {
++
++    var _mode = QRMode.MODE_NUMBER;
++    var _data = data;
++
++    var _this = {};
++
++    _this.getMode = function() {
++      return _mode;
++    };
++
++    _this.getLength = function(buffer) {
++      return _data.length;
++    };
++
++    _this.write = function(buffer) {
++
++      var data = _data;
++
++      var i = 0;
++
++      while (i + 2 < data.length) {
++        buffer.put(strToNum(data.substring(i, i + 3) ), 10);
++        i += 3;
++      }
++
++      if (i < data.length) {
++        if (data.length - i == 1) {
++          buffer.put(strToNum(data.substring(i, i + 1) ), 4);
++        } else if (data.length - i == 2) {
++          buffer.put(strToNum(data.substring(i, i + 2) ), 7);
++        }
++      }
++    };
++
++    var strToNum = function(s) {
++      var num = 0;
++      for (var i = 0; i < s.length; i += 1) {
++        num = num * 10 + chatToNum(s.charAt(i) );
++      }
++      return num;
++    };
++
++    var chatToNum = function(c) {
++      if ('0' <= c && c <= '9') {
++        return c.charCodeAt(0) - '0'.charCodeAt(0);
++      }
++      throw 'illegal char :' + c;
++    };
++
++    return _this;
++  };
++
++  //---------------------------------------------------------------------
++  // qrAlphaNum
++  //---------------------------------------------------------------------
++
++  var qrAlphaNum = function(data) {
++
++    var _mode = QRMode.MODE_ALPHA_NUM;
++    var _data = data;
++
++    var _this = {};
++
++    _this.getMode = function() {
++      return _mode;
++    };
++
++    _this.getLength = function(buffer) {
++      return _data.length;
++    };
++
++    _this.write = function(buffer) {
++
++      var s = _data;
++
++      var i = 0;
++
++      while (i + 1 < s.length) {
++        buffer.put(
++          getCode(s.charAt(i) ) * 45 +
++          getCode(s.charAt(i + 1) ), 11);
++        i += 2;
++      }
++
++      if (i < s.length) {
++        buffer.put(getCode(s.charAt(i) ), 6);
++      }
++    };
++
++    var getCode = function(c) {
++
++      if ('0' <= c && c <= '9') {
++        return c.charCodeAt(0) - '0'.charCodeAt(0);
++      } else if ('A' <= c && c <= 'Z') {
++        return c.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
++      } else {
++        switch (c) {
++        case ' ' : return 36;
++        case '$' : return 37;
++        case '%' : return 38;
++        case '*' : return 39;
++        case '+' : return 40;
++        case '-' : return 41;
++        case '.' : return 42;
++        case '/' : return 43;
++        case ':' : return 44;
++        default :
++          throw 'illegal char :' + c;
++        }
++      }
++    };
++
++    return _this;
++  };
++
++  //---------------------------------------------------------------------
++  // qr8BitByte
++  //---------------------------------------------------------------------
++
++  var qr8BitByte = function(data) {
++
++    var _mode = QRMode.MODE_8BIT_BYTE;
++    var _data = data;
++    var _bytes = qrcode.stringToBytes(data);
++
++    var _this = {};
++
++    _this.getMode = function() {
++      return _mode;
++    };
++
++    _this.getLength = function(buffer) {
++      return _bytes.length;
++    };
++
++    _this.write = function(buffer) {
++      for (var i = 0; i < _bytes.length; i += 1) {
++        buffer.put(_bytes[i], 8);
++      }
++    };
++
++    return _this;
++  };
++
++  //---------------------------------------------------------------------
++  // qrKanji
++  //---------------------------------------------------------------------
++
++  var qrKanji = function(data) {
++
++    var _mode = QRMode.MODE_KANJI;
++    var _data = data;
++
++    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
++    if (!stringToBytes) {
++      throw 'sjis not supported.';
++    }
++    !function(c, code) {
++      // self test for sjis support.
++      var test = stringToBytes(c);
++      if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
++        throw 'sjis not supported.';
++      }
++    }('\u53cb', 0x9746);
++
++    var _bytes = stringToBytes(data);
++
++    var _this = {};
++
++    _this.getMode = function() {
++      return _mode;
++    };
++
++    _this.getLength = function(buffer) {
++      return ~~(_bytes.length / 2);
++    };
++
++    _this.write = function(buffer) {
++
++      var data = _bytes;
++
++      var i = 0;
++
++      while (i + 1 < data.length) {
++
++        var c = ( (0xff & data[i]) << 8) | (0xff & data[i + 1]);
++
++        if (0x8140 <= c && c <= 0x9FFC) {
++          c -= 0x8140;
++        } else if (0xE040 <= c && c <= 0xEBBF) {
++          c -= 0xC140;
++        } else {
++          throw 'illegal char at ' + (i + 1) + '/' + c;
++        }
++
++        c = ( (c >>> 8) & 0xff) * 0xC0 + (c & 0xff);
++
++        buffer.put(c, 13);
++
++        i += 2;
++      }
++
++      if (i < data.length) {
++        throw 'illegal char at ' + (i + 1);
++      }
++    };
++
++    return _this;
++  };
++
++  //=====================================================================
++  // GIF Support etc.
++  //
++
++  //---------------------------------------------------------------------
++  // byteArrayOutputStream
++  //---------------------------------------------------------------------
++
++  var byteArrayOutputStream = function() {
++
++    var _bytes = [];
++
++    var _this = {};
++
++    _this.writeByte = function(b) {
++      _bytes.push(b & 0xff);
++    };
++
++    _this.writeShort = function(i) {
++      _this.writeByte(i);
++      _this.writeByte(i >>> 8);
++    };
++
++    _this.writeBytes = function(b, off, len) {
++      off = off || 0;
++      len = len || b.length;
++      for (var i = 0; i < len; i += 1) {
++        _this.writeByte(b[i + off]);
++      }
++    };
++
++    _this.writeString = function(s) {
++      for (var i = 0; i < s.length; i += 1) {
++        _this.writeByte(s.charCodeAt(i) );
++      }
++    };
++
++    _this.toByteArray = function() {
++      return _bytes;
++    };
++
++    _this.toString = function() {
++      var s = '';
++      s += '[';
++      for (var i = 0; i < _bytes.length; i += 1) {
++        if (i > 0) {
++          s += ',';
++        }
++        s += _bytes[i];
++      }
++      s += ']';
++      return s;
++    };
++
++    return _this;
++  };
++
++  //---------------------------------------------------------------------
++  // base64EncodeOutputStream
++  //---------------------------------------------------------------------
++
++  var base64EncodeOutputStream = function() {
++
++    var _buffer = 0;
++    var _buflen = 0;
++    var _length = 0;
++    var _base64 = '';
++
++    var _this = {};
++
++    var writeEncoded = function(b) {
++      _base64 += String.fromCharCode(encode(b & 0x3f) );
++    };
++
++    var encode = function(n) {
++      if (n < 0) {
++        // error.
++      } else if (n < 26) {
++        return 0x41 + n;
++      } else if (n < 52) {
++        return 0x61 + (n - 26);
++      } else if (n < 62) {
++        return 0x30 + (n - 52);
++      } else if (n == 62) {
++        return 0x2b;
++      } else if (n == 63) {
++        return 0x2f;
++      }
++      throw 'n:' + n;
++    };
++
++    _this.writeByte = function(n) {
++
++      _buffer = (_buffer << 8) | (n & 0xff);
++      _buflen += 8;
++      _length += 1;
++
++      while (_buflen >= 6) {
++        writeEncoded(_buffer >>> (_buflen - 6) );
++        _buflen -= 6;
++      }
++    };
++
++    _this.flush = function() {
++
++      if (_buflen > 0) {
++        writeEncoded(_buffer << (6 - _buflen) );
++        _buffer = 0;
++        _buflen = 0;
++      }
++
++      if (_length % 3 != 0) {
++        // padding
++        var padlen = 3 - _length % 3;
++        for (var i = 0; i < padlen; i += 1) {
++          _base64 += '=';
++        }
++      }
++    };
++
++    _this.toString = function() {
++      return _base64;
++    };
++
++    return _this;
++  };
++
++  //---------------------------------------------------------------------
++  // base64DecodeInputStream
++  //---------------------------------------------------------------------
++
++  var base64DecodeInputStream = function(str) {
++
++    var _str = str;
++    var _pos = 0;
++    var _buffer = 0;
++    var _buflen = 0;
++
++    var _this = {};
++
++    _this.read = function() {
++
++      while (_buflen < 8) {
++
++        if (_pos >= _str.length) {
++          if (_buflen == 0) {
++            return -1;
++          }
++          throw 'unexpected end of file./' + _buflen;
++        }
++
++        var c = _str.charAt(_pos);
++        _pos += 1;
++
++        if (c == '=') {
++          _buflen = 0;
++          return -1;
++        } else if (c.match(/^\s$/) ) {
++          // ignore if whitespace.
++          continue;
++        }
++
++        _buffer = (_buffer << 6) | decode(c.charCodeAt(0) );
++        _buflen += 6;
++      }
++
++      var n = (_buffer >>> (_buflen - 8) ) & 0xff;
++      _buflen -= 8;
++      return n;
++    };
++
++    var decode = function(c) {
++      if (0x41 <= c && c <= 0x5a) {
++        return c - 0x41;
++      } else if (0x61 <= c && c <= 0x7a) {
++        return c - 0x61 + 26;
++      } else if (0x30 <= c && c <= 0x39) {
++        return c - 0x30 + 52;
++      } else if (c == 0x2b) {
++        return 62;
++      } else if (c == 0x2f) {
++        return 63;
++      } else {
++        throw 'c:' + c;
++      }
++    };
++
++    return _this;
++  };
++
++  //---------------------------------------------------------------------
++  // gifImage (B/W)
++  //---------------------------------------------------------------------
++
++  var gifImage = function(width, height) {
++
++    var _width = width;
++    var _height = height;
++    var _data = new Array(width * height);
++
++    var _this = {};
++
++    _this.setPixel = function(x, y, pixel) {
++      _data[y * _width + x] = pixel;
++    };
++
++    _this.write = function(out) {
++
++      //---------------------------------
++      // GIF Signature
++
++      out.writeString('GIF87a');
++
++      //---------------------------------
++      // Screen Descriptor
++
++      out.writeShort(_width);
++      out.writeShort(_height);
++
++      out.writeByte(0x80); // 2bit
++      out.writeByte(0);
++      out.writeByte(0);
++
++      //---------------------------------
++      // Global Color Map
++
++      // black
++      out.writeByte(0x00);
++      out.writeByte(0x00);
++      out.writeByte(0x00);
++
++      // white
++      out.writeByte(0xff);
++      out.writeByte(0xff);
++      out.writeByte(0xff);
++
++      //---------------------------------
++      // Image Descriptor
++
++      out.writeString(',');
++      out.writeShort(0);
++      out.writeShort(0);
++      out.writeShort(_width);
++      out.writeShort(_height);
++      out.writeByte(0);
++
++      //---------------------------------
++      // Local Color Map
++
++      //---------------------------------
++      // Raster Data
++
++      var lzwMinCodeSize = 2;
++      var raster = getLZWRaster(lzwMinCodeSize);
++
++      out.writeByte(lzwMinCodeSize);
++
++      var offset = 0;
++
++      while (raster.length - offset > 255) {
++        out.writeByte(255);
++        out.writeBytes(raster, offset, 255);
++        offset += 255;
++      }
++
++      out.writeByte(raster.length - offset);
++      out.writeBytes(raster, offset, raster.length - offset);
++      out.writeByte(0x00);
++
++      //---------------------------------
++      // GIF Terminator
++      out.writeString(';');
++    };
++
++    var bitOutputStream = function(out) {
++
++      var _out = out;
++      var _bitLength = 0;
++      var _bitBuffer = 0;
++
++      var _this = {};
++
++      _this.write = function(data, length) {
++
++        if ( (data >>> length) != 0) {
++          throw 'length over';
++        }
++
++        while (_bitLength + length >= 8) {
++          _out.writeByte(0xff & ( (data << _bitLength) | _bitBuffer) );
++          length -= (8 - _bitLength);
++          data >>>= (8 - _bitLength);
++          _bitBuffer = 0;
++          _bitLength = 0;
++        }
++
++        _bitBuffer = (data << _bitLength) | _bitBuffer;
++        _bitLength = _bitLength + length;
++      };
++
++      _this.flush = function() {
++        if (_bitLength > 0) {
++          _out.writeByte(_bitBuffer);
++        }
++      };
++
++      return _this;
++    };
++
++    var getLZWRaster = function(lzwMinCodeSize) {
++
++      var clearCode = 1 << lzwMinCodeSize;
++      var endCode = (1 << lzwMinCodeSize) + 1;
++      var bitLength = lzwMinCodeSize + 1;
++
++      // Setup LZWTable
++      var table = lzwTable();
++
++      for (var i = 0; i < clearCode; i += 1) {
++        table.add(String.fromCharCode(i) );
++      }
++      table.add(String.fromCharCode(clearCode) );
++      table.add(String.fromCharCode(endCode) );
++
++      var byteOut = byteArrayOutputStream();
++      var bitOut = bitOutputStream(byteOut);
++
++      // clear code
++      bitOut.write(clearCode, bitLength);
++
++      var dataIndex = 0;
++
++      var s = String.fromCharCode(_data[dataIndex]);
++      dataIndex += 1;
++
++      while (dataIndex < _data.length) {
++
++        var c = String.fromCharCode(_data[dataIndex]);
++        dataIndex += 1;
++
++        if (table.contains(s + c) ) {
++
++          s = s + c;
++
++        } else {
++
++          bitOut.write(table.indexOf(s), bitLength);
++
++          if (table.size() < 0xfff) {
++
++            if (table.size() == (1 << bitLength) ) {
++              bitLength += 1;
++            }
++
++            table.add(s + c);
++          }
++
++          s = c;
++        }
++      }
++
++      bitOut.write(table.indexOf(s), bitLength);
++
++      // end code
++      bitOut.write(endCode, bitLength);
++
++      bitOut.flush();
++
++      return byteOut.toByteArray();
++    };
++
++    var lzwTable = function() {
++
++      var _map = {};
++      var _size = 0;
++
++      var _this = {};
++
++      _this.add = function(key) {
++        if (_this.contains(key) ) {
++          throw 'dup key:' + key;
++        }
++        _map[key] = _size;
++        _size += 1;
++      };
++
++      _this.size = function() {
++        return _size;
++      };
++
++      _this.indexOf = function(key) {
++        return _map[key];
++      };
++
++      _this.contains = function(key) {
++        return typeof _map[key] != 'undefined';
++      };
++
++      return _this;
++    };
++
++    return _this;
++  };
++
++  var createDataURL = function(width, height, getPixel) {
++    var gif = gifImage(width, height);
++    for (var y = 0; y < height; y += 1) {
++      for (var x = 0; x < width; x += 1) {
++        gif.setPixel(x, y, getPixel(x, y) );
++      }
++    }
++
++    var b = byteArrayOutputStream();
++    gif.write(b);
++
++    var base64 = base64EncodeOutputStream();
++    var bytes = b.toByteArray();
++    for (var i = 0; i < bytes.length; i += 1) {
++      base64.writeByte(bytes[i]);
++    }
++    base64.flush();
++
++    return 'data:image/gif;base64,' + base64;
++  };
++
++  //---------------------------------------------------------------------
++  // returns qrcode function.
++
++  return qrcode;
++}();
++
++// multibyte support
++!function() {
++
++  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
++    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
++    function toUTF8Array(str) {
++      var utf8 = [];
++      for (var i=0; i < str.length; i++) {
++        var charcode = str.charCodeAt(i);
++        if (charcode < 0x80) utf8.push(charcode);
++        else if (charcode < 0x800) {
++          utf8.push(0xc0 | (charcode >> 6),
++              0x80 | (charcode & 0x3f));
++        }
++        else if (charcode < 0xd800 || charcode >= 0xe000) {
++          utf8.push(0xe0 | (charcode >> 12),
++              0x80 | ((charcode>>6) & 0x3f),
++              0x80 | (charcode & 0x3f));
++        }
++        // surrogate pair
++        else {
++          i++;
++          // UTF-16 encodes 0x10000-0x10FFFF by
++          // subtracting 0x10000 and splitting the
++          // 20 bits of 0x0-0xFFFFF into two halves
++          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
++            | (str.charCodeAt(i) & 0x3ff));
++          utf8.push(0xf0 | (charcode >>18),
++              0x80 | ((charcode>>12) & 0x3f),
++              0x80 | ((charcode>>6) & 0x3f),
++              0x80 | (charcode & 0x3f));
++        }
++      }
++      return utf8;
++    }
++    return toUTF8Array(s);
++  };
++
++}();
++
++(function (factory) {
++  if (typeof define === 'function' && define.amd) {
++      define([], factory);
++  } else if (typeof exports === 'object') {
++      module.exports = factory();
++  }
++}(function () {
++    return qrcode;
++}));

@@ -1,0 +1,21 @@
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const source = fs.readFileSync(process.argv[2], 'utf8');
+const html = fs.readFileSync(process.argv[3], 'utf8');
+const start = source.indexOf('document.getElementById("st-badusb-save-settings")?.addEventListener');
+const end = source.indexOf('\n\n\ndocument.getElementById("pt-refresh")', start);
+assert(start >= 0 && end > start);
+const fields = {};
+for (const [id,value,type] of [['delayMs','1500'],['trigger-sel','0'],['confirm-toggle','', 'checkbox'],['confirmMs','3000'],['once-toggle','', 'checkbox']]) fields['st-badusb-'+id] = {value, type:type||'text', checked:true, dataset:{}};
+let handler, calls=[], mode='partial';
+const msg={classList:{remove(){}},textContent:''}, button={disabled:false};
+const doc={getElementById(id) { if (id==='st-badusb-save-settings') return {addEventListener(_, fn){handler=fn;}}; if(id==='st-badusb-msg') return msg; return fields[id]; }};
+const ctx={document:doc, refreshStudio(){}, requestPost:async (_,data)=>{calls.push(data.action); if(mode==='partial'&&data.action==='settrigger') throw Error('offline'); if(mode==='edit'&&data.action==='setdelay') fields['st-badusb-delayMs'].value='2500'; return JSON.stringify({ok:true});}};
+vm.createContext(ctx); vm.runInContext(source.slice(start,end),ctx);
+(async()=>{
+ fields['st-badusb-delayMs'].dataset.touched='1'; fields['st-badusb-trigger-sel'].dataset.touched='1';
+ await handler({currentTarget:button}); assert.deepEqual(calls,['setdelay','settrigger']); assert(!fields['st-badusb-delayMs'].dataset.touched); assert(fields['st-badusb-trigger-sel'].dataset.touched); assert(msg.textContent.includes('Đã lưu: Delay') && msg.textContent.includes('Chưa xác nhận: Trigger')); assert(!button.disabled);
+ calls=[];fields['st-badusb-delayMs'].value='-1';fields['st-badusb-delayMs'].dataset.touched='1'; await handler({currentTarget:button}); assert.equal(calls.length,0); assert(msg.textContent.includes('Chưa lưu mục nào'));
+ calls=[]; mode='edit'; fields['st-badusb-delayMs'].value='1500'; delete fields['st-badusb-trigger-sel'].dataset.touched; await handler({currentTarget:button}); assert(fields['st-badusb-delayMs'].dataset.touched);
+ assert(html.includes('startPayloadPicker()')); assert(source.includes('field.value = path;')); assert(source.includes('fs.value = currentDrive')); assert(source.includes('pick && payloadPickerActive')); assert(source.includes('openRecordings(\'SD\')')); assert(html.includes('openRecordings(\'LittleFS\')')); assert(source.includes('generation !== studioRefreshGeneration')); assert(source.includes('Không cập nhật được: '));
+ console.log('Studio picker, partial save, validation and stale-data checks passed');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -69,10 +69,14 @@
             <button type="button" class="btn-action" onclick="switchTab('screen')">Live Screen Mirror</button>
             <button type="button" class="btn-action" onclick="switchTab('personalize')">Theme &amp; Identity</button>
             <button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi Switch</button>
-            <button type="button" class="btn-action btn-default" onclick="openOtaModal()">WebOTA Flash</button>
-            <button type="button" class="btn-action btn-warn act-reboot">Reboot Device</button>
-            <button type="button" class="btn-action btn-danger act-bootloader">USB Bootloader</button>
           </div>
+          <details class="sl-group sl-mt"><summary>Hệ thống nâng cao</summary>
+            <div class="sl-row sl-mt">
+              <button type="button" class="btn-action btn-default" onclick="openOtaModal()">WebOTA Flash</button>
+              <button type="button" class="btn-action btn-warn act-reboot">Reboot Device</button>
+              <button type="button" class="btn-action btn-danger act-bootloader">USB Bootloader</button>
+            </div>
+          </details>
           <div class="ux-settings" aria-label="Device sound and display">
             <label><input type="checkbox" id="ux-sound" /> System sounds</label>
             <label><input type="checkbox" id="ux-menu-tones" /> Menu tones (off = alerts only)</label>
@@ -139,6 +143,8 @@
             <button type="button" class="btn-action" id="btn-switch-bootmenu">Reboot to Dual-Boot Menu</button>
           </div>
         </div>
+      </div>
+    </section>
 
     <!-- TAB 1.5: MONITOR — Network + System + Alerts dashboard tổng -->
     <section id="tab-monitor" class="tab-pane hidden">
@@ -185,9 +191,8 @@
             <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="lan">Mở SecLab →</button><button type="button" class="btn-action" onclick="switchTab('console')">Console</button></div>
           </div>
           <div class="dash-card">
-            <div class="dash-card-head"><h3>Quick Wi-Fi Scan</h3><span class="sl-badge" id="mon-ov-wifi-badge">2.4 GHz</span></div>
-            <div class="sl-row"><button type="button" class="btn-action btn-default" id="mon-wifi-scan">Scan APs</button><button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi Modal</button></div>
-            <div id="mon-wifi-list" class="sl-scroll sl-mt"></div>
+            <div class="dash-card-head"><h3>Wi-Fi Scan</h3><span class="sl-badge">2.4 GHz</span></div>
+            <div class="sl-row"><button type="button" class="btn-action btn-default" data-monslab-jump="network">Open Network &amp; Wi-Fi →</button></div>
           </div>
         </div>
       </div>
@@ -316,7 +321,7 @@
             <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="clock">Mở Clock →</button><button type="button" class="btn-action" id="st-sync-time">Sync Browser Time</button></div>
           </div>
           <div class="ov-tile"><strong>Microphone</strong><b id="st-ov-mic">--</b><small class="muted-sm" id="st-ov-mic-sub">Spectrum / Record / dB</small><span id="st-ov-mic-badge" class="sl-badge">ES7210</span>
-            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Mic →</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Recordings →</button></div>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Mic →</button><button type="button" class="btn-action" onclick="switchStSlab('mic')">Recordings →</button></div>
           </div>
           <div class="ov-tile"><strong>Sonar Guard</strong><b id="st-ov-sonar">IDLE</b><small class="muted-sm" id="st-ov-sonar-sub">Carrier --Hz · Sens --</small><span id="st-ov-sonar-badge" class="sl-badge">IDLE</span>
             <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Sonar →</button></div>
@@ -325,7 +330,7 @@
             <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="qr">Mở QR →</button></div>
           </div>
           <div class="ov-tile"><strong>Megalodon</strong><b id="st-ov-mega">Ready</b><small class="muted-sm" id="st-ov-mega-sub">Soundboard · shark game</small><span id="st-ov-mega-badge" class="sl-badge">♪</span>
-            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="quickCli('megalodon')">Launch via Console</button></div>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('screen')">Open device controls</button></div>
           </div>
           <div class="ov-tile"><strong>Dual-Boot</strong><b id="st-ov-dual">--</b><small class="muted-sm" id="st-ov-dual-sub">ota_0 / ota_1</small><span id="st-ov-dual-badge" class="sl-badge">--</span>
             <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/bruce.conf')">bruce.conf</button></div>
@@ -333,9 +338,9 @@
         </div>
         <div class="dash-grid sl-mt" style="padding:0">
           <div class="dash-card">
-            <div class="dash-card-head"><h3>Mic Recent Files</h3><span id="st-ov-mic-badge2" class="sl-badge">WAV</span></div>
+            <div class="dash-card-head"><h3>Mic Recordings</h3><span id="st-ov-mic-badge2" class="sl-badge">WAV</span></div>
             <div id="st-ov-mic-files" class="sl-scroll" style="max-height:132px"></div>
-            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Open /BruceMIC →</button><button type="button" class="btn-action" onclick="quickCli('mic record')">CLI: mic</button></div>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchStSlab('mic')">Chọn ổ bản ghi →</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open device controls</button></div>
           </div>
           <div class="dash-card">
             <div class="dash-card-head"><h3>Sonar Events</h3><span id="st-ov-sonar-badge2" class="sl-badge">LIVE</span></div>
@@ -351,12 +356,11 @@
           <div class="dash-card-head"><h3>Microphone — ES7210 Dual-Mic</h3><span class="sl-badge">48 kHz</span></div>
           <div class="kv-grid">
             <div class="kv-item"><span>Mode</span><b id="st-mic-mode">Spectrum / dB / Record</b></div>
-            <div class="kv-item"><span>Last WAV</span><b id="st-mic-last">--</b></div>
-            <div class="kv-item"><span>Storage</span><b id="st-mic-storage">LittleFS /BruceMIC</b></div>
+            <div class="kv-item"><span>Storage</span><b id="st-mic-storage">SD or LittleFS /BruceMIC</b></div>
             <div class="kv-item"><span>Gain</span><b id="st-mic-gain">24 dB</b></div>
           </div>
-          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="quickCli('mic spectrum')">Spectrum (device)</button><button type="button" class="btn-action" onclick="quickCli('mic db')">dB Meter</button><button type="button" class="btn-action" onclick="quickCli('mic record')">Record WAV</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Open Recordings</button></div>
-          <strong class="sl-sub sl-mt">Recent WAV Recordings</strong>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="switchTab('screen')">Open Studio → Microphone on device</button><button type="button" class="btn-action" onclick="openRecordings('LittleFS')">Bản ghi: LittleFS</button><button type="button" class="btn-action" onclick="openRecordings('SD')">Bản ghi: SD</button></div>
+          <strong class="sl-sub sl-mt">Recordings</strong>
           <div id="st-mic-files" class="sl-scroll sl-mt"></div>
         </div>
         <details class="sl-group" open>
@@ -367,7 +371,7 @@
             <div class="kv-item"><span>Motion Peak</span><b id="st-sonar-pk">0%</b></div>
             <div class="kv-item"><span>Signal</span><b id="st-sonar-dir">--</b></div>
           </div>
-          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="quickCli('sonar')">Launch Sonar Guard (device)</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">View Log</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Audio Clips</button></div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('screen')">Open Sonar on device</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">View Log</button><button type="button" class="btn-action" onclick="switchStSlab('mic')">Audio Clips</button></div>
           <audio id="st-sonar-player" class="sl-audio hidden" controls preload="none"></audio>
           <div id="st-sonar-events" class="sl-scroll sl-mt"></div>
         </details>
@@ -393,16 +397,16 @@
       <!-- Clock & More -->
       <div id="stslab-clock" class="slab-view hidden">
         <div class="kv-grid">
-          <div class="kv-item"><span>Device Time (NTP RTC)</span><b id="st-clock-time">--:--:--</b></div>
-          <div class="kv-item"><span>Timezone / DST</span><b id="st-clock-tz">UTC+0 · DST off</b></div>
+          <div class="kv-item"><span>Browser Time</span><b id="st-clock-time">--:--:--</b></div>
+          <div class="kv-item"><span>Browser Timezone</span><b id="st-clock-tz">UTC+0 · DST off</b></div>
           <div class="kv-item"><span>Uptime</span><b id="st-clock-uptime">--</b></div>
-          <div class="kv-item"><span>NTP Sync</span><b id="st-clock-ntp">--</b></div>
+          <div class="kv-item"><span>Device Clock</span><b id="st-clock-ntp">--</b></div>
         </div>
-        <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" id="st-clock-sync">Sync Browser Time → Device</button><button type="button" class="btn-action" onclick="quickCli('date')">CLI: date</button><button type="button" class="btn-action" onclick="quickCli('timer')">Timer (device)</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open Screen Mirror</button></div>
+        <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" id="st-clock-sync">Sync Browser Time → Device</button><button type="button" class="btn-action" onclick="quickCli('date')">CLI: date</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open Clock → Timer on device</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open Screen Mirror</button></div>
         <details class="sl-group" open>
           <summary><span>Megalodon — Soundboard & Game</span><span class="sl-badge">♪</span></summary>
           <p class="muted-sm sl-mt">Retro shark game + soundboard trên device. Chạy trực tiếp trên màn hình 1.83″.</p>
-          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="quickCli('megalodon')">Launch Megalodon (device)</button><button type="button" class="btn-action" onclick="quickCli('tone 1000 500')">Test Tone</button></div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="switchTab('screen')">Open Studio → Megalodon on device</button><button type="button" class="btn-action" onclick="quickCli('tone 1000 500')">Test Tone</button></div>
         </details>
         <details class="sl-group">
           <summary><span>Dual-Boot Switcher</span><span id="st-dual-badge" class="sl-badge">--</span></summary>
@@ -420,7 +424,7 @@
       <div id="stslab-badusb" class="slab-view hidden">
         <div class="dash-card dash-card-wide">
           <div class="dash-card-head"><h3>BadUSB Auto-Run — Plug & Run Payload</h3><span id="st-badusb-badge" class="sl-badge">OFF</span></div>
-          <p class="muted-sm">Cắm vào máy là chạy luôn DuckyScript đã chuẩn bị. 3s đếm ngược để hủy bằng bất kỳ nút nào. Lưu trong <code>bruce.conf</code>.</p>
+          <p class="muted-sm">Khi USB được nhận, payload có thể chạy tự động. Cửa sổ huỷ và thời gian chờ phụ thuộc cài đặt bên dưới. Chỉ dùng với thiết bị được phép. Nếu đang bật, lưu payload mới có thể làm Auto-Run chạy khi host được nhận.</p>
           <div class="kv-grid sl-mt">
             <div class="kv-item"><span>Enabled</span><b id="st-badusb-enabled">--</b></div>
             <div class="kv-item"><span>Armed</span><b id="st-badusb-armed">--</b></div>
@@ -439,25 +443,24 @@
             <input type="text" id="st-badusb-path" placeholder="/payload.txt or /badusb/demo.txt" class="sl-input" style="flex:1;min-width:180px" />
             <button type="button" class="btn-action btn-default" id="st-badusb-set-payload">Set Payload</button>
           </div>
+          <details class="sl-group sl-mt"><summary>Cài đặt nâng cao</summary>
           <div class="sl-row sl-mt">
-            <input type="number" id="st-badusb-delayMs" min="0" max="10000" step="100" placeholder="delayMs" class="sl-input" style="max-width:120px" />
-            <button type="button" class="btn-action" id="st-badusb-set-delay">Set Delay (ms)</button>
-            <select id="st-badusb-trigger-sel" class="sl-input" style="max-width:160px"><option value="0">On Enumeration</option><option value="1">On VBUS</option><option value="2">Delayed +2s</option></select>
-            <button type="button" class="btn-action" id="st-badusb-set-trigger">Set Trigger</button>
+            <label for="st-badusb-delayMs">Delay (ms)</label><input type="number" id="st-badusb-delayMs" min="0" max="10000" step="100" placeholder="delayMs" class="sl-input" style="max-width:120px" />
+            <select id="st-badusb-trigger-sel" class="sl-input" style="max-width:160px"><option value="0">On Enumeration</option><option value="1" disabled>VBUS unavailable</option><option value="2">Delayed +2s</option></select>
           </div>
           <div class="sl-row sl-mt">
-            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-confirm-toggle" /> Confirm 3s window</label>
+            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-confirm-toggle" /> Cửa sổ xác nhận</label>
             <input type="number" id="st-badusb-confirmMs" min="1000" max="10000" step="500" placeholder="confirmMs" class="sl-input" style="max-width:120px" />
-            <button type="button" class="btn-action" id="st-badusb-set-confirm">Set Confirm</button>
             <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-once-toggle" /> Run once per plug</label>
-            <button type="button" class="btn-action" id="st-badusb-set-once">Set Once</button>
           </div>
-          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">Browse Files → Pick payload</button><button type="button" class="btn-action" onclick="quickCli('badusb')">Open BadUSB (device)</button></div>
+          <button type="button" class="btn-action btn-default sl-mt" id="st-badusb-save-settings">Lưu cài đặt nâng cao</button>
+          <small>Chỉ lưu các mục đã thay đổi; mỗi mục được lưu riêng.</small></details>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="startPayloadPicker()">Chọn payload từ Files</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open BadUSB on device</button></div>
           <div id="st-badusb-msg" class="ota-status hidden" style="margin-top:8px"></div>
         </div>
         <details class="sl-group" open>
-          <summary><span>How it works</span><span class="sl-badge">3s cancel</span></summary>
-          <p class="muted-sm sl-mt">1. Chọn payload DuckyScript trong <b>LittleFS</b> hoặc <b>SD</b> (ví dụ <code>/payload.txt</code>). 2. Bật <b>Enable</b>. 3. Cắm USB vào host — firmware đợi <b>delayMs</b> sau khi <code>tud_mounted()</code>, hiện countdown <b>confirmMs</b> (mặc định 3000ms), bấm bất kỳ nút để hủy, không thì chạy <code>key_input()</code>. Lưu persistent trong <code>bruce.conf → badUsbAutoRun</code>. Trigger: Enumeration (mặc định), VBUS, hoặc Delayed thêm 2s.</p>
+          <summary><span>How it works</span><span class="sl-badge">Có thể huỷ</span></summary>
+          <p class="muted-sm sl-mt">1. Chọn payload DuckyScript trong <b>LittleFS</b> hoặc <b>SD</b> (ví dụ <code>/payload.txt</code>). 2. Bật <b>Enable</b>. 3. Cắm USB vào host — firmware đợi <b>delayMs</b> sau khi <code>tud_mounted()</code>, nếu bật xác nhận thì hiện countdown <b>confirmMs</b> (mặc định 3000ms), bấm nút để hủy, không thì chạy <code>key_input()</code>. Lưu persistent trong <code>bruce.conf → badUsbAutoRun</code>. Trigger: Enumeration (mặc định) hoặc Delayed thêm 2s. VBUS chưa hỗ trợ. Chạy lặp chỉ khi tắt Run once; mỗi lần đều kiểm tra kết nối và cửa sổ xác nhận.</p>
         </details>
       </div>
 
@@ -466,6 +469,7 @@
     <!-- TAB 2: FILES -->
     <!-- TAB 2: FILES -->
     <section id="tab-files" class="tab-pane hidden">
+      <div id="payload-picker-banner" class="ota-status hidden" role="status">Chọn “Dùng làm payload” tại file cần dùng. Chưa chạy hoặc lưu tự động. <button type="button" class="btn-action" onclick="cancelPayloadPicker()">Huỷ chọn</button></div>
       <div class="free-space">
         <div class="act-browse block-space free-sd" data-path="/" data-drive="SD">
           <div class="drive-top">
@@ -680,8 +684,8 @@
                 <input type="text" id="pers-mdns" maxlength="24" placeholder="bruce" />
               </div>
               <div class="field">
-                <label for="pers-bright">LCD Brightness: <b id="pers-bright-val">80%</b></label>
-                <input type="range" id="pers-bright" min="10" max="100" value="80" />
+                <span>LCD brightness is managed in Dashboard → Quick Controls.</span>
+                <button type="button" class="btn-action" onclick="switchTab('dashboard')">Open display controls</button>
               </div>
               <div class="field">
                 <label for="pers-apssid">AP Hotspot SSID</label>
@@ -1251,6 +1255,7 @@
 
   <div class="loading-area hidden"><div class="text"></div></div>
   <div class="upload-area hidden"></div>
+  <script src="/qr_local.js"></script>
   <script src="/index.js"></script>
 </body>
 </html>
