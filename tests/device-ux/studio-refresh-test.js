@@ -8,8 +8,8 @@ vm.createContext(context);vm.runInContext(src.slice(a,b),context);
 const serializesRefresh = src.slice(a,b).includes('if (studioRefreshBusy)');
 (async()=>{
  values={'/systeminfo':{BOARD:'new'},'/seclab/status':{},'/studio/qrcodes':{qrcodes:[]}};
- await context.refreshStudio();assert(msg.textContent.includes('Auto-Run'));assert(last.textContent.includes('cũ'));assert.equal(context.studioLastBadusb.enabled,true);
- values['/badusb/autorun']={enabled:false};await context.refreshStudio();assert(last.textContent.includes('Cập nhật'));
+ await context.refreshStudio();assert(msg.textContent.includes('Auto-Run'));assert(last.textContent.includes('stale'));assert.equal(context.studioLastBadusb.enabled,true);
+ values['/badusb/autorun']={enabled:false};await context.refreshStudio();assert(last.textContent.includes('Updated'));
  values['/systeminfo']='hold';let old=context.refreshStudio();values['/systeminfo']={BOARD:'latest'};await context.refreshStudio();if(serializesRefresh) assert.equal(context.studioRefreshQueued,true);held(JSON.stringify({BOARD:'obsolete'}));await old;if(serializesRefresh) await new Promise(r=>setTimeout(r,0));assert.equal(context.studioLastSys.BOARD,'latest');
  console.log('Studio partial failure and out-of-order refresh checks passed');
 })().catch(e=>{console.error(e);process.exitCode=1});

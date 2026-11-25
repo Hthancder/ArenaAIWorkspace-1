@@ -4659,7 +4659,7 @@ index 5290300..b27bf10 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..33d5a6b 100644
+index fd61602..cac7677 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -5213,7 +5213,7 @@ index fd61602..33d5a6b 100644
 +        if (payloadPickerActive) {
 +          const pick = document.createElement("button");
 +          pick.type = "button"; pick.className = "btn-action act-pick-payload";
-+          pick.textContent = "Dùng làm payload";
++          pick.textContent = "Use as payload";
 +          e.querySelector(".col-action").appendChild(pick);
 +        }
          e.querySelector(".col-action").classList.add("type-file");
@@ -6710,7 +6710,7 @@ index fd61602..33d5a6b 100644
 +    fs.dataset.touched = "1"; field.dataset.touched = "1";
 +    cancelPayloadPicker();
 +    const msg = document.getElementById("st-badusb-msg");
-+    msg.className = "ota-status"; msg.textContent = "Đã chọn file. Nhấn Set Payload để lưu; chưa chạy payload.";
++    msg.className = "ota-status"; msg.textContent = "File selected. Press Set Payload to store it; it is not run yet.";
 +    msg.classList.remove("hidden");
 +    return;
 +  }
@@ -7349,10 +7349,10 @@ index fd61602..33d5a6b 100644
 +  field.disabled=true;
 +  try {
 +    const d=JSON.parse(await requestPost("/badusb/autorun",{action:"enable",enabled:field.checked?"1":"0"}));
-+    if (!d.ok) throw new Error(d.msg || "Không thể đổi trạng thái");
-+    msg.className="ota-status ok"; msg.textContent=d.msg || "Đã lưu trạng thái.";
++    if (!d.ok) throw new Error(d.msg || "Could not change state");
++    msg.className="ota-status ok"; msg.textContent=d.msg || "State saved.";
 +  } catch(err) {
-+    msg.className="ota-status err"; msg.textContent=(err.message || "Không thể đổi trạng thái") + ". Kiểm tra trạng thái thiết bị sau khi kết nối lại.";
++    msg.className="ota-status err"; msg.textContent=(err.message || "Could not change state") + ". Check the device state after reconnecting.";
 +  } finally {
 +    msg.classList.remove("hidden");
 +    badUsbFieldsSaved("st-badusb-enabled-toggle");
@@ -7379,13 +7379,13 @@ index fd61602..33d5a6b 100644
 +    {name:"Run once", ids:["once-toggle"], data:{action:"setrunonce", runOncePerPlug:el("once-toggle").checked?"1":"0"}}
 +  ].filter(g => g.ids.some(id => el(id).dataset.touched));
 +  const fail = text => { msg.className="ota-status err"; msg.textContent=text; msg.classList.remove("hidden"); };
-+  if (!groups.length) { fail("Không có thay đổi cần lưu."); return; }
++  if (!groups.length) { fail("Nothing changed to save."); return; }
 +  for (const g of groups) {
 +    const d=g.data;
 +    if ((d.action==="setdelay" && (!/^\d+$/.test(d.delayMs) || +d.delayMs>10000)) ||
 +        (d.action==="setconfirm" && (!/^\d+$/.test(d.confirmMs) || +d.confirmMs<1000 || +d.confirmMs>10000)) ||
 +        (d.action==="settrigger" && !["0","2"].includes(d.trigger))) {
-+      fail("Giá trị không hợp lệ: " + g.name + ". Chưa lưu mục nào."); return;
++      fail("Invalid value: " + g.name + ". Nothing was saved."); return;
 +    }
 +  }
 +  groups.forEach(g => { g.snapshot=g.ids.map(id => el(id).type === "checkbox" ? el(id).checked : el(id).value); });
@@ -7397,11 +7397,11 @@ index fd61602..33d5a6b 100644
 +      if (!d.ok) throw new Error(d.msg || "rejected");
 +      saved.push(g.name);
 +      g.ids.forEach((id,i) => { const f=el(id); if ((f.type === "checkbox" ? f.checked : f.value) === g.snapshot[i]) delete f.dataset.touched; });
-+    } catch(e) { failed.push(g.name + ": " + (e.message || "lỗi")); }
++    } catch(e) { failed.push(g.name + ": " + (e.message || "error")); }
 +  }
 +  button.disabled=false;
 +  msg.className="ota-status " + (failed.length ? "err" : "ok");
-+  msg.textContent=(saved.length ? "Đã lưu: " + saved.join(", ") + ". " : "") + (failed.length ? "Chưa xác nhận: " + failed.join("; ") + ". Kiểm tra trạng thái trước khi thử lại." : "");
++  msg.textContent=(saved.length ? "Saved: " + saved.join(", ") + ". " : "") + (failed.length ? "Not confirmed: " + failed.join("; ") + ". Check the state before retrying." : "");
 +  msg.classList.remove("hidden");
 +  refreshStudio();
 +});
@@ -7444,9 +7444,9 @@ index fd61602..33d5a6b 100644
 +  const w=window.open(); w.document.write(c); w.document.close();
 +});
 +document.getElementById("pt-import")?.addEventListener("click", async ()=>{
-+  const txt=prompt("Dán toàn bộ HTML mẫu vào đây (Ctrl+V), sẽ tạo file mới:");
++  const txt=prompt("Paste the full HTML template here (Ctrl+V); a new file will be created:");
 +  if(!txt) return;
-+  const name=prompt("Đặt tên file (vd facebook.html):","imported.html");
++  const name=prompt("File name (e.g. facebook.html):","imported.html");
 +  if(!name) return;
 +  const msg=document.getElementById("pt-msg");
 +  try{ const raw=await requestPost("/portal/templates",{action:"save", name, content:txt}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(e){ if(msg){ msg.className="ota-status err"; msg.textContent=e.message; msg.classList.remove("hidden"); } }
@@ -7456,7 +7456,7 @@ index fd61602..33d5a6b 100644
 +  const txt=await f.text();
 +  portalSetForm(f.name, txt, "");
 +  const msg=document.getElementById("pt-msg");
-+  if(msg){ msg.className="ota-status ok"; msg.textContent="Đã nạp file "+f.name+" vào ô soạn — bấm Lưu mẫu để lưu lên thiết bị"; msg.classList.remove("hidden"); }
++  if(msg){ msg.className="ota-status ok"; msg.textContent="Loaded file "+f.name+" into the editor — press Save template to store it on the device"; msg.classList.remove("hidden"); }
 +});
 +document.getElementById("pt-list")?.addEventListener("click", async (e)=>{
 +  const t=e.target;
@@ -7468,13 +7468,13 @@ index fd61602..33d5a6b 100644
 +  if(use){
 +    try{ const raw=await requestPost("/portal/templates",{action:"active", path:use}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
 +  } else if(edit){
-+    try{ const raw=await requestPost("/portal/templates",{action:"get", path:edit}); const j=JSON.parse(raw); if(j.ok){ let ap=j.content.match(/<!-- AP="([^"]+)" -->/); portalSetForm(edit.split("/").pop(), j.content.replace(/<!-- AP="[^"]+" -->\n?/,""), ap?ap[1]:""); if(msg){ msg.className="ota-status ok"; msg.textContent="Đã nạp để sửa: "+edit; msg.classList.remove("hidden"); } document.getElementById("pt-content")?.scrollIntoView({behavior:"smooth"}); } }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
++    try{ const raw=await requestPost("/portal/templates",{action:"get", path:edit}); const j=JSON.parse(raw); if(j.ok){ let ap=j.content.match(/<!-- AP="([^"]+)" -->/); portalSetForm(edit.split("/").pop(), j.content.replace(/<!-- AP="[^"]+" -->\n?/,""), ap?ap[1]:""); if(msg){ msg.className="ota-status ok"; msg.textContent="Loaded for editing: "+edit; msg.classList.remove("hidden"); } document.getElementById("pt-content")?.scrollIntoView({behavior:"smooth"}); } }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
 +  } else if(dup){
-+    const newName=prompt("Tên file nhân bản:", dup.split("/").pop().replace(".html","-copy.html"));
++    const newName=prompt("Name for the copy:", dup.split("/").pop().replace(".html","-copy.html"));
 +    if(!newName) return;
 +    try{ const raw=await requestPost("/portal/templates",{action:"get", path:dup}); const j=JSON.parse(raw); if(j.ok){ const raw2=await requestPost("/portal/templates",{action:"save", name:newName, content:j.content}); const k=JSON.parse(raw2); if(msg){ msg.className="ota-status "+(k.ok?"ok":"err"); msg.textContent=k.msg; msg.classList.remove("hidden"); } portalRefresh(); } }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
 +  } else if(del){
-+    if(!confirm("Xoá mẫu "+del+" ?")) return;
++    if(!confirm("Delete template "+del+" ?")) return;
 +    try{ const raw=await requestPost("/portal/templates",{action:"delete", path:del}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
 +  }
 +});
@@ -7898,7 +7898,7 @@ index fd61602..33d5a6b 100644
 +    if(!studioLastSys && !studioLastSecLab) throw new Error("no studio data");
 +    lastSysInfo = studioLastSys || lastSysInfo;
 +    const missing = [["System",sys],["SecLab",sec],["QR",qr],["Auto-Run",badusb]].filter(x=>!x[1]).map(x=>x[0]);
-+    if(lastEl) lastEl.textContent = missing.length ? "Dữ liệu có thể cũ" : "Cập nhật " + new Date().toLocaleTimeString();
++    if(lastEl) lastEl.textContent = missing.length ? "Data may be stale" : "Updated " + new Date().toLocaleTimeString();
 +    renderStudioOverview(studioLastSys, studioLastSecLab, studioLastQr);
 +    renderStudioMic(studioLastSys, studioLastSecLab);
 +    renderStudioQr(studioLastQr);
@@ -7906,12 +7906,12 @@ index fd61602..33d5a6b 100644
 +    renderStudioBadusb(studioLastBadusb);
 +    if(msgBox){
 +      if(isPreview && !sys){ msgBox.className="ota-status ok"; msgBox.textContent="Preview mode \u2014 showing mock Studio data. Connect device for live."; msgBox.classList.remove("hidden"); }
-+      else if (missing.length) { msgBox.className="ota-status err"; msgBox.textContent="Không cập nhật được: " + missing.join(", ") + ". Dữ liệu hiển thị có thể cũ; kiểm tra kết nối và thử Refresh."; msgBox.classList.remove("hidden"); }
++      else if (missing.length) { msgBox.className="ota-status err"; msgBox.textContent="Could not refresh: " + missing.join(", ") + ". The data shown may be stale; check the connection and press Refresh."; msgBox.classList.remove("hidden"); }
 +      else msgBox.classList.add("hidden");
 +    }
 +  }catch(e){
 +    if (generation !== studioRefreshGeneration) return;
-+    if (lastEl) lastEl.textContent = "Không cập nhật được — dữ liệu có thể cũ";
++    if (lastEl) lastEl.textContent = "Could not refresh — data may be stale";
 +    if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Studio refresh failed"; msgBox.classList.remove("hidden"); }
 +    console.warn("refreshStudio",e);
 +  } finally {
@@ -7957,7 +7957,7 @@ index fd61602..33d5a6b 100644
 +  const micBox=document.getElementById("st-ov-mic-files");
 +  if(micBox){
 +    // try to list mic files via existing file API cache if any, else mock
-+    micBox.innerHTML = `<div class="sl-item"><span>Record via device: <b>Studio</b> \u2192 <b>Microphone</b> \u2192 <b>Record</b></span><span class="sl-tag ok">ES7210</span></div><div class="sl-item"><span>/BruceMIC \u00b7 SD or LittleFS</span><button type="button" class="btn-action" onclick="switchStSlab('mic')">Chọn ổ</button></div>`;
++    micBox.innerHTML = `<div class="sl-item"><span>Record via device: <b>Studio</b> \u2192 <b>Microphone</b> \u2192 <b>Record</b></span><span class="sl-tag ok">ES7210</span></div><div class="sl-item"><span>/BruceMIC \u00b7 SD or LittleFS</span><button type="button" class="btn-action" onclick="switchStSlab('mic')">Choose drive</button></div>`;
 +  }
 +  const sonarBox=document.getElementById("st-ov-sonar-events");
 +  if(sonarBox){
@@ -8068,16 +8068,16 @@ index fd61602..33d5a6b 100644
 +    const j=JSON.parse(raw);
 +    portalTemplates=j.templates||[];
 +    portalActive=j.active||"";
-+    if(activeEl) activeEl.textContent=portalActive||"(mặc định Google/Router)";
++    if(activeEl) activeEl.textContent=portalActive||"(default: Google/Router)";
 +    if(countEl) countEl.textContent=String(portalTemplates.length);
-+    if(badge) { badge.textContent=portalActive?portalActive.split("/").pop():"mặc định"; badge.className="sl-badge "+(portalActive?"on":""); }
++    if(badge) { badge.textContent=portalActive?portalActive.split("/").pop():"default"; badge.className="sl-badge "+(portalActive?"on":""); }
 +    if(listEl){
-+      if(!portalTemplates.length) listEl.innerHTML=`<div class="sl-item muted-sm">Chưa có mẫu nào — bấm <b>+ Mẫu mới</b> hoặc <b>Tải file .html</b> để thêm. Mẫu sẽ lưu ở <code>/portal_templates/</code></div>`;
-+      else listEl.innerHTML=portalTemplates.map(x=>`<div class="sl-item"><span><strong>${slEsc(x.name)}</strong><br><small class="mono muted-sm">${slEsc(x.path)} · ${x.size}B ${x.ap?`· AP: ${slEsc(x.ap)}`:""} ${portalActive===x.path?`· <b>Active</b>`:""}</small></span><span style="display:flex;gap:6px"><button type="button" class="sl-tag ok" data-pt-use="${slEsc(x.path)}">Dùng</button><button type="button" class="sl-tag" data-pt-edit="${slEsc(x.path)}">Sửa</button><button type="button" class="sl-tag" data-pt-dup="${slEsc(x.path)}">Nhân bản</button><button type="button" class="sl-tag blk" data-pt-del="${slEsc(x.path)}">Xoá</button></span></div>`).join("");
++      if(!portalTemplates.length) listEl.innerHTML=`<div class="sl-item muted-sm">No templates yet — press <b>+ New template</b> or <b>Import .html</b> to add one. Templates are stored in <code>/portal_templates/</code></div>`;
++      else listEl.innerHTML=portalTemplates.map(x=>`<div class="sl-item"><span><strong>${slEsc(x.name)}</strong><br><small class="mono muted-sm">${slEsc(x.path)} · ${x.size}B ${x.ap?`· AP: ${slEsc(x.ap)}`:""} ${portalActive===x.path?`· <b>Active</b>`:""}</small></span><span style="display:flex;gap:6px"><button type="button" class="sl-tag ok" data-pt-use="${slEsc(x.path)}">Use</button><button type="button" class="sl-tag" data-pt-edit="${slEsc(x.path)}">Edit</button><button type="button" class="sl-tag" data-pt-dup="${slEsc(x.path)}">Duplicate</button><button type="button" class="sl-tag blk" data-pt-del="${slEsc(x.path)}">Delete</button></span></div>`).join("");
 +    }
 +    if(msg){ msg.classList.add("hidden"); }
 +  }catch(e){
-+    if(msg){ msg.className="ota-status err"; msg.textContent=e.message||"Không tải được danh sách"; msg.classList.remove("hidden"); }
++    if(msg){ msg.className="ota-status err"; msg.textContent=e.message||"Could not load the list"; msg.classList.remove("hidden"); }
    }
 -});
 +}
@@ -8092,8 +8092,8 @@ index fd61602..33d5a6b 100644
 +  const c=document.getElementById("pt-content")?.value||"";
 +  const ap=document.getElementById("pt-ap")?.value.trim()||"";
 +  const msg=document.getElementById("pt-msg");
-+  if(!n){ if(msg){ msg.className="ota-status err"; msg.textContent="Thiếu tên file (vd google.html)"; msg.classList.remove("hidden"); } return; }
-+  if(!c.trim()){ if(msg){ msg.className="ota-status err"; msg.textContent="Thiếu nội dung HTML"; msg.classList.remove("hidden"); } return; }
++  if(!n){ if(msg){ msg.className="ota-status err"; msg.textContent="Missing file name (e.g. google.html)"; msg.classList.remove("hidden"); } return; }
++  if(!c.trim()){ if(msg){ msg.className="ota-status err"; msg.textContent="HTML content is empty"; msg.classList.remove("hidden"); } return; }
 +  try{ const raw=await requestPost("/portal/templates",{action:"save", name:n, content:c, apName:ap}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg||""; msg.classList.remove("hidden"); } if(j.ok) { portalRefresh(); } }catch(e){ if(msg){ msg.className="ota-status err"; msg.textContent=e.message; msg.classList.remove("hidden"); } }
 +}
  
@@ -11512,6 +11512,52 @@ index 180e105..61f922e 100644
      if (!btn) return false;
  #ifdef HAS_ENCODER
      // NextPress/PrevPress here are rotary-encoder-derived, not raw mechanical
+diff --git a/include/precompiler_flags.h b/include/precompiler_flags.h
+index 86b5f07..716b826 100644
+--- a/include/precompiler_flags.h
++++ b/include/precompiler_flags.h
+@@ -170,6 +170,41 @@
+ #define BTN_ALIAS "Sel"
+ #endif
+ 
++// On-screen control hints. These used to be typed by hand at every call site,
++// which is how "Click=Select  ESC=Back" ended up on a three-button board where
++// no key is called "Click" and there is no text-entry ESC. Boards that name
++// their keys differently override these once, and every footer follows.
++#ifndef UI_HINT_SELECT
++#define UI_HINT_SELECT BTN_ALIAS
++#endif
++#ifndef UI_HINT_BACK
++#define UI_HINT_BACK "Esc"
++#endif
++#ifndef UI_HINT_LIST
++#define UI_HINT_LIST UI_HINT_SELECT "=Select  " UI_HINT_BACK "=Back"
++#endif
++#ifndef UI_HINT_STOP
++#define UI_HINT_STOP UI_HINT_SELECT "=Edit  " UI_HINT_BACK "=Stop"
++#endif
++#ifndef UI_HINT_YES_NO
++#define UI_HINT_YES_NO UI_HINT_SELECT "=Yes  " UI_HINT_BACK "=No"
++#endif
++#ifndef UI_HINT_CONFIRM
++#define UI_HINT_CONFIRM UI_HINT_SELECT "=Confirm  " UI_HINT_BACK "=Cancel"
++#endif
++#ifndef UI_HINT_OPEN
++#define UI_HINT_OPEN UI_HINT_SELECT "=Open  " UI_HINT_BACK "=Back"
++#endif
++#ifndef UI_HINT_PICK
++#define UI_HINT_PICK UI_HINT_SELECT "=Pick  " UI_HINT_BACK "=Back"
++#endif
++#ifndef UI_HINT_RUN
++#define UI_HINT_RUN UI_HINT_SELECT "=Run  " UI_HINT_BACK "=Back"
++#endif
++#ifndef UI_HINT_TOGGLE
++#define UI_HINT_TOGGLE UI_HINT_SELECT "=Toggle  " UI_HINT_BACK "=Cancel"
++#endif
++
+ #ifndef DEEPSLEEP_WAKEUP_PIN
+ #define DEEPSLEEP_WAKEUP_PIN -1
+ #endif
 diff --git a/include/tftLogger.h b/include/tftLogger.h
 index ffb96fe..0ff81d9 100644
 --- a/include/tftLogger.h
@@ -12107,7 +12153,7 @@ index 72d69eb..7fbd4ed 100644
      void addWebUISession(const String &token);
      void removeWebUISession(const String &token);
 diff --git a/src/core/display.cpp b/src/core/display.cpp
-index d3fe50a..0bd8c75 100644
+index d3fe50a..8263573 100644
 --- a/src/core/display.cpp
 +++ b/src/core/display.cpp
 @@ -1,8 +1,11 @@
@@ -12410,7 +12456,7 @@ index d3fe50a..0bd8c75 100644
      // update history
      last_index = index;
  #if defined(HAS_TOUCH)
-@@ -1152,6 +1288,137 @@ Opt_Coord drawOptions(
+@@ -1152,6 +1288,136 @@ Opt_Coord drawOptions(
  void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
      drawStatusBar();
      int menuSize = options.size();
@@ -12524,8 +12570,7 @@ index d3fe50a..0bd8c75 100644
 +    int selSize = FG;
 +    if ((int)selLbl.length() > (pillW - 12) / (LW * FG)) selSize = FM;
 +    if ((int)selLbl.length() > (pillW - 12) / (LW * FM)) selSize = FP;
-+    int maxSelChars = (pillW - 10) / (LW * selSize);
-+    if ((int)selLbl.length() > maxSelChars) selLbl = selLbl.substring(0, maxSelChars - 1) + "~";
++    selLbl = fitMenuLabel(selLbl, (pillW - 10) / (LW * selSize));
 +    tft.setTextSize(selSize);
 +    tft.setTextColor(bruceConfig.bgColor, selBg);
 +    tft.drawCentreString(selLbl, pillCenterX, middle - (selSize * LH) / 2, SMOOTH_FONT);
@@ -12548,15 +12593,70 @@ index d3fe50a..0bd8c75 100644
      tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
      tft.setTextSize(FP);
      tft.drawPixel(0, 0, 0);
-@@ -1267,6 +1534,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
+@@ -1193,10 +1459,15 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
+     if (neighbors < 0) neighbors = 0;
+ 
+     tft.setTextSize(FM);
++    // Neighbours are drawn at the smaller size but were never clipped, so a long
++    // label ran straight through the border. The selected row is clipped a few
++    // lines below; unselected rows must be too.
++    const int neighborMaxChars = max(4, (tftWidth - 2 * BORDER_PAD_X) / (LW * FM));
+     for (int k = neighbors; k >= 1; k--) {
+         int idx = ((index - k) % menuSize + menuSize) % menuSize;
+         int itemCenterY = middle - k * rowPitch;
+         int y = itemCenterY - neighborTextH / 2;
++        String neighborLbl = fitMenuLabel(options[idx].label, neighborMaxChars);
+         tft.setTextColor(options[idx].enabled ? bruceConfig.secColor : TFT_DARKGREY);
+         tft.fillRect(
+             BORDER_OFFSET_FROM_SCREEN_EDGE + 1,
+@@ -1205,7 +1476,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
+             rowClearH,
+             bruceConfig.bgColor
+         );
+-        tft.drawCentreString(options[idx].label, tftWidth / 2, y, SMOOTH_FONT);
++        tft.drawCentreString(neighborLbl, tftWidth / 2, y, SMOOTH_FONT);
+     }
+ 
+     // Selected item
+@@ -1231,6 +1502,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
+         int idx = (index + k) % menuSize;
+         int itemCenterY = middle + k * rowPitch;
+         int y = itemCenterY - neighborTextH / 2;
++        String neighborLbl = fitMenuLabel(options[idx].label, neighborMaxChars);
+         tft.setTextColor(options[idx].enabled ? bruceConfig.secColor : TFT_DARKGREY);
+         tft.fillRect(
+             BORDER_OFFSET_FROM_SCREEN_EDGE + 1,
+@@ -1239,7 +1511,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
+             rowClearH,
+             bruceConfig.bgColor
+         );
+-        tft.drawCentreString(options[idx].label, tftWidth / 2, y, SMOOTH_FONT);
++        tft.drawCentreString(neighborLbl, tftWidth / 2, y, SMOOTH_FONT);
+     }
+ 
+     tft.fillRect(
+@@ -1267,6 +1539,20 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
      );
      TouchFooter();
  #endif
 +#endif
++}
++
++/***************************************************************************************
++** Function name: fitMenuLabel
++** Description:   Clamp a menu label to a printable width. The bitmap font has no
++**                ellipsis and no UTF-8 support, so an over-long or accented label used
++**                to be drawn straight through the screen border. Labels wider than the
++**                limit keep a "~" to show they were cut.
++***************************************************************************************/
++String fitMenuLabel(const String &label, int maxChars) {
++    if (maxChars < 4) maxChars = 4;
++    if ((int)label.length() <= maxChars) return label;
++    return label.substring(0, maxChars - 1) + "~";
  }
  
  void drawStatusBar() {
-@@ -1274,20 +1542,27 @@ void drawStatusBar() {
+@@ -1274,20 +1560,27 @@ void drawStatusBar() {
      if (bat > 0) drawBatteryStatus(bat);
  
      if (bruceConfig.theme.border) {
@@ -12586,7 +12686,7 @@ index d3fe50a..0bd8c75 100644
          );
      }
  
-@@ -1302,7 +1577,11 @@ void drawStatusBar() {
+@@ -1302,7 +1595,11 @@ void drawStatusBar() {
          tft.print(timeStr);
      } else {
          setTftDisplay(BORDER_PAD_X, BORDER_PAD_X, bruceConfig.priColor, FP, bruceConfig.bgColor);
@@ -12600,7 +12700,7 @@ index d3fe50a..0bd8c75 100644
  
      int iconCount = 0;
 diff --git a/src/core/display.h b/src/core/display.h
-index 0345168..7502c90 100644
+index 0345168..709f003 100644
 --- a/src/core/display.h
 +++ b/src/core/display.h
 @@ -7,6 +7,7 @@
@@ -12627,6 +12727,16 @@ index 0345168..7502c90 100644
  
  #if !defined(LITE_VERSION)
  
+@@ -196,6 +199,9 @@ Opt_Coord drawOptions(
+ void drawSubmenu(int index, std::vector<Option> &options, const char *title);
+ 
+ void drawStatusBar();
++
++// Clamp a label to a printable width (the bitmap font has no ellipsis/UTF-8).
++String fitMenuLabel(const String &label, int maxChars);
+ void drawMainBorder(bool clear = true);
+ void drawMainBorderWithTitle(const String &title, bool clear = true);
+ void printTitle(const String &title);
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
 index 0000000..b49f5b4
@@ -19233,7 +19343,7 @@ index 0000000..a28c8b5
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..ee4b1ce 100644
+index a8679bd..169f5d5 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,49 @@
@@ -20558,7 +20668,7 @@ index a8679bd..ee4b1ce 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -456,154 +1415,1222 @@ void configureWebServer() {
+@@ -456,154 +1415,1228 @@ void configureWebServer() {
      server->on("/index.js", HTTP_GET, [](AsyncWebServerRequest *request) {
          serveWebUIFile(request, "index.js", "text/javascript", true, index_js, index_js_size);
      });
@@ -21268,7 +21378,13 @@ index a8679bd..ee4b1ce 100644
 +            }
 +            if (!st->authOk) {
 +                free(st);
-+                request->send(401, "text/plain", "Unauthorized");
++                // Every other branch of /ota/chunk answers JSON, and the upload
++                // page parses the body with .json(). Plain text here turned an
++                // expired login into "Network error" instead of "log in again".
++                request->send(
++                    401, "application/json",
++                    "{\"ok\":false,\"msg\":\"WebUI session expired. Reload the page and log in again.\"}"
++                );
 +                return;
 +            }
 +            if (s_otaBeginState == OTA_BEGIN_PREPARING) {
@@ -21898,7 +22014,7 @@ index a8679bd..ee4b1ce 100644
                  FS *fs;
                  if (useSD) {
                      fs = &SD;
-@@ -632,6 +2659,11 @@ void configureWebServer() {
+@@ -632,6 +2665,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -21910,7 +22026,7 @@ index a8679bd..ee4b1ce 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2732,7 @@ void configureWebServer() {
+@@ -700,7 +2738,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -21919,7 +22035,7 @@ index a8679bd..ee4b1ce 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2752,13 @@ void configureWebServer() {
+@@ -720,7 +2758,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -21934,7 +22050,7 @@ index a8679bd..ee4b1ce 100644
          handleUpload
      );
  
-@@ -737,6 +2775,427 @@ void configureWebServer() {
+@@ -737,6 +2781,427 @@ void configureWebServer() {
              }
          }
      });
@@ -22362,7 +22478,7 @@ index a8679bd..ee4b1ce 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +3204,78 @@ void configureWebServer() {
+@@ -745,25 +3210,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -22450,7 +22566,7 @@ index a8679bd..ee4b1ce 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +3283,213 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +3289,213 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -23393,6 +23509,27 @@ index eebc4a9..c3d0478 100644
  
      wakeUpScreen();
      if (bruceConfig.startupApp != "" && !startupApp.startApp(bruceConfig.startupApp)) {
+diff --git a/src/modules/NRF24/nrf_mousejack.cpp b/src/modules/NRF24/nrf_mousejack.cpp
+index 4f3082a..17154a0 100644
+--- a/src/modules/NRF24/nrf_mousejack.cpp
++++ b/src/modules/NRF24/nrf_mousejack.cpp
+@@ -10,6 +10,7 @@
+  *          adapted for Bruce architecture with multi-platform input.
+  */
+ #if !defined(LITE_VERSION)
++#include <precompiler_flags.h>
+ #include "nrf_mousejack.h"
+ #include "core/display.h"
+ #include "core/mykeyboard.h"
+@@ -634,7 +635,7 @@ static void mj_drawScanScreen(uint8_t currentCh, bool initial) {
+     int footerY = tftHeight - BORDER_PAD_X - FP * LH - 2;
+     tft.fillRect(7, footerY, tftWidth - 14, FP * LH, bruceConfig.bgColor);
+     tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
+-    tft.drawCentreString("[ESC] Stop", tftWidth / 2, footerY, 1);
++    tft.drawCentreString(String("[") + UI_HINT_BACK + "] Stop", tftWidth / 2, footerY, 1);
+ }
+ 
+ // ── Scanning function ───────────────────────────────────────────
 diff --git a/src/modules/badusb_ble/badusb_autorun.cpp b/src/modules/badusb_ble/badusb_autorun.cpp
 new file mode 100644
 index 0000000..5d50f8f
@@ -23790,10 +23927,16 @@ index 0000000..2779eda
 +
 +#endif
 diff --git a/src/modules/badusb_ble/ducky_typer.cpp b/src/modules/badusb_ble/ducky_typer.cpp
-index c6fd084..faae9b3 100644
+index c6fd084..e2bf446 100644
 --- a/src/modules/badusb_ble/ducky_typer.cpp
 +++ b/src/modules/badusb_ble/ducky_typer.cpp
-@@ -6,6 +6,7 @@
+@@ -1,4 +1,5 @@
+ #if !defined(LITE_VERSION)
++#include <precompiler_flags.h>
+ #include "ducky_typer.h"
+ #include "core/display.h"
+ #include "core/mykeyboard.h"
+@@ -6,6 +7,7 @@
  #include "core/sd_functions.h"
  #include "core/utils.h"
  #include "esp_mac.h"
@@ -23801,7 +23944,7 @@ index c6fd084..faae9b3 100644
  #include "modules/ble/ble_common.h"
  #include <NimBLEDevice.h>
  #include <map>
-@@ -154,7 +155,8 @@ enum DuckyCommandType {
+@@ -154,7 +156,8 @@ enum DuckyCommandType {
      DuckyCommandType_AltChar,
      DuckyCommandType_AltString,
      DuckyCommandType_StringDelay,
@@ -23811,7 +23954,7 @@ index c6fd084..faae9b3 100644
  };
  
  struct DuckyCommandLookup {
-@@ -200,6 +202,10 @@ const DuckyCommandLookup duckyCmds[] PROGMEM = {
+@@ -200,6 +203,10 @@ const DuckyCommandLookup duckyCmds[] PROGMEM = {
      {"DEFAULTSTRINGDELAY",    0,                DuckyCommandType_DefaultStringDelay},
      {"REPEAT",                0,                DuckyCommandType_Repeat            },
      {"WAIT_FOR_BUTTON_PRESS", 0,                DuckyCommandType_WaitForButtonPress},
@@ -23822,7 +23965,7 @@ index c6fd084..faae9b3 100644
      {"ALTCHAR",               0,                DuckyCommandType_AltChar           },
      {"ALTSTRING",             0,                DuckyCommandType_AltString         },
      {"ALTCODE",               0,                DuckyCommandType_AltString         },
-@@ -853,10 +859,10 @@ EXIT:
+@@ -853,10 +860,10 @@ EXIT:
  // KEY_INPUT - Main Ducky script parser
  // ============================================================================
  
@@ -23836,7 +23979,7 @@ index c6fd084..faae9b3 100644
      String lineContent = "";
      String Command = "";
      char Cmd[25];
-@@ -867,6 +873,11 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+@@ -867,6 +874,11 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
      static int nextStringDelay = -1;
      static int defaultStringDelay = bruceConfig.badUSBBLEKeyDelay;
      currentOutputY = 0;
@@ -23848,7 +23991,7 @@ index c6fd084..faae9b3 100644
  
      _hid->releaseAll();
  
-@@ -895,10 +906,12 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+@@ -895,10 +907,12 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
  
      uint32_t startMillisBADUSBBLE = millis();
  
@@ -23862,7 +24005,7 @@ index c6fd084..faae9b3 100644
          }
          lineContent = payloadFile.readStringUntil('\n');
          if (lineContent.endsWith("\r")) lineContent.remove(lineContent.length() - 1);
-@@ -935,6 +948,7 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+@@ -935,6 +949,7 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
          uint16_t i;
          uint16_t repeatCount = RepeatTmp.toInt();
          for (i = 0; i < repeatCount; i++) {
@@ -23870,7 +24013,7 @@ index c6fd084..faae9b3 100644
              DuckyCommandLookup *PriCmd = findDuckyCommand(Cmd);
              DuckyCommandLookup *ArgCmd = findDuckyCommand(Argument.c_str());
  
-@@ -949,10 +963,24 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+@@ -949,10 +964,24 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
                      if (strcmp(PriCmd->command, "STRINGLN") == 0) _hid->println();
  
                      if (nextStringDelay >= 0) { nextStringDelay = -1; }
@@ -23895,7 +24038,7 @@ index c6fd084..faae9b3 100644
                          waitSelect = check(SelPress);
                          delay(50);
                      }
-@@ -1023,6 +1051,7 @@ EXIT:
+@@ -1023,6 +1052,7 @@ EXIT:
      tft.setTextSize(FP);
      payloadFile.close();
      _hid->releaseAll();
@@ -23903,6 +24046,15 @@ index c6fd084..faae9b3 100644
  }
  
  // ============================================================================
+@@ -1479,7 +1509,7 @@ void PresenterMode(HIDInterface *&hid, bool ble) {
+ 
+         tft.setTextSize(FP);
+         tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+-        tft.drawCentreString("<< PREV | SEL | NEXT >>", tftWidth / 2, tftHeight - 15, 1);
++        tft.drawCentreString("<< PREV | " UI_HINT_SELECT " | NEXT >>", tftWidth / 2, tftHeight - 15, 1);
+     };
+ 
+     // Tuned for text size 4 at LW=6/LH=8 defaults; scaled proportionally for other boards.
 diff --git a/src/modules/badusb_ble/ducky_typer.h b/src/modules/badusb_ble/ducky_typer.h
 index bb5aeb4..f046012 100644
 --- a/src/modules/badusb_ble/ducky_typer.h
@@ -25049,10 +25201,17 @@ index ffd58b4..0e2ad2b 100644
  
  #endif
 diff --git a/src/modules/ble/BLE_Suite.cpp b/src/modules/ble/BLE_Suite.cpp
-index 27c887d..a470dd0 100644
+index 27c887d..62ce7df 100644
 --- a/src/modules/ble/BLE_Suite.cpp
 +++ b/src/modules/ble/BLE_Suite.cpp
-@@ -20,7 +20,9 @@
+@@ -14,13 +14,16 @@
+ #include "BLE_Suite.h"
+ #include "HFP_Exploit.h"
+ #include "ble_common.h"
++#include <precompiler_flags.h>
+ #include "core/display.h"
+ #include "core/mykeyboard.h"
+ #include "core/radio_mem.h"
  #include "core/utils.h"
  #include "core/wifi/wifi_common.h"
  #include "fastpair_crypto.h"
@@ -25062,7 +25221,7 @@ index 27c887d..a470dd0 100644
  #include <SD.h>
  #include <algorithm>
  #include <functional>
-@@ -300,8 +302,12 @@ bool BLEStateManager::initBLE(const String &name, int powerLevel) {
+@@ -300,8 +303,12 @@ bool BLEStateManager::initBLE(const String &name, int powerLevel) {
          }
      }
  
@@ -25076,7 +25235,7 @@ index 27c887d..a470dd0 100644
          return false;
      }
  
-@@ -2475,6 +2481,11 @@ bool MultiConnectionAttack::advertisingSpam(std::vector<NimBLEAddress> targets)
+@@ -2475,6 +2482,11 @@ bool MultiConnectionAttack::advertisingSpam(std::vector<NimBLEAddress> targets)
  }
  
  bool MultiConnectionAttack::nrf24JamAttack(int jamMode) {
@@ -25088,7 +25247,7 @@ index 27c887d..a470dd0 100644
      AutoCleanup cleanup([]() { BLEStateManager::deinitBLE(true); });
  
      if (!confirmAttack("Jam BLE frequencies? This may disrupt nearby devices.")) return false;
-@@ -2517,9 +2528,15 @@ bool MultiConnectionAttack::nrf24JamAttack(int jamMode) {
+@@ -2517,9 +2529,15 @@ bool MultiConnectionAttack::nrf24JamAttack(int jamMode) {
      }
      showAttackResult(false, "Failed to start BLE jamming");
      return false;
@@ -25104,7 +25263,7 @@ index 27c887d..a470dd0 100644
      AutoCleanup cleanup([]() { BLEStateManager::deinitBLE(true); });
  
      if (!confirmAttack("Jam BLE while attempting exploit connection?")) return false;
-@@ -2556,6 +2573,7 @@ bool MultiConnectionAttack::jamAndConnect(NimBLEAddress target) {
+@@ -2556,6 +2574,7 @@ bool MultiConnectionAttack::jamAndConnect(NimBLEAddress target) {
      }
      showAttackResult(false, "Jam & Connect attack failed");
      return false;
@@ -25112,7 +25271,61 @@ index 27c887d..a470dd0 100644
  }
  
  void MultiConnectionAttack::cleanup() {
-@@ -4822,7 +4840,9 @@ void BleSuiteMenu() {
+@@ -3193,7 +3212,7 @@ String selectFileFromSD() {
+     };
+ 
+     int cursor = 0;
+-    int chosen = bleListLoop("SD Files", fileCount, "SEL open  ESC back", row, &cursor);
++    int chosen = bleListLoop("SD Files", fileCount, UI_HINT_OPEN, row, &cursor);
+     return (chosen < 0) ? String("") : files[chosen];
+ }
+ 
+@@ -3244,7 +3263,7 @@ String getScriptFromUser() {
+     };
+ 
+     int cursor = 0;
+-    int chosen = bleListLoop("Select Script", scriptCount, "SEL run  ESC back", row, &cursor);
++    int chosen = bleListLoop("Select Script", scriptCount, UI_HINT_RUN, row, &cursor);
+     if (chosen < 0 || chosen == scriptCount - 1) return ""; // cancelled
+ 
+     if (scripts[chosen] == "Load from SD") {
+@@ -3911,7 +3930,7 @@ void BLE_Sniffer() {
+             drawMainBorderWithTitle("BLE SNIFFER");
+             padprintln("");
+             padprintln("Press [SEL] to start/stop capture");
+-            padprintln("Press [ESC] to exit");
++            padprintln(String("Press [") + UI_HINT_BACK + "] to exit");
+             padprintln("");
+             padprintln("Status: READY");
+             redraw = false;
+@@ -3973,7 +3992,7 @@ void BLE_Sniffer() {
+             padprintln("");
+             padprintln("[SEL]  - view packets");
+             padprintln("[NEXT] - save to SD/LittleFS");
+-            padprintln("[ESC]  - exit");
++            padprintln(String("[") + UI_HINT_BACK + "]  - exit");
+         }
+ 
+         if (isSelPressed && snifferPacketCount > 0) {
+@@ -4384,7 +4403,7 @@ String selectTargetFromScan(const char *title) {
+ 
+     while (!exitLoop) {
+         int chosen = bleListLoop(
+-            "Select Device", (int)deviceCount, "SEL pick  ESC back", deviceRow, &selectedIdx
++            "Select Device", (int)deviceCount, UI_HINT_PICK, deviceRow, &selectedIdx
+         );
+         if (chosen < 0) {
+             exitLoop = true;
+@@ -4467,7 +4486,7 @@ String selectMultipleTargetsFromScan(const char *title, std::vector<NimBLEAddres
+     };
+ 
+     for (;;) {
+-        int chosen = bleListLoop(title, rowCount, "SEL toggle  ESC cancel", row, &cursor);
++        int chosen = bleListLoop(title, rowCount, UI_HINT_TOGGLE, row, &cursor);
+         if (chosen < 0) {
+             targets.clear();
+             return "";
+@@ -4822,7 +4841,9 @@ void BleSuiteMenu() {
  
      showWelcomeScreen();
  
@@ -25123,7 +25336,7 @@ index 27c887d..a470dd0 100644
      const char *menuItems[] = {
          "Quick Vulnerability Scan",
          "Deep Device Profiling",
-@@ -4834,8 +4854,7 @@ void BleSuiteMenu() {
+@@ -4834,15 +4855,14 @@ void BleSuiteMenu() {
          "DoS Attacks",
          "Payload Delivery",
          "Testing Tools",
@@ -25133,7 +25346,15 @@ index 27c887d..a470dd0 100644
      };
  
      int selected = 0;
-@@ -4860,8 +4879,7 @@ void BleSuiteMenu() {
+ 
+     while (true) {
+         int choice =
+-            bleListLoop("BLE Suite", MENU_ITEMS, "SEL run  ESC back", bleTextRow(menuItems), &selected);
++            bleListLoop("BLE Suite", MENU_ITEMS, UI_HINT_RUN, bleTextRow(menuItems), &selected);
+ 
+         if (choice < 0) {
+             // Clear data when exiting the menu
+@@ -4860,8 +4880,7 @@ void BleSuiteMenu() {
              return;
          }
  
@@ -25143,7 +25364,16 @@ index 27c887d..a470dd0 100644
      }
  }
  
-@@ -5186,6 +5204,18 @@ void showMemorySubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
+@@ -4931,7 +4950,7 @@ int showSubMenu(const char *title, const char *options[], int optionCount) {
+     // Carry the chosen target into the hint line so the submenus stop hiding
+     // which device the attack is aimed at.
+     String hint = g_selectedDevice.address.isEmpty()
+-                      ? String("SEL run  ESC back")
++                      ? String(UI_HINT_RUN)
+                       : ("> " + (g_selectedDevice.name.length() ? g_selectedDevice.name
+                                                                 : g_selectedDevice.address));
+     return bleListLoop(title, optionCount, hint, bleTextRow(options));
+@@ -5186,6 +5205,18 @@ void showMemorySubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
  }
  
  void showDoSSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
@@ -25162,7 +25392,7 @@ index 27c887d..a470dd0 100644
      const char *options[] = {
          "Connection Flood", "Advertising Spam", "Jam & Connect (NRF24)", "Protocol Fuzzer"
      };
-@@ -5202,6 +5232,7 @@ void showDoSSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
+@@ -5202,6 +5233,7 @@ void showDoSSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
          case 2: multi.jamAndConnect(target); break;
          case 3: runProtocolFuzzer(target); break;
      }
@@ -25170,6 +25400,48 @@ index 27c887d..a470dd0 100644
  }
  
  void showPayloadSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
+@@ -5777,7 +5809,7 @@ bool confirmAttack(const char *targetName) {
+     }
+ 
+     tft.setTextColor(bleDim(), bruceConfig.bgColor);
+-    tft.drawString("SEL yes   NEXT/ESC no", g.listL, g.footY, 1);
++    tft.drawString(UI_HINT_YES_NO, g.listL, g.footY, 1);
+ 
+     for (;;) {
+         if (check(EscPress) || check(NextPress)) return false;
+@@ -5794,7 +5826,7 @@ bool requireSimpleConfirmation(const char *message) {
+ 
+     tft.setTextSize(FP);
+     tft.setTextColor(bleDim(), bruceConfig.bgColor);
+-    tft.drawString("SEL yes   NEXT/ESC no", g.listL, g.footY, 1);
++    tft.drawString(UI_HINT_YES_NO, g.listL, g.footY, 1);
+ 
+     for (;;) {
+         if (check(EscPress) || check(NextPress)) return false;
+@@ -5834,11 +5866,11 @@ int8_t showAdaptiveMessage(
+ 
+     String hint;
+     if (buttonCount == 0) hint = autoProgress ? "" : "any key to continue";
+-    else if (buttonCount == 1) hint = String("SEL ") + btn1 + "   ESC cancel";
++    else if (buttonCount == 1) hint = String(UI_HINT_SELECT) + "=" + btn1 + "   " + UI_HINT_BACK + "=Cancel";
+     else {
+-        hint = String("SEL ") + btn1 + "  NEXT " + btn2;
++        hint = String(UI_HINT_SELECT) + "=" + btn1 + "  NEXT " + btn2;
+         if (buttonCount > 2) hint += String("  PREV ") + btn3;
+-        hint += "  ESC cancel";
++        hint += String("  ") + UI_HINT_BACK + "=Cancel";
+     }
+     tft.setTextColor(bleDim(), bruceConfig.bgColor);
+     tft.drawString(bleFit(hint, g.listW), g.listL, g.footY, 1);
+@@ -5906,7 +5938,7 @@ void showDeviceInfoScreen(
+             tft.fillRect(g.listL, g.footY, g.listW, 8 * FP, bruceConfig.bgColor);
+             bool more = (int)rows.size() > perPage;
+             tft.setTextColor(bleDim(), bruceConfig.bgColor);
+-            tft.drawString(more ? "PREV/NEXT scroll  ESC back" : "SEL / ESC back", g.listL, g.footY, 1);
++            tft.drawString(more ? "PREV/NEXT scroll  " UI_HINT_BACK "=Back" : UI_HINT_LIST, g.listL, g.footY, 1);
+             if (more) {
+                 int last = std::min((int)rows.size(), off + perPage);
+                 String pos = String(off + 1) + "-" + String(last) + "/" + String((int)rows.size());
 diff --git a/src/modules/ble/BLE_Suite.h b/src/modules/ble/BLE_Suite.h
 index 538c342..0e605ae 100644
 --- a/src/modules/ble/BLE_Suite.h
@@ -27334,7 +27606,7 @@ index 0000000..bafd4e4
 +
 +#endif
 diff --git a/src/modules/ble/ble_sniffer.cpp b/src/modules/ble/ble_sniffer.cpp
-index 496ff9a..9935b4d 100644
+index 496ff9a..b848f24 100644
 --- a/src/modules/ble/ble_sniffer.cpp
 +++ b/src/modules/ble/ble_sniffer.cpp
 @@ -1,5 +1,5 @@
@@ -27344,11 +27616,12 @@ index 496ff9a..9935b4d 100644
   * Author: Ninja-jr
   * Date: 2026-01-24
   *
-@@ -7,9 +7,23 @@
+@@ -7,9 +7,24 @@
   * parses manufacturer data, and saves to SD/LittleFS.
   */
  
 -#if defined(LITE_VERSION)
++#include <precompiler_flags.h>
  #include "ble_sniffer.h"
  #include "core/display.h"
 +#include "core/utils.h"
@@ -27369,7 +27642,34 @@ index 496ff9a..9935b4d 100644
  #include "core/mykeyboard.h"
  #include "core/sd_functions.h"
  #include "core/utils.h"
-@@ -337,11 +351,4 @@ void BLE_Sniffer() {
+@@ -85,7 +100,7 @@ void BLE_Sniffer() {
+     drawMainBorderWithTitle("BLE SNIFFER");
+     padprintln("");
+     padprintln("Press [SEL] to start/stop capture");
+-    padprintln("Press [ESC] to exit");
++    padprintln(String("Press [") + UI_HINT_BACK + "] to exit");
+     padprintln("");
+     padprintln("Status: READY");
+ 
+@@ -164,7 +179,7 @@ void BLE_Sniffer() {
+                 padprintln("");
+                 padprintln("Press [SEL] to view packets");
+                 padprintln("Press [NEXT] to save to SD/LittleFS");
+-                padprintln("Press [ESC] to exit");
++                padprintln(String("Press [") + UI_HINT_BACK + "] to exit");
+             }
+         }
+ 
+@@ -222,7 +237,7 @@ void BLE_Sniffer() {
+ 
+                 tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
+                 tft.setCursor(10, tftHeight - 20);
+-                tft.drawString("PREV/NEXT: Navigate  SEL: View Details  ESC: Back", 10, tftHeight - 20, 1);
++                tft.drawString("PREV/NEXT: Navigate  " UI_HINT_SELECT ": View Details  " UI_HINT_BACK ": Back", 10, tftHeight - 20, 1);
+ 
+                 if (check(NextPress)) {
+                     if (selected < snifferPacketCount - 1) {
+@@ -337,11 +352,4 @@ void BLE_Sniffer() {
      }
  }
  
@@ -27402,7 +27702,7 @@ index a1c3936..bce93b3 100644
 +void BLE_SnifferMenu();
  #endif
 diff --git a/src/modules/ble/ble_spam.cpp b/src/modules/ble/ble_spam.cpp
-index a702b84..545a9b8 100644
+index a702b84..0a4fd96 100644
 --- a/src/modules/ble/ble_spam.cpp
 +++ b/src/modules/ble/ble_spam.cpp
 @@ -569,7 +569,8 @@ enum BleSpamAttackType {
@@ -27421,7 +27721,7 @@ index a702b84..545a9b8 100644
      {BLE_SPAM_ATTACK_BLE_BEACON,            "BLE Beacon Spam"      },
 -    {BLE_SPAM_ATTACK_RANDOM_ALL,            "Random / All"         }
 +    {BLE_SPAM_ATTACK_RANDOM_ALL,            "Random / All"         },
-+    {BLE_SPAM_ATTACK_PARTY,                 "🎉 Party Mode (All Devices)"}
++    {BLE_SPAM_ATTACK_PARTY,                 "Party Mode (All Devices)" }
  };
  
  #if !defined(LITE_VERSION)
@@ -27502,6 +27802,42 @@ index a702b84..545a9b8 100644
      }
  }
  
+@@ -1771,7 +1813,7 @@ bleSpamConfigScreen(const BleSpamSelection &selection, BleSpamConfig &config, bo
+ 
+             tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
+             tft.fillRect(8, footerY, tftWidth - 16, footerH, bruceConfig.bgColor);
+-            tft.drawCentreString("Click=Select  ESC=Back", tftWidth / 2, footerY + 2, 1);
++            tft.drawCentreString(UI_HINT_LIST, tftWidth / 2, footerY + 2, 1);
+ 
+             redrawRows = false;
+         }
+@@ -1879,7 +1921,7 @@ static void bleSpamRenderRunningScreen(
+ 
+         tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
+         tft.fillRect(8, footerY, tftWidth - 16, footerH, bruceConfig.bgColor);
+-        tft.drawCentreString("Click=Edit  ESC=Stop", tftWidth / 2, footerY + 2, 1);
++        tft.drawCentreString(UI_HINT_STOP, tftWidth / 2, footerY + 2, 1);
+     }
+ 
+     if (blinkDirty) {
+@@ -1935,7 +1977,7 @@ static bool bleSpamStoppedPrompt(const BleSpamSelection &selection, uint32_t sen
+                 tft.setTextColor(TFT_DARKGREY, bruceConfig.bgColor);
+                 int footerY = tftHeight - FP * LH - 12;
+                 tft.fillRect(8, footerY, tftWidth - 16, FP * LH + 4, bruceConfig.bgColor);
+-                tft.drawCentreString("Click=Select  ESC=Back", tftWidth / 2, footerY + 2, 1);
++                tft.drawCentreString(UI_HINT_LIST, tftWidth / 2, footerY + 2, 1);
+                 layoutDrawn = true;
+             }
+ 
+@@ -2218,7 +2260,7 @@ static void bleSpamMenuUi() {
+             bleSpamGetAttackOptionCount(),
+             0,
+             [](int idx) { return bleSpamGetAttackLabel(idx); },
+-            "Click=Select  ESC=Back"
++            UI_HINT_LIST
+         );
+ 
+         if (attackIndex < 0) return;
 @@ -2228,8 +2270,9 @@ static void bleSpamMenuUi() {
          selection.device_index = 0;
  
@@ -27513,9 +27849,18 @@ index a702b84..545a9b8 100644
                  bool startAttack = bleSpamConfigScreen(selection, config, configChanged);
                  bleSpamSaveConfig(config);
                  configChanged = false;
+@@ -2247,7 +2290,7 @@ static void bleSpamMenuUi() {
+                 deviceCount,
+                 0,
+                 [&](int idx) { return bleSpamGetDeviceName(selection.attack_type, idx); },
+-                "Click=Select  ESC=Back"
++                UI_HINT_LIST
+             );
+ 
+             if (deviceIndex < 0) break;
 diff --git a/src/modules/ble/ble_tracker_guard.cpp b/src/modules/ble/ble_tracker_guard.cpp
 new file mode 100644
-index 0000000..afbf717
+index 0000000..32c2f81
 --- /dev/null
 +++ b/src/modules/ble/ble_tracker_guard.cpp
 @@ -0,0 +1,324 @@
@@ -27811,7 +28156,7 @@ index 0000000..afbf717
 +                frame.drawString(bannerHint, tftWidth / 2, tftHeight - 14);
 +            } else {
 +                frame.setTextColor(sec, bg);
-+                frame.drawString("SEL save  > pause  < clear  ESC exit", tftWidth / 2, tftHeight - 14);
++                frame.drawString(String(UI_HINT_SELECT) + "=Save  > pause  < clear  " + UI_HINT_BACK + "=Exit", tftWidth / 2, tftHeight - 14);
 +            }
 +            frame.pushSprite(0, 0);
 +            tft.markUnmappedPixels();
@@ -27855,6 +28200,19 @@ index 0000000..1464a9e
 +void ble_guard_setup();
 +
 +#endif
+diff --git a/src/modules/ir/ir_read.cpp b/src/modules/ir/ir_read.cpp
+index 0c609a3..749fe69 100644
+--- a/src/modules/ir/ir_read.cpp
++++ b/src/modules/ir/ir_read.cpp
+@@ -233,7 +233,7 @@ void IrRead::display_btn_options() {
+         if (quickloop) padprintln("Press [NEXT] to skip button");
+         if (signals_read > 0) { padprintln("Press [OK]   to save device"); }
+     }
+-    padprintln("Press [ESC]  to exit");
++    padprintln(String("Press [") + UI_HINT_BACK + "]  to exit");
+ }
+ 
+ void IrRead::read_signal() {
 diff --git a/src/modules/others/audio.cpp b/src/modules/others/audio.cpp
 index 89b670e..3ca98cf 100644
 --- a/src/modules/others/audio.cpp
@@ -29154,11 +29512,35 @@ index 0000000..2104303
 +        return false;
 +    }
 +};
+diff --git a/src/modules/others/timer.cpp b/src/modules/others/timer.cpp
+index 0681826..e7861b0 100644
+--- a/src/modules/others/timer.cpp
++++ b/src/modules/others/timer.cpp
+@@ -6,6 +6,7 @@
+  * @date 2026-01-25
+  */
+ 
++#include <precompiler_flags.h>
+ #include "timer.h"
+ #include "core/display.h"
+ #include "core/utils.h"
+@@ -212,7 +213,7 @@ void Timer::playAlarmPattern() {
+ 
+     tft.setTextSize(FP);
+     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+-    tft.drawCentreString("Press SEL or BACK to stop", timerX, timerY + (2 * LH), 1);
++    tft.drawCentreString(String("Press ") + UI_HINT_SELECT + " or " + UI_HINT_BACK + " to stop", timerX, timerY + (2 * LH), 1);
+ 
+     // Alarm pattern loop - continues until user stops it
+     while (true) {
 diff --git a/src/modules/others/tururururu.cpp b/src/modules/others/tururururu.cpp
-index 4d2ea72..eab4882 100644
+index 4d2ea72..d11cf0f 100644
 --- a/src/modules/others/tururururu.cpp
 +++ b/src/modules/others/tururururu.cpp
-@@ -3,31 +3,37 @@
+@@ -1,33 +1,40 @@
++#include <precompiler_flags.h>
+ #include "tururururu.h"
+ #include "core/display.h"
  #include "core/mykeyboard.h"
  #include <globals.h>
  
@@ -29207,7 +29589,7 @@ index 4d2ea72..eab4882 100644
      sprite.deleteSprite();
      sprite.createSprite(32, 30);
      sprite.fillScreen(bruceConfig.bgColor);
-@@ -39,7 +45,6 @@ void initSprites() {
+@@ -39,7 +46,6 @@ void initSprites() {
      sprite.fillTriangle(23, 18, 29, 18, 24, 21, TFT_RED);
      sprite.fillRect(0, 21, 32, 15, bruceConfig.bgColor);
  
@@ -29215,7 +29597,7 @@ index 4d2ea72..eab4882 100644
      draw.deleteSprite();
      draw.createSprite(20, 8);
      draw.fillScreen(bruceConfig.bgColor);
-@@ -49,153 +54,277 @@ void initSprites() {
+@@ -49,153 +55,293 @@ void initSprites() {
      draw.drawFastVLine(10, 1, 7, TFT_WHITE);
      draw.drawFastVLine(15, 1, 7, TFT_WHITE);
      draw.fillCircle(3, 3, 1, TFT_BLACK);
@@ -29454,7 +29836,7 @@ index 4d2ea72..eab4882 100644
 +    tft.drawCentreString("UP/DOWN de di chuyen  SEL=Pause", tftWidth/2, tftHeight/2-8, 1);
 +    tft.drawCentreString("An * de bat tu 5s  <3 tang mang", tftWidth/2, tftHeight/2+4, 1);
 +    tft.setTextSize(FM);
-+    tft.drawCentreString("Nhan SEL de bat dau", tftWidth/2, tftHeight/2+24, 1);
++    tft.drawCentreString(String("Press ") + UI_HINT_SELECT + " to start", tftWidth/2, tftHeight/2+24, 1);
 +    while(!check(SelPress) && !check(EscPress)) vTaskDelay(pdMS_TO_TICKS(20));
 +    while(check(SelPress)) vTaskDelay(pdMS_TO_TICKS(20));
 +    if(check(EscPress)) return;
@@ -29568,11 +29950,27 @@ index 4d2ea72..eab4882 100644
 +            tft.setTextSize(FP);
 +            String s="Score "+String(score)+"  Level "+String(level);
 +            tft.drawCentreString(s, tftWidth/2, tftHeight/2, 1);
-+            tft.drawCentreString("SEL=Choi lai  ESC=Thoat", tftWidth/2, tftHeight/2+16, 1);
-+            while(true){
-+                if(check(SelPress)){ while(check(SelPress)) vTaskDelay(20); score=0; lives=3; level=1; fishCount=5; invincible=false; isBossLevel=false; for(int i=0;i<fishCount;i++) spawnFish(fish[i],true); tft.fillScreen(bruceConfig.bgColor); break; }
-+                if(check(EscPress)){ goto Exit; }
-+                vTaskDelay(30);
++            tft.drawCentreString(
++                String(UI_HINT_SELECT) + "=Play again   " + UI_HINT_BACK + "=Back", tftWidth / 2, tftHeight / 2 + 16, 1
++            );
++            // Clear the held key before acting, then wait for the release, so a
++            // single press cannot both restart and immediately leave the screen.
++            while (true) {
++                if (check(SelPress)) {
++                    while (SelPress) vTaskDelay(pdMS_TO_TICKS(20));
++                    score = 0;
++                    lives = 3;
++                    level = 1;
++                    fishCount = 5;
++                    invincible = false;
++                    isBossLevel = false;
++                    levelStart = millis();
++                    for (int i = 0; i < fishCount; i++) spawnFish(fish[i], true);
++                    tft.fillScreen(bruceConfig.bgColor);
++                    break;
++                }
++                if (check(EscPress)) { goto Exit; }
++                vTaskDelay(pdMS_TO_TICKS(30));
 +            }
          }
 -
@@ -29648,7 +30046,7 @@ index f0eaee5..dbfc0ad 100644
              lastUiUpdate = millis();
          }
 diff --git a/src/modules/pwnagotchi/ui.cpp b/src/modules/pwnagotchi/ui.cpp
-index ca1f9de..82603dc 100644
+index ca1f9de..ea7be37 100644
 --- a/src/modules/pwnagotchi/ui.cpp
 +++ b/src/modules/pwnagotchi/ui.cpp
 @@ -9,6 +9,35 @@ Thanks to @bmorcelli for his help doing a better code.
@@ -29737,7 +30135,7 @@ index ca1f9de..82603dc 100644
 +            tft.drawLine(0, canvas_top_h - 1, display_w - 1, canvas_top_h - 1, bruceConfig.priColor);
 +            tft.drawLine(0, canvas_bot_h, display_w - 1, canvas_bot_h, bruceConfig.priColor);
 +            tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
-+            tft.drawString(petFit("SEL options  <> face  HOLD SEL back", display_w - 10), 5, canvas_bot_h + 5);
++            tft.drawString(petFit(String(UI_HINT_SELECT) + "=Options  <> face  HOLD " + UI_HINT_SELECT + "=Back", display_w - 10), 5, canvas_bot_h + 5);
 +            lastDraw = 0;
 +            redraw = false;
 +        }
@@ -29871,6 +30269,33 @@ index 23e8e3c..697864a 100644
  void wakeUp();
  void drawMood(const String &face, const String &phrase, bool broken = false);
  void drawTime();
+diff --git a/src/modules/rf/rf_jammer.cpp b/src/modules/rf/rf_jammer.cpp
+index c0c0c5e..e61896c 100644
+--- a/src/modules/rf/rf_jammer.cpp
++++ b/src/modules/rf/rf_jammer.cpp
+@@ -1,3 +1,4 @@
++#include <precompiler_flags.h>
+ #include "rf_jammer.h"
+ #include "core/display.h"
+ #include "core/mykeyboard.h"
+@@ -64,7 +65,7 @@ RFJamMode RFJammer::showModeMenu(bool defaultFull) {
+             int footerY = tftHeight - BORDER_PAD_X - FP * LH - 2;
+             tft.fillRect(7, footerY, tftWidth - 14, FP * LH, bruceConfig.bgColor);
+             tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+-            tft.drawCentreString("[OK]Select [ESC]Back", tftWidth / 2, footerY, 1);
++            tft.drawCentreString(String("[") + UI_HINT_SELECT + "]Select [" + UI_HINT_BACK + "]Back", tftWidth / 2, footerY, 1);
+ 
+             redraw = false;
+         }
+@@ -167,7 +168,7 @@ void RFJammer::display_banner() {
+     // Footer
+     int footerY = tftHeight - BORDER_PAD_X - FP * LH - 2;
+     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+-    tft.drawCentreString("[ESC] Stop", tftWidth / 2, footerY, 1);
++    tft.drawCentreString(String("[") + UI_HINT_BACK + "] Stop", tftWidth / 2, footerY, 1);
+ }
+ 
+ void RFJammer::update_display(uint32_t elapsedMs) {
 diff --git a/src/modules/wifi/chain_logic.h b/src/modules/wifi/chain_logic.h
 new file mode 100644
 index 0000000..819464c
@@ -36297,6 +36722,22 @@ index 0000000..0b4fbc1
 +String naptGetStateJson();
 +
 +#endif
+diff --git a/src/modules/wifi/netcut.cpp b/src/modules/wifi/netcut.cpp
+index 08a2cad..db2a5a5 100644
+--- a/src/modules/wifi/netcut.cpp
++++ b/src/modules/wifi/netcut.cpp
+@@ -851,8 +851,9 @@ DeviceListMenu:
+         options.push_back({label.c_str(), [i]() { _deviceActionMenu(i); }});
+     }
+ 
+-    // Separator + global actions
+-    options.push_back({"--- Actions ---", []() {}});
++    // Separator + global actions. It is marked disabled so the cursor skips it:
++    // a selectable row whose callback does nothing looks like a dead button.
++    options.push_back(Option("--- Actions ---", []() {}, false, nullptr, nullptr, false, false));
+ 
+     options.push_back({"Cut All", []() {
+                            netcutCutAll();
 diff --git a/src/modules/wifi/pmf_csa_test.cpp b/src/modules/wifi/pmf_csa_test.cpp
 new file mode 100644
 index 0000000..569e71f
@@ -40766,6 +41207,27 @@ index 0000000..297064f
 +    }
 +    return best;
 +}
+diff --git a/src/modules/wifi/wifi_recover.cpp b/src/modules/wifi/wifi_recover.cpp
+index fcc2675..0ba0c78 100644
+--- a/src/modules/wifi/wifi_recover.cpp
++++ b/src/modules/wifi/wifi_recover.cpp
+@@ -26,6 +26,7 @@
+ #define CRACK_YIELD_MS 2
+ // ─────────────────────────────────────────────────────────────────────────────
+ 
++#include <precompiler_flags.h>
+ #include "wifi_recover.h"
+ 
+ #include "core/display.h"
+@@ -1023,7 +1024,7 @@ void wifi_crack_handshake(const String &wordlist_path, const String &pcap_path)
+     );
+ 
+     padprintln("Recovering...");
+-    padprintln("(Press SEL to abort)");
++    padprintln(String("(Press ") + UI_HINT_SELECT + " to abort)");
+     padprintln("");
+ 
+     uint64_t start_time = now_us();
 diff --git a/src/modules/wifi/wifite.cpp b/src/modules/wifi/wifite.cpp
 index 327074a..8cf95db 100644
 --- a/src/modules/wifi/wifite.cpp

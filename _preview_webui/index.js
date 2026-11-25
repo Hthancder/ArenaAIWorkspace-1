@@ -104,6 +104,9 @@ async function requestGet(url, data) {
       } else reject(new Error(`Request failed (${req.status})`));
     };
     req.onerror = () => reject(new Error("Network error"));
+    req.ontimeout = () => reject(new Error("Request timed out"));
+    req.onabort = () => reject(new Error("Request aborted"));
+    req.timeout = 30000;
     req.send();
   });
 }
@@ -131,6 +134,9 @@ async function requestPost(url, data) {
       } else reject(httpRequestError(`Request failed (${req.status})`, req));
     };
     req.onerror = () => reject(httpRequestError("Network error", req));
+    req.ontimeout = () => reject(httpRequestError("Request timed out", req));
+    req.onabort = () => reject(httpRequestError("Request aborted", req));
+    req.timeout = 30000;
     req.send(fd);
   });
 }
@@ -376,7 +382,7 @@ function renderFileRow(fileList) {
         if (payloadPickerActive) {
           const pick = document.createElement("button");
           pick.type = "button"; pick.className = "btn-action act-pick-payload";
-          pick.textContent = "Dùng làm payload";
+          pick.textContent = "Use as payload";
           e.querySelector(".col-action").appendChild(pick);
         }
         e.querySelector(".col-action").classList.add("type-file");
@@ -405,6 +411,7 @@ let sdCardAvailable = false;
 let currentDrive;
 let currentPath;
 let lastSysInfo = {};
+let systemInfoRefreshBusy = false;
 let filesRequestGeneration = 0;
 let payloadPickerActive = false;
 function startPayloadPicker() {
@@ -474,6 +481,8 @@ function applyThemeCss(pri, sec, bg, style) {
 }
 
 async function fetchSystemInfo(silent = false) {
+  if (systemInfoRefreshBusy) return;
+  systemInfoRefreshBusy = true;
   if (!silent) Dialog.loading.show("Fetching system info...");
   try {
     let info = JSON.parse(await requestGet("/systeminfo"));
@@ -533,6 +542,7 @@ async function fetchSystemInfo(silent = false) {
     if ($("#meter-fs")) $("#meter-fs").style.width = fsTotalBytes > 0 ? Math.min(100, (fsUsedBytes * 100) / fsTotalBytes).toFixed(1) + "%" : "0%";
   } finally {
     if (!silent) Dialog.loading.hide();
+    systemInfoRefreshBusy = false;
   }
 }
 
@@ -1333,12 +1343,49 @@ $("#ota-start-btn").addEventListener("click", async () => {
   try {
     const beginFd = new FormData();
     beginFd.append("size", String(selectedOtaFile.size));
-    const br = await fetch(base + "/ota/begin", { method: "POST", body: beginFd });
+    // Every request here is bounded: the page must always end up either
+    // uploading with a percentage or showing a concrete error.
+    const OTA_HTTP_TIMEOUT_MS = 15000;
+    const timed = async (url, opts = {}, ms = OTA_HTTP_TIMEOUT_MS) => {
+      const ctl = new AbortController();
+      const id = setTimeout(() => ctl.abort(), ms);
+      try {
+        return await fetch(url, { ...opts, signal: ctl.signal });
+      } finally {
+        clearTimeout(id);
+      }
+    };
+    let br;
+    try {
+      br = await timed(base + "/ota/begin", { method: "POST", body: beginFd }, OTA_HTTP_TIMEOUT_MS);
+    } catch (e) {
+      throw new Error("Device did not answer /ota/begin within 15s. Check the Wi-Fi link and try again.");
+    }
     const bd = await br.json().catch(() => ({}));
-    if (!br.ok || !bd.ok) throw new Error(bd.msg || "Failed to initialize OTA");
+    if (!br.ok || !bd.ok) throw new Error(bd.msg || `Device refused the OTA start (HTTP ${br.status})`);
     if (typeof bd.session !== "string" || !bd.session) throw new Error("OTA session missing. Refresh the page and try again.");
     session = bd.session;
     if (otaCancelled) throw new Error("OTA cancelled by user.");
+
+    // The device prepares the target slot on its own task, so /ota/begin now
+    // answers instantly and this polls /ota/ready. Older firmware replies 404
+    // here; that means begin already did the work, so carry on.
+    if (bd.pending) {
+      const readyBy = Date.now() + 180000;
+      for (;;) {
+        if (otaCancelled) throw new Error("OTA cancelled by user.");
+        await new Promise((r) => setTimeout(r, 500));
+        const rr = await timed(base + "/ota/ready", { cache: "no-store" }, OTA_HTTP_TIMEOUT_MS).catch(() => null);
+        const rd = rr ? await rr.json().catch(() => ({})) : {};
+        if (rd.state === "failed") throw new Error(rd.msg || "Device could not prepare the OTA slot");
+        if (rd.state === "ready") break;
+        if (rd.state === "idle") throw new Error("Device dropped the OTA session while preparing the slot. Try again.");
+        const waited = Math.round((Date.now() - t0) / 1000);
+        $("#ota-prog-msg").textContent = `Preparing OTA slot... ${waited}s`;
+        if (Date.now() > readyBy) throw new Error("Device still preparing the OTA slot after 180s. Reboot the device and retry.");
+      }
+      $("#ota-prog-msg").textContent = "Slot ready, uploading...";
+    }
 
     const chunkSize = bd.chunkSize || 32768;
     let offset = 0;
@@ -1403,7 +1450,6 @@ $("#ota-start-btn").addEventListener("click", async () => {
       $("#ota-prog-msg").textContent = "Restart manually to use the update.";
       return;
     }
-
     $("#ota-bar-fill").style.width = "100%";
     $("#ota-prog-pct").textContent = "100%";
     $("#ota-status").className = "ota-status ok";
@@ -1461,7 +1507,6 @@ $("#wifi-connect-btn").addEventListener("click", async () => {
     $("#wifi-connect-btn").disabled = false;
   }
 });
-
 window.ondragenter = (e) => {
   if ($(".dialog.ota:not(.hidden)") || activeTab !== "files") return;
   if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) {
@@ -1518,7 +1563,7 @@ $("#tab-files").addEventListener("click", async (e) => {
     fs.dataset.touched = "1"; field.dataset.touched = "1";
     cancelPayloadPicker();
     const msg = document.getElementById("st-badusb-msg");
-    msg.className = "ota-status"; msg.textContent = "Đã chọn file. Nhấn Set Payload để lưu; chưa chạy payload.";
+    msg.className = "ota-status"; msg.textContent = "File selected. Press Set Payload to store it; it is not run yet.";
     msg.classList.remove("hidden");
     return;
   }
@@ -1774,8 +1819,11 @@ $(".oinput-text-submit").addEventListener("keyup", function (e) {
     setTimeout(() => openFileInEditor(currentDrive, urlParams.editFile), 100);
   }
 
+  // Keep the browser's applied palette/layout in sync with device-side changes.
+  // Do not overwrite a potentially unsaved Personalize form. This is the only
+  // system-info poll; tab refreshers share their own guarded schedules.
   setInterval(() => {
-    if ($(".dialog-background.hidden") && !_runningUpload && !otaBusy) {
+    if (!document.hidden && $(".dialog-background.hidden") && !_runningUpload && !otaBusy) {
       fetchSystemInfo(true).catch(() => {});
     }
   }, 15000);
@@ -1784,6 +1832,7 @@ $(".oinput-text-submit").addEventListener("keyup", function (e) {
 // ============ SECLAB DASHBOARD ============
 let secLabTimer = null;
 let secLabBusy = false;
+let secLabRefreshBusy = false;
 let secLabStatusOk = true;
 let secLabPlusState = {};
 let secLabNaptState = {};
@@ -1796,15 +1845,16 @@ const secLabMsgTimers = new WeakMap();
 function startSecLabPoll() {
   stopSecLabPoll();
   secLabTimer = setInterval(() => {
-    if (activeTab === "seclab" && $(".dialog-background.hidden") && !otaBusy) {
+    if (activeTab === "seclab" && !document.hidden && $(".dialog-background.hidden") && !otaBusy) {
       refreshSecLab().catch(() => {});
     }
-  }, 2600);
+  }, 8000);
 }
 function stopSecLabPoll() {
   if (secLabTimer) { clearInterval(secLabTimer); secLabTimer = null; }
 }
 let monTimer = null;
+let monRefreshBusy = false;
 let monLastSys = null;
 let monLastSecLab = null;
 let monFilter = "all";
@@ -1815,11 +1865,13 @@ function startMonitorPoll(){
     if(activeTab==="monitor" && (!auto || auto.checked) && !document.hidden && !otaBusy){
       refreshMonitor().catch(()=>{});
     }
-  }, 3000);
+  }, 8000);
 }
 function stopMonitorPoll(){ if(monTimer){ clearInterval(monTimer); monTimer=null; } }
 
 let studioTimer = null;
+let studioRefreshBusy = false;
+let studioRefreshQueued = false;
 let studioLastSys = null;
 let studioLastSecLab = null;
 let studioLastQr = null;
@@ -1847,10 +1899,10 @@ document.getElementById("st-badusb-enabled-toggle")?.addEventListener("change", 
   field.disabled=true;
   try {
     const d=JSON.parse(await requestPost("/badusb/autorun",{action:"enable",enabled:field.checked?"1":"0"}));
-    if (!d.ok) throw new Error(d.msg || "Không thể đổi trạng thái");
-    msg.className="ota-status ok"; msg.textContent=d.msg || "Đã lưu trạng thái.";
+    if (!d.ok) throw new Error(d.msg || "Could not change state");
+    msg.className="ota-status ok"; msg.textContent=d.msg || "State saved.";
   } catch(err) {
-    msg.className="ota-status err"; msg.textContent=(err.message || "Không thể đổi trạng thái") + ". Kiểm tra trạng thái thiết bị sau khi kết nối lại.";
+    msg.className="ota-status err"; msg.textContent=(err.message || "Could not change state") + ". Check the device state after reconnecting.";
   } finally {
     msg.classList.remove("hidden");
     badUsbFieldsSaved("st-badusb-enabled-toggle");
@@ -1877,13 +1929,13 @@ document.getElementById("st-badusb-save-settings")?.addEventListener("click", as
     {name:"Run once", ids:["once-toggle"], data:{action:"setrunonce", runOncePerPlug:el("once-toggle").checked?"1":"0"}}
   ].filter(g => g.ids.some(id => el(id).dataset.touched));
   const fail = text => { msg.className="ota-status err"; msg.textContent=text; msg.classList.remove("hidden"); };
-  if (!groups.length) { fail("Không có thay đổi cần lưu."); return; }
+  if (!groups.length) { fail("Nothing changed to save."); return; }
   for (const g of groups) {
     const d=g.data;
     if ((d.action==="setdelay" && (!/^\d+$/.test(d.delayMs) || +d.delayMs>10000)) ||
         (d.action==="setconfirm" && (!/^\d+$/.test(d.confirmMs) || +d.confirmMs<1000 || +d.confirmMs>10000)) ||
         (d.action==="settrigger" && !["0","2"].includes(d.trigger))) {
-      fail("Giá trị không hợp lệ: " + g.name + ". Chưa lưu mục nào."); return;
+      fail("Invalid value: " + g.name + ". Nothing was saved."); return;
     }
   }
   groups.forEach(g => { g.snapshot=g.ids.map(id => el(id).type === "checkbox" ? el(id).checked : el(id).value); });
@@ -1895,11 +1947,11 @@ document.getElementById("st-badusb-save-settings")?.addEventListener("click", as
       if (!d.ok) throw new Error(d.msg || "rejected");
       saved.push(g.name);
       g.ids.forEach((id,i) => { const f=el(id); if ((f.type === "checkbox" ? f.checked : f.value) === g.snapshot[i]) delete f.dataset.touched; });
-    } catch(e) { failed.push(g.name + ": " + (e.message || "lỗi")); }
+    } catch(e) { failed.push(g.name + ": " + (e.message || "error")); }
   }
   button.disabled=false;
   msg.className="ota-status " + (failed.length ? "err" : "ok");
-  msg.textContent=(saved.length ? "Đã lưu: " + saved.join(", ") + ". " : "") + (failed.length ? "Chưa xác nhận: " + failed.join("; ") + ". Kiểm tra trạng thái trước khi thử lại." : "");
+  msg.textContent=(saved.length ? "Saved: " + saved.join(", ") + ". " : "") + (failed.length ? "Not confirmed: " + failed.join("; ") + ". Check the state before retrying." : "");
   msg.classList.remove("hidden");
   refreshStudio();
 });
@@ -1924,9 +1976,9 @@ document.getElementById("pt-preview")?.addEventListener("click", ()=>{
   const w=window.open(); w.document.write(c); w.document.close();
 });
 document.getElementById("pt-import")?.addEventListener("click", async ()=>{
-  const txt=prompt("Dán toàn bộ HTML mẫu vào đây (Ctrl+V), sẽ tạo file mới:");
+  const txt=prompt("Paste the full HTML template here (Ctrl+V); a new file will be created:");
   if(!txt) return;
-  const name=prompt("Đặt tên file (vd facebook.html):","imported.html");
+  const name=prompt("File name (e.g. facebook.html):","imported.html");
   if(!name) return;
   const msg=document.getElementById("pt-msg");
   try{ const raw=await requestPost("/portal/templates",{action:"save", name, content:txt}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(e){ if(msg){ msg.className="ota-status err"; msg.textContent=e.message; msg.classList.remove("hidden"); } }
@@ -1936,7 +1988,7 @@ document.getElementById("pt-file")?.addEventListener("change", async (e)=>{
   const txt=await f.text();
   portalSetForm(f.name, txt, "");
   const msg=document.getElementById("pt-msg");
-  if(msg){ msg.className="ota-status ok"; msg.textContent="Đã nạp file "+f.name+" vào ô soạn — bấm Lưu mẫu để lưu lên thiết bị"; msg.classList.remove("hidden"); }
+  if(msg){ msg.className="ota-status ok"; msg.textContent="Loaded file "+f.name+" into the editor — press Save template to store it on the device"; msg.classList.remove("hidden"); }
 });
 document.getElementById("pt-list")?.addEventListener("click", async (e)=>{
   const t=e.target;
@@ -1948,13 +2000,13 @@ document.getElementById("pt-list")?.addEventListener("click", async (e)=>{
   if(use){
     try{ const raw=await requestPost("/portal/templates",{action:"active", path:use}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
   } else if(edit){
-    try{ const raw=await requestPost("/portal/templates",{action:"get", path:edit}); const j=JSON.parse(raw); if(j.ok){ let ap=j.content.match(/<!-- AP="([^"]+)" -->/); portalSetForm(edit.split("/").pop(), j.content.replace(/<!-- AP="[^"]+" -->\n?/,""), ap?ap[1]:""); if(msg){ msg.className="ota-status ok"; msg.textContent="Đã nạp để sửa: "+edit; msg.classList.remove("hidden"); } document.getElementById("pt-content")?.scrollIntoView({behavior:"smooth"}); } }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
+    try{ const raw=await requestPost("/portal/templates",{action:"get", path:edit}); const j=JSON.parse(raw); if(j.ok){ let ap=j.content.match(/<!-- AP="([^"]+)" -->/); portalSetForm(edit.split("/").pop(), j.content.replace(/<!-- AP="[^"]+" -->\n?/,""), ap?ap[1]:""); if(msg){ msg.className="ota-status ok"; msg.textContent="Loaded for editing: "+edit; msg.classList.remove("hidden"); } document.getElementById("pt-content")?.scrollIntoView({behavior:"smooth"}); } }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
   } else if(dup){
-    const newName=prompt("Tên file nhân bản:", dup.split("/").pop().replace(".html","-copy.html"));
+    const newName=prompt("Name for the copy:", dup.split("/").pop().replace(".html","-copy.html"));
     if(!newName) return;
     try{ const raw=await requestPost("/portal/templates",{action:"get", path:dup}); const j=JSON.parse(raw); if(j.ok){ const raw2=await requestPost("/portal/templates",{action:"save", name:newName, content:j.content}); const k=JSON.parse(raw2); if(msg){ msg.className="ota-status "+(k.ok?"ok":"err"); msg.textContent=k.msg; msg.classList.remove("hidden"); } portalRefresh(); } }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
   } else if(del){
-    if(!confirm("Xoá mẫu "+del+" ?")) return;
+    if(!confirm("Delete template "+del+" ?")) return;
     try{ const raw=await requestPost("/portal/templates",{action:"delete", path:del}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
   }
 });
@@ -1969,7 +2021,7 @@ function startStudioPoll(){
     if(activeTab==="studio" && (!auto || auto.checked) && !document.hidden && !otaBusy){
       refreshStudio().catch(()=>{});
     }
-  }, 3000);
+  }, 10000);
 }
 function stopStudioPoll(){ if(studioTimer){ clearInterval(studioTimer); studioTimer=null; } }
 function switchStSlab(name){
@@ -2051,6 +2103,8 @@ function switchMonSlab(name){
 }
 
 async function refreshMonitor(){
+  if (monRefreshBusy) return;
+  monRefreshBusy = true;
   const msgBox=document.getElementById("mon-msg");
   const lastEl=document.getElementById("mon-last");
   const isPreview = window.location.hostname==="127.0.0.1" || window.location.hostname==="localhost" || window.location.port==="8002" || window.location.port==="8001";
@@ -2081,6 +2135,8 @@ async function refreshMonitor(){
   }catch(e){
     if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Monitor refresh failed"; msgBox.classList.remove("hidden"); }
     console.warn("refreshMonitor",e);
+  } finally {
+    monRefreshBusy = false;
   }
 }
 function renderMonitorOverview(sys, sec){
@@ -2226,6 +2282,8 @@ function renderMonitorAlerts(sec){
 
 
 async function refreshStudio(){
+  if (studioRefreshBusy) { studioRefreshQueued = true; return; }
+  studioRefreshBusy = true;
   const generation = ++studioRefreshGeneration;
   const msgBox=document.getElementById("st-msg");
   const lastEl=document.getElementById("st-last");
@@ -2256,7 +2314,7 @@ async function refreshStudio(){
     if(!studioLastSys && !studioLastSecLab) throw new Error("no studio data");
     lastSysInfo = studioLastSys || lastSysInfo;
     const missing = [["System",sys],["SecLab",sec],["QR",qr],["Auto-Run",badusb]].filter(x=>!x[1]).map(x=>x[0]);
-    if(lastEl) lastEl.textContent = missing.length ? "Dữ liệu có thể cũ" : "Cập nhật " + new Date().toLocaleTimeString();
+    if(lastEl) lastEl.textContent = missing.length ? "Data may be stale" : "Updated " + new Date().toLocaleTimeString();
     renderStudioOverview(studioLastSys, studioLastSecLab, studioLastQr);
     renderStudioMic(studioLastSys, studioLastSecLab);
     renderStudioQr(studioLastQr);
@@ -2264,14 +2322,20 @@ async function refreshStudio(){
     renderStudioBadusb(studioLastBadusb);
     if(msgBox){
       if(isPreview && !sys){ msgBox.className="ota-status ok"; msgBox.textContent="Preview mode \u2014 showing mock Studio data. Connect device for live."; msgBox.classList.remove("hidden"); }
-      else if (missing.length) { msgBox.className="ota-status err"; msgBox.textContent="Không cập nhật được: " + missing.join(", ") + ". Dữ liệu hiển thị có thể cũ; kiểm tra kết nối và thử Refresh."; msgBox.classList.remove("hidden"); }
+      else if (missing.length) { msgBox.className="ota-status err"; msgBox.textContent="Could not refresh: " + missing.join(", ") + ". The data shown may be stale; check the connection and press Refresh."; msgBox.classList.remove("hidden"); }
       else msgBox.classList.add("hidden");
     }
   }catch(e){
     if (generation !== studioRefreshGeneration) return;
-    if (lastEl) lastEl.textContent = "Không cập nhật được — dữ liệu có thể cũ";
+    if (lastEl) lastEl.textContent = "Could not refresh — data may be stale";
     if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Studio refresh failed"; msgBox.classList.remove("hidden"); }
     console.warn("refreshStudio",e);
+  } finally {
+    studioRefreshBusy = false;
+    if (studioRefreshQueued) {
+      studioRefreshQueued = false;
+      refreshStudio().catch(() => {});
+    }
   }
 }
 function renderStudioOverview(sys, sec, qr){
@@ -2303,7 +2367,7 @@ function renderStudioOverview(sys, sec, qr){
   const micBox=document.getElementById("st-ov-mic-files");
   if(micBox){
     // try to list mic files via existing file API cache if any, else mock
-    micBox.innerHTML = `<div class="sl-item"><span>Record via device: <b>Studio</b> \u2192 <b>Microphone</b> \u2192 <b>Record</b></span><span class="sl-tag ok">ES7210</span></div><div class="sl-item"><span>/BruceMIC \u00b7 SD or LittleFS</span><button type="button" class="btn-action" onclick="switchStSlab('mic')">Chọn ổ</button></div>`;
+    micBox.innerHTML = `<div class="sl-item"><span>Record via device: <b>Studio</b> \u2192 <b>Microphone</b> \u2192 <b>Record</b></span><span class="sl-tag ok">ES7210</span></div><div class="sl-item"><span>/BruceMIC \u00b7 SD or LittleFS</span><button type="button" class="btn-action" onclick="switchStSlab('mic')">Choose drive</button></div>`;
   }
   const sonarBox=document.getElementById("st-ov-sonar-events");
   if(sonarBox){
@@ -2402,16 +2466,16 @@ async function portalRefresh(){
     const j=JSON.parse(raw);
     portalTemplates=j.templates||[];
     portalActive=j.active||"";
-    if(activeEl) activeEl.textContent=portalActive||"(mặc định Google/Router)";
+    if(activeEl) activeEl.textContent=portalActive||"(default: Google/Router)";
     if(countEl) countEl.textContent=String(portalTemplates.length);
-    if(badge) { badge.textContent=portalActive?portalActive.split("/").pop():"mặc định"; badge.className="sl-badge "+(portalActive?"on":""); }
+    if(badge) { badge.textContent=portalActive?portalActive.split("/").pop():"default"; badge.className="sl-badge "+(portalActive?"on":""); }
     if(listEl){
-      if(!portalTemplates.length) listEl.innerHTML=`<div class="sl-item muted-sm">Chưa có mẫu nào — bấm <b>+ Mẫu mới</b> hoặc <b>Tải file .html</b> để thêm. Mẫu sẽ lưu ở <code>/portal_templates/</code></div>`;
-      else listEl.innerHTML=portalTemplates.map(x=>`<div class="sl-item"><span><strong>${slEsc(x.name)}</strong><br><small class="mono muted-sm">${slEsc(x.path)} · ${x.size}B ${x.ap?`· AP: ${slEsc(x.ap)}`:""} ${portalActive===x.path?`· <b>Active</b>`:""}</small></span><span style="display:flex;gap:6px"><button type="button" class="sl-tag ok" data-pt-use="${slEsc(x.path)}">Dùng</button><button type="button" class="sl-tag" data-pt-edit="${slEsc(x.path)}">Sửa</button><button type="button" class="sl-tag" data-pt-dup="${slEsc(x.path)}">Nhân bản</button><button type="button" class="sl-tag blk" data-pt-del="${slEsc(x.path)}">Xoá</button></span></div>`).join("");
+      if(!portalTemplates.length) listEl.innerHTML=`<div class="sl-item muted-sm">No templates yet — press <b>+ New template</b> or <b>Import .html</b> to add one. Templates are stored in <code>/portal_templates/</code></div>`;
+      else listEl.innerHTML=portalTemplates.map(x=>`<div class="sl-item"><span><strong>${slEsc(x.name)}</strong><br><small class="mono muted-sm">${slEsc(x.path)} · ${x.size}B ${x.ap?`· AP: ${slEsc(x.ap)}`:""} ${portalActive===x.path?`· <b>Active</b>`:""}</small></span><span style="display:flex;gap:6px"><button type="button" class="sl-tag ok" data-pt-use="${slEsc(x.path)}">Use</button><button type="button" class="sl-tag" data-pt-edit="${slEsc(x.path)}">Edit</button><button type="button" class="sl-tag" data-pt-dup="${slEsc(x.path)}">Duplicate</button><button type="button" class="sl-tag blk" data-pt-del="${slEsc(x.path)}">Delete</button></span></div>`).join("");
     }
     if(msg){ msg.classList.add("hidden"); }
   }catch(e){
-    if(msg){ msg.className="ota-status err"; msg.textContent=e.message||"Không tải được danh sách"; msg.classList.remove("hidden"); }
+    if(msg){ msg.className="ota-status err"; msg.textContent=e.message||"Could not load the list"; msg.classList.remove("hidden"); }
   }
 }
 function portalSetForm(name, content, ap){
@@ -2425,8 +2489,8 @@ async function portalSave(){
   const c=document.getElementById("pt-content")?.value||"";
   const ap=document.getElementById("pt-ap")?.value.trim()||"";
   const msg=document.getElementById("pt-msg");
-  if(!n){ if(msg){ msg.className="ota-status err"; msg.textContent="Thiếu tên file (vd google.html)"; msg.classList.remove("hidden"); } return; }
-  if(!c.trim()){ if(msg){ msg.className="ota-status err"; msg.textContent="Thiếu nội dung HTML"; msg.classList.remove("hidden"); } return; }
+  if(!n){ if(msg){ msg.className="ota-status err"; msg.textContent="Missing file name (e.g. google.html)"; msg.classList.remove("hidden"); } return; }
+  if(!c.trim()){ if(msg){ msg.className="ota-status err"; msg.textContent="HTML content is empty"; msg.classList.remove("hidden"); } return; }
   try{ const raw=await requestPost("/portal/templates",{action:"save", name:n, content:c, apName:ap}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg||""; msg.classList.remove("hidden"); } if(j.ok) { portalRefresh(); } }catch(e){ if(msg){ msg.className="ota-status err"; msg.textContent=e.message; msg.classList.remove("hidden"); } }
 }
 
@@ -2637,6 +2701,8 @@ function renderAirChannelBars(air) {
 }
 
 async function refreshSecLab() {
+  if (secLabRefreshBusy) return;
+  secLabRefreshBusy = true;
   try {
     const raw = await requestGet("/seclab/status");
     const d = JSON.parse(raw);
@@ -2649,9 +2715,6 @@ async function refreshSecLab() {
       nb.textContent = n.running ? `ON (${n.uptimeSec || 0}s)` : (n.starting ? "STARTING..." : "OFF");
       nb.className = "sl-badge " + (n.running ? "on" : (n.starting ? "alert" : ""));
     }
-    const naptActive = !!(n.running || n.starting);
-    $("#sl-napt-start")?.classList.toggle("hidden", naptActive);
-    $("#sl-napt-stop")?.classList.toggle("hidden", !naptActive);
     if (!n.running && !n.starting && n.lastErr && $("#sl-napt-msg")) {
       const box = $("#sl-napt-msg");
       if (Date.now() - secLabLastNaptActionAt > 8000 &&
@@ -2798,19 +2861,6 @@ async function refreshSecLab() {
       osSel.value = name.startsWith("mac") ? "macos" : (name.startsWith("lin") ? "linux" : "windows");
     }
     slSyncSecLabToggles(plus);
-    const slPair = (startAct, stopAct, active) => {
-      document.querySelector(`[data-sl-action="${startAct}"]`)?.classList.toggle("hidden", !!active);
-      document.querySelector(`[data-sl-action="${stopAct}"]`)?.classList.toggle("hidden", !active);
-    };
-    slPair("pmkid_start", "pmkid_stop", pm.running);
-    slPair("csa_start", "csa_stop", cs.running);
-    slPair("portal_start", "portal_stop", pt.running || pt.napt);
-    slPair("lan_start", "lan_stop", la.running);
-    slPair("responder_start", "responder_stop", rp.running);
-    slPair("guard_start", "guard_stop", lg.running);
-    slPair("http_start", "http_stop", hi.running);
-    slPair("led_start", "led_stop", ll.running);
-    slPair("tag_start", "tag_stop", tb.running);
     slSetInput("#sl-plus-csa-channel", plus.csaChannel || 1);
     slSetInput("#sl-plus-csa-bursts", plus.csaBursts || 3);
     slSetInput("#sl-plus-http-port", plus.httpPort || 3128);
@@ -2845,6 +2895,8 @@ async function refreshSecLab() {
       slShowMsg($("#sl-plus-msg"), slErrorText(e, "SecLab+ status unavailable; retrying..."), false, 0);
       secLabStatusErrShown = true;
     }
+  } finally {
+    secLabRefreshBusy = false;
   }
 }
 
@@ -3060,9 +3112,6 @@ async function uxLoad(showSettings = false, generation = uxGeneration) {
       silent_or_busy: "Speaker muted, busy, or unavailable. Check Sound settings and try again."
     };
     status.textContent = states[data.find] || "Status unavailable.";
-    const finding = data.find === "queued" || data.find === "playing" || data.find === "playing_silent";
-    $("#ux-find")?.classList.toggle("hidden", finding);
-    $("#ux-stop")?.classList.toggle("hidden", !finding);
   } catch (err) { if (generation === uxGeneration) status.textContent = "Controls unavailable. Check your connection or sign in again."; }
 }
 function uxRangeLabels() {
@@ -3118,10 +3167,6 @@ $("#ux-stop")?.addEventListener("click", async () => {
   finally { stopButton.disabled = false; if (generation === uxGeneration) findButton.disabled = false; }
 });
 if ($("#ux-status")) uxLoad(true);
-
-// Keep the browser's applied palette/layout in sync with device-side changes.
-// Do not overwrite a potentially unsaved Personalize form.
-if (typeof setInterval === "function") setInterval(() => { if (!document.hidden && !otaBusy) fetchSystemInfo(true).catch(() => {}); }, 15000);
 
  // ==== SecLab compact subtabs + overview mirror (2026-11) ====
  function switchSlab(name){
@@ -3261,4 +3306,3 @@ if (typeof setInterval === "function") setInterval(() => { if (!document.hidden 
      };
    }
  })();
-

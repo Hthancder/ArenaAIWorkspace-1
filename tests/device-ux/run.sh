@@ -15,6 +15,7 @@ g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-fram
 node "$root/tests/device-ux/web-test.js" "$src/embedded_resources/web_interface/index.js" "$src/embedded_resources/web_interface/index.html"
 python3 "$root/tests/device-ux/firmware-safety-test.py" "$src"
 python3 "$root/tests/device-ux/capture-race-test.py" "$src"
+python3 "$root/tests/device-ux/consistency-test.py" "$src"
 node "$root/tests/device-ux/ui-dedup-test.js" "$src/embedded_resources/web_interface/index.js" "$src/embedded_resources/web_interface/index.html"
 node "$root/tests/device-ux/ui-dedup-test.js" "$root/_preview_webui/index.js" "$root/_preview_webui/index.html"
 node "$root/tests/device-ux/ui-safety-test.js" "$src/embedded_resources/web_interface/index.js" "$src/embedded_resources/web_interface/index.html" "$src/embedded_resources/web_interface/qr_local.js"
