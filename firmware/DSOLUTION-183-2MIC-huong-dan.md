@@ -275,6 +275,27 @@ nạp sai địa chỉ). Thứ tự kiểm tra khi có log serial: (1) banner bo
 - Bản mới từ chối phiên OTA thứ hai đang hoạt động, gắn mã phiên cho các yêu cầu chia khối/hủy/hoàn tất và không cho hai yêu cầu dùng chung bộ đệm đồng thời. Nếu kết nối bị ngắt, có thể thử lại khối; phiên bỏ dở quá 90 giây được thu hồi khi bắt đầu phiên OTA mới. Khi bấm hủy trong lúc khởi tạo, trình duyệt chờ nhận phiên rồi mới gửi hủy; trong bước hoàn tất không thể hủy an toàn.
 - Nếu mất phản hồi khi hoàn tất, chưa thể biết chắc cập nhật đã xong hay chưa: kiểm tra màn hình và kết nối máy trước khi thử lại; không tự rút nguồn. Nếu firmware báo không tạo được tác vụ khởi động lại, hãy khởi động lại thủ công. Kiểm thử máy chủ/màn hình ở đây là mô phỏng; cần xác nhận OTA thực tế, nguồn và màn hình trên thiết bị.
 
+### Vì sao trước đây trang đứng ở "Initializing OTA slot..." (đã sửa)
+
+Hiểu đơn giản: trước kia, khi bấm **Upload**, trình duyệt hỏi máy "chuẩn bị chỗ nhớ mới đi", và máy làm **toàn bộ** việc chuẩn bị đó ngay trong lúc đang trả lời câu hỏi. Việc chuẩn bị gồm nâng xung nhịp CPU, tắt chế độ tiết kiệm Wi-Fi và xoá dần vùng nhớ 6 MB. Chừng nào việc đó chưa xong thì câu trả lời chưa được gửi, nên trang không có số % nào để hiện và cũng **không có giới hạn thời gian** — nhìn như treo vĩnh viễn.
+
+Bây giờ chia làm hai bước:
+
+| Trước | Bây giờ |
+| --- | --- |
+| Bấm Upload → máy vừa xoá flash vừa giữ kết nối → trang đứng im, không biết bao lâu | Bấm Upload → máy trả lời **ngay** "đã nhận, đang chuẩn bị", trang hiện `Preparing OTA slot... 3s` |
+| Không có giới hạn thời gian nếu máy không trả lời | Mọi lệnh đều có hạn 15 giây; quá hạn thì báo lỗi rõ ràng |
+| Chuẩn bị thất bại → trang chờ mãi | Trang hỏi lại máy mỗi 0,5 giây; khi máy báo lỗi thì hiện đúng lý do (ví dụ `No OTA partition found`), chậm nhất sau 180 giây |
+| Màn hình máy hiện 0% trong khi thực ra đang xoá flash | Màn hình hiện `Preparing OTA slot` / `Erasing 4160 KB`, xong mới chạy % |
+| Bấm Cancel lúc đang chuẩn bị thì không có tác dụng | Cancel được ghi nhận và huỷ ngay khi bước chuẩn bị kết thúc |
+
+Cần biết thêm:
+
+- **Bước "Preparing" có thể mất vài chục giây** với slot 6 MB. Đó là xoá flash thật, không phải treo. Trang đếm giây để bạn thấy nó vẫn đang chạy; quá 180 giây mới coi là lỗi và báo khởi động lại máy.
+- Trong lúc chuẩn bị, màn hình máy vẫn nhận nút (Esc để thoát khung OTA), nhưng **không nên** rút nguồn.
+- Nếu trang báo lỗi kèm `HTTP 404` / `HTTP 401`: đó là lỗi đường dẫn hoặc phiên đăng nhập, không phải lỗi file `.bin`. Tải lại trang WebUI rồi thử lại; `401` nghĩa là phiên đăng nhập đã hết.
+- File `.bin` phải là bản `DSolution-183-2mic-ota.bin` (khoảng 4,2 MB). `factory.bin` / bootloader bị chặn ngay khi chọn file.
+
 ### Theme và Sonar thử nghiệm
 
 - Sáu bảng màu Cyber Cyan, Matrix Green, Amber Ops, Crimson Red, Ultraviolet và Arctic Ice có trên máy ở **Display & UI → UI Color** và trên WebUI. **Menu Layout** Carousel/Grid cũng chỉnh được trong Personalize; WebUI dùng cùng màu RGB565 và đổi phong cách tương ứng. Làm mới Personalize nếu cài đặt trên máy trong lúc form đang mở; ảnh/icon từ theme JSON chỉ được máy vẽ, không phải bản sao WebUI.
