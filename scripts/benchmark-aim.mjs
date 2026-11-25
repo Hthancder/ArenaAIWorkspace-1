@@ -64,7 +64,7 @@ for (const kind of names) {
       // Vary source-supported speed/range and distances; no future observations fed back.
       const speed = [66, 85, 100, 182][(seed + Math.floor(hz / 30) + Number(cadence !== '33Hz')) % 4], origin = { x: seed % 2 ? -15 : 0, y: 0 }, profile = { speed, range: 300, barrel: 2, offset: .25 };
       const before = performance.now();
-      const shot = predictShot({ origin, target: current, track, profile, latency: .035, stabilize: true });
+      const shot = predictShot({ origin, target: current, track, profile, latency: .035, stabilize: true, compensateSnapshot: true });
       const cost = performance.now() - before;
       for (const [model, row] of Object.entries(rows)) {
         let world = current, flight = Math.hypot(current.x - origin.x, current.y) / speed;

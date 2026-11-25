@@ -263,3 +263,19 @@ test('strafe stabilization setting defaults on and preserves explicit opt-out', 
   assert.equal(normalizeConfig({ version: 3, stabilizeStrafe: false }).stabilizeStrafe, false);
   assert.equal(normalizeConfig({ stabilizeStrafe: 'false' }).stabilizeStrafe, true);
 });
+
+test('Lock linear snapshot compensation is bounded, history-gated and opt-in', () => {
+  const tracker = new SnapshotTracker(), enemy = { __id: 151 };
+  for (let i = 0; i < 28; i++) tracker.observe(enemy, { x: 50, y: i * .33 }, i * 33);
+  const track = tracker.estimate(enemy, 27 * 33);
+  const opts = { origin: { x: 0, y: 0 }, target: track.pos, track, profile, latency: .03 };
+  const normal = predictShot(opts), adapted = predictShot({ ...opts, compensateSnapshot: true });
+  assert.ok(adapted.world.y > normal.world.y + .25);
+  assert.deepEqual(predictShot({ ...opts, latency: 0, compensateSnapshot: true }), predictShot({ ...opts, latency: 0 }));
+  assert.deepEqual(predictShot({ ...opts, compensateSnapshot: true, latency: .1 }), predictShot({ ...opts, latency: .1 }));
+  assert.deepEqual(predictShot({ ...opts, compensateSnapshot: true, track: { ...track, motion: track.motion.slice(-5) } }), predictShot({ ...opts, track: { ...track, motion: track.motion.slice(-5) } }));
+  const motion = track.motion.map((s, i) => i === 10 ? { ...s, p: { ...s.p, x: s.p.x + .5 } } : s);
+  assert.deepEqual(predictShot({ ...opts, compensateSnapshot: true, track: { ...track, motion } }), predictShot({ ...opts, track: { ...track, motion } }));
+  const gap = track.motion.filter((_, i) => i < 10 || i > 14);
+  assert.deepEqual(predictShot({ ...opts, compensateSnapshot: true, track: { ...track, motion: gap } }), predictShot({ ...opts, track: { ...track, motion: gap } }));
+});

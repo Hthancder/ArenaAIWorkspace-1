@@ -32,7 +32,7 @@ function run({ width, radius, escape, cadence, hz, seed, speed, drift = 0 }) {
   for (let now = .07; now < 9; now += 1 / hz) {
     while (i < packets.length && packets[i].t <= now) { const p = packets[i++]; current = p.p; tracker.observe(entity, current, p.t * 1000); }
     const track = tracker.estimate(entity, now * 1000);
-    const shot = predictShot({ origin, target: current, track, profile, radius, latency: .035, stabilize: true });
+    const shot = predictShot({ origin, target: current, track, profile, radius, latency: .035, stabilize: true, compensateSnapshot: true });
     const flight = shot.time ?? Math.hypot(current.x, current.y) / speed;
     const actual = truth(now + .035 + flight), d = shot.dir || { x: current.x / Math.hypot(current.x, current.y), y: current.y / Math.hypot(current.x, current.y) };
     const miss = Math.abs(d.x * actual.y - d.y * actual.x);

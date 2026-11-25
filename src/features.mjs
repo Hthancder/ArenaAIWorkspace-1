@@ -509,7 +509,7 @@ export class Features {
             distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: 'direct-missing-definitions', approximate: true };
         } else {
           shot = predictShot({ origin: pos, target: candidate.pos, track, profile,
-            latency: track && cfg.latencyCompensation ? this.timing.transit() : 0, lead: (cfg.leadAdjustment ?? 100) / 100,
+            latency: track && cfg.latencyCompensation ? this.timing.transit() : 0, compensateSnapshot: mode === 'lock', lead: (cfg.leadAdjustment ?? 100) / 100,
             radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1, stabilize: mode === 'lock' && cfg.stabilizeStrafe !== false,
             muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, muzzleObstacles, layerFor(dir), rawLayer & 1, selfRadius) });
           if (shot.dir && cfg.predict && !track) { shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable'; shot.approximate = true; }

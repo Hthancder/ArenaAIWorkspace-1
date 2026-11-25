@@ -145,12 +145,29 @@ export function weaponProfile(defs, type, perks = []) {
 export function muzzleAt(pos, dir, profile) {
   return { x: pos.x - dir.y * profile.offset + dir.x * profile.barrel, y: pos.y + dir.x * profile.offset + dir.y * profile.barrel };
 }
-export function predictShot({ origin, target, track, profile, latency = 0, lead = 1, radius = 1, muzzleFor = muzzleAt, stabilize = false }) {
+// A short, nearly linear history can justify compensating snapshot transit in
+// addition to the estimated outgoing transit. It cannot predict future turns.
+function linearHistory(track) {
+  const samples = track?.motion;
+  if (!Array.isArray(samples) || samples.length < 12 || !finite(track.age) || track.age > .1) return false;
+  const first = samples[0], last = samples.at(-1), span = last.t - first.t;
+  if (!finite(first.t) || !finite(last.t) || span < 650 || !vec(first.p) || !vec(last.p)) return false;
+  const dx = last.p.x - first.p.x, dy = last.p.y - first.p.y;
+  if (Math.hypot(dx, dy) / (span / 1000) < 2) return false;
+  for (let i = 1; i < samples.length; i++) {
+    const sample = samples[i];
+    if (!vec(sample.p) || !finite(sample.t) || sample.t <= samples[i - 1].t || sample.t - samples[i - 1].t > 100) return false;
+    const f = (sample.t - first.t) / span;
+    if (Math.hypot(sample.p.x - first.p.x - dx * f, sample.p.y - first.p.y - dy * f) > .12) return false;
+  }
+  return true;
+}
+export function predictShot({ origin, target, track, profile, latency = 0, lead = 1, radius = 1, muzzleFor = muzzleAt, stabilize = false, compensateSnapshot = false }) {
   if (!vec(origin) || !vec(target) || !profile) return { state: 'missing-profile' };
   const bounded = stabilize ? boundedOscillation(track, radius) : null;
   target = bounded || track?.pos || target;
   const age = track?.age || 0, vx = bounded ? 0 : track?.vx || 0, vy = bounded ? 0 : track?.vy || 0;
-  const transit = clamp(latency, 0, .1), ahead = age + transit;
+  const transit = clamp(latency * (compensateSnapshot && !bounded && linearHistory(track) ? 2 : 1), 0, .1), ahead = age + transit;
   const current = { x: target.x + vx * ahead, y: target.y + vy * ahead };
   let dir = unit({ x: current.x - origin.x, y: current.y - origin.y });
   if (!dir) return { state: 'coincident' };
