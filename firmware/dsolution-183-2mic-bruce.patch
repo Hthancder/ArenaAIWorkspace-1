@@ -4659,7 +4659,7 @@ index 5290300..b27bf10 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..cac7677 100644
+index fd61602..0bd82f8 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -5942,7 +5942,7 @@ index fd61602..cac7677 100644
        }
      }
      return r;
-@@ -690,279 +961,619 @@ async function renderTFT(data) {
+@@ -690,279 +961,629 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6568,7 +6568,17 @@ index fd61602..cac7677 100644
 +    otaCommitting = true;
 +    $("#ota-cancel-btn").classList.add("hidden");
 +    $("#ota-prog-msg").textContent = "Verifying & committing OTA slot...";
-+    const fr = await fetch(base + "/ota/commit", { method: "POST", headers: { "X-OTA-Session": session } });
++    // Commit verifies the image and answers in one go. Every other OTA step has
++    // a timeout; without one here a dropped reply left the page sitting on
++    // "Verifying & committing OTA slot..." forever with no way out.
++    otaAbortCtrl = new AbortController();
++    const commitTimer = setTimeout(() => otaAbortCtrl.abort(), 30000);
++    let fr;
++    try {
++      fr = await fetch(base + "/ota/commit", { method: "POST", headers: { "X-OTA-Session": session }, signal: otaAbortCtrl.signal });
++    } finally {
++      clearTimeout(commitTimer);
++    }
 +    const fd = await fr.json().catch(() => ({}));
 +    if (!fr.ok || !fd.ok) throw new Error(fd.msg || "OTA commit failed");
 +    if (fd.restartScheduled === false) {
@@ -6731,7 +6741,7 @@ index fd61602..cac7677 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1581,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1591,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6770,7 +6780,7 @@ index fd61602..cac7677 100644
      return;
    }
  
-@@ -1009,24 +1591,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1601,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6800,7 +6810,7 @@ index fd61602..cac7677 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1609,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1619,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6837,7 +6847,7 @@ index fd61602..cac7677 100644
      return;
    }
  
-@@ -1062,662 +1626,1683 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1636,1683 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
