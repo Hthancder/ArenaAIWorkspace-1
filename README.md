@@ -62,7 +62,7 @@ Bản `0.5.0-preview.2` sửa những đường lỗi đã tái hiện: schedule
 | Switch / Use One Gun | Ammo/actual slot; một equip request, chờ confirmation; không reset cooldown server |
 | Melee / Auto Melee | Giành aim/movement/equip trong reach; hủy pending Switch; manual equip thắng, không tranh lại trong cùng Fire hold |
 | Mobile Movement | Một vector output; nhả phím dừng; melee movement thắng, không cộng vector |
-| Loot | Nearby chỉ phát lệnh khi client thấy supply, có backoff từng object; server tự chọn loot nên có thể nhặt món khác. Mobile loot/doors cần Join mới; không giả inventory acknowledgment. Xem [đối chiếu Auto Loot](docs/auto-loot-doi-chieu.vi.md). |
+| Loot | Nearby có backoff từng object, nghỉ 3,5 giây sau lệnh vứt được nhận diện; server tự chọn loot nên có thể nhặt món khác. Mobile loot/doors cần Join mới. Xem [Auto Loot và dao động](docs/auto-loot-va-ngam-dao-dong.vi.md). |
 | Layer Spoofer | Local render preview; gameplay aim/wallcheck/loot dùng layer chưa override |
 | ESP / X-Ray / Zoom / Map | Overrides riêng; đổi setting không clear toàn bộ; Canvas lỗi không gỡ names/zoom hoặc chặn input |
 

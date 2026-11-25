@@ -1143,5 +1143,35 @@ test('auto-loot never suppresses a native physical Loot bind', () => {
     app.game.transmit(1, new JoinMsg()); engine.pre();
     loot.type = 'mp5';
     assert.equal(app.game.binds.isBindPressed(10), true);
+    app.game.transmit(12, { item: '9mm', weapIdx: 0, serialize() {} });
+    assert.equal(app.game.binds.isBindPressed(10), true, 'drop pause does not block physical input');
   } finally { engine.dispose(); dom.window.close(); }
+});
+
+test('verified outgoing DropItem pauses Nearby immediately, extends cooldown and forwards the drop', () => {
+  const f = pickupFixture();
+  try {
+    f.app.game.transmit(1, new JoinMsg()); f.engine.pre();
+    assert.equal(f.app.game.binds.isBindPressed(10), true);
+    const drop = { item: '9mm', weapIdx: 0, serialize() {} };
+    assert.equal(f.app.game.transmit(12, drop), 'forwarded');
+    assert.equal(f.app.game.sent.at(-1).data, drop);
+    assert.equal(f.app.game.binds.isBindPressed(10), false, 'already-prepared pulse canceled');
+    f.advance(3400); f.engine.pre(); assert.equal(f.engine.stats.lootState, 'paused-after-drop');
+    f.app.game.transmit(12, drop); f.advance(3499); f.engine.pre(); assert.equal(f.engine.pickupPulse, false);
+    f.advance(1); f.engine.pre(); assert.equal(f.engine.pickupPulse, true);
+    f.engine.releaseMatch(); assert.equal(f.engine.pickupPauseUntil, 0);
+  } finally { f.engine.dispose(); f.dom.window.close(); }
+});
+
+test('drop pause ignores malformed messages and other protocol versions', () => {
+  const f = pickupFixture();
+  try {
+    f.app.game.transmit(1, new JoinMsg(9999));
+    f.app.game.transmit(12, { item: '9mm', weapIdx: 0, serialize() {} });
+    assert.equal(f.engine.pickupPauseUntil, 0);
+    f.app.game.transmit(1, new JoinMsg());
+    f.app.game.transmit(12, { item: '', weapIdx: 0, serialize() {} });
+    assert.equal(f.engine.pickupPauseUntil, 0);
+  } finally { f.engine.dispose(); f.dom.window.close(); }
 });

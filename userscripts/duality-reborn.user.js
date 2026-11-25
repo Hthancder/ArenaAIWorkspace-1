@@ -6899,6 +6899,42 @@ THE SOFTWARE.
   }
   __name(smoothDamp, "smoothDamp");
   var modeOf = /* @__PURE__ */ __name((cfg) => cfg.aim === false ? "off" : cfg.aimMode === "assist" ? "assist" : cfg.aimMode === "off" ? "off" : "lock", "modeOf");
+  function rememberMotion(s, pos, now) {
+    const motion = s.motion || (s.motion = []);
+    if (motion.length && now - motion.at(-1).t < 8) motion.pop();
+    motion.push({ p: point(pos), t: now });
+    s.motion = motion.filter((o) => now - o.t <= 900).slice(-32);
+  }
+  __name(rememberMotion, "rememberMotion");
+  function boundedOscillation(track, radius) {
+    const samples = track?.motion;
+    if (!Array.isArray(samples) || samples.length < 8 || !finite(track.age) || track.age > 0.15 || !finite(radius) || radius <= 0) return null;
+    if (samples.at(-1).t - samples[0].t < 550) return null;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < samples.length; i++) {
+      const { p, t } = samples[i];
+      if (!vec(p) || !finite(t) || i && (t <= samples[i - 1].t || t - samples[i - 1].t > 150)) return null;
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    const last = samples.at(-1), previous = samples.at(-2);
+    if (Math.hypot(last.p.x - previous.p.x, last.p.y - previous.p.y) / ((last.t - previous.t) / 1e3) > 5) return null;
+    const dx = maxX - minX, dy = maxY - minY, diameter = Math.hypot(dx, dy);
+    if (diameter < 0.2 || diameter > Math.min(1.3 * radius, 2)) return null;
+    const axis = dx >= dy ? "x" : "y";
+    let sign = 0, turns = 0;
+    for (let i = 1; i < samples.length; i++) {
+      const delta = samples[i].p[axis] - samples[i - 1].p[axis];
+      if (Math.abs(delta) < 0.035) continue;
+      const next = Math.sign(delta);
+      if (sign && sign !== next) turns++;
+      sign = next;
+    }
+    return turns >= 2 ? { x: (minX + maxX) / 2, y: (minY + maxY) / 2, diameter } : null;
+  }
+  __name(boundedOscillation, "boundedOscillation");
   var SnapshotTracker = class {
     static {
       __name(this, "SnapshotTracker");
@@ -6915,6 +6951,7 @@ THE SOFTWARE.
       let s = this.states.get(entity);
       if (!s || s.id !== entity.__id || s.layer !== layer || now - s.time > 500 || now <= s.time || Math.hypot(pos.x - s.pos.x, pos.y - s.pos.y) > 20) {
         s = { id: entity.__id, layer, pos: point(pos), time: now, vx: 0, vy: 0, error: 0, velocityError: 0, samples: [{ p: point(pos), t: now }] };
+        rememberMotion(s, pos, now);
         this.states.set(entity, s);
         return s;
       }
@@ -6923,6 +6960,7 @@ THE SOFTWARE.
           s.pos = point(pos);
           s.time = now;
           s.samples = [{ p: point(pos), t: now }];
+          rememberMotion(s, pos, now);
           return s;
         }
         s.samples.pop();
@@ -6970,6 +7008,7 @@ THE SOFTWARE.
       s.velocityError = Math.sqrt((rss / Math.max(1, s.samples.length - 2) + (1024 / 65535) ** 2) / Math.max(tt - t * t / w, 1e-4));
       s.pos = point(pos);
       s.time = now;
+      rememberMotion(s, pos, now);
       return s;
     }
     estimate(entity, now) {
@@ -7009,10 +7048,11 @@ THE SOFTWARE.
     return { x: pos.x - dir.y * profile.offset + dir.x * profile.barrel, y: pos.y + dir.x * profile.offset + dir.y * profile.barrel };
   }
   __name(muzzleAt, "muzzleAt");
-  function predictShot({ origin, target, track, profile, latency = 0, lead = 1, radius = 1, muzzleFor = muzzleAt }) {
+  function predictShot({ origin, target, track, profile, latency = 0, lead = 1, radius = 1, muzzleFor = muzzleAt, stabilize = false }) {
     if (!vec(origin) || !vec(target) || !profile) return { state: "missing-profile" };
-    target = track?.pos || target;
-    const age = track?.age || 0, vx = track?.vx || 0, vy = track?.vy || 0;
+    const bounded = stabilize ? boundedOscillation(track, radius) : null;
+    target = bounded || track?.pos || target;
+    const age = track?.age || 0, vx = bounded ? 0 : track?.vx || 0, vy = bounded ? 0 : track?.vy || 0;
     const transit = clamp(latency, 0, 0.1), ahead = age + transit;
     const current2 = { x: target.x + vx * ahead, y: target.y + vy * ahead };
     let dir = unit({ x: current2.x - origin.x, y: current2.y - origin.y });
@@ -7027,7 +7067,7 @@ THE SOFTWARE.
       if (!dir) return { state: "coincident" };
     }
     if (profile.speed * time > profile.range) return { state: "out-of-range-or-horizon" };
-    const error = (track?.error || 0) + (track?.velocityError || 0) * (ahead + time);
+    const error = (track?.error || 0) + (bounded ? bounded.diameter / 2 : (track?.velocityError || 0) * (ahead + time));
     if (age > 0.15 || (track?.error || 0) > Math.max(0.75, radius) * 2) return { state: "uncertain" };
     const confidence = error > Math.max(0.75, radius) * 2 ? Math.max(0.75, radius) * 2 / error : 1;
     if (confidence < 1) for (let i = 0; i < 3; i++) {
@@ -7046,7 +7086,7 @@ THE SOFTWARE.
     }
     const finalMuzzle = muzzleFor(origin, dir, profile);
     const mouseLen = Math.hypot(world.x - finalMuzzle.x, world.y - finalMuzzle.y) / (profile.variance || 1) + profile.barrel;
-    return { mouseLen, state: confidence < 1 ? "reduced-lead-uncertainty" : track ? "predicted" : "direct-no-history", world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
+    return { mouseLen, state: confidence < 1 ? "reduced-lead-uncertainty" : bounded ? "bounded-oscillation" : track ? "predicted" : "direct-no-history", world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
   }
   __name(predictShot, "predictShot");
   var AimController = class {
@@ -7677,6 +7717,7 @@ THE SOFTWARE.
       this.lootSource = null;
       this.pickupPulse = false;
       this.pickupAttempt = null;
+      this.pickupPauseUntil = 0;
       this.lootBackoff = new LootBackoff();
       this.stats.lootState = "disabled";
       this.stats.pickupPulses = 0;
@@ -7788,6 +7829,7 @@ THE SOFTWARE.
       this.lootSource = null;
       this.pickupPulse = false;
       this.pickupAttempt = null;
+      this.pickupPauseUntil = 0;
       this.lootBackoff.reset();
       this.binds = null;
       this.bindsInstalled = false;
@@ -7838,6 +7880,11 @@ THE SOFTWARE.
             joinRecord = { observed: true, forwarded: false, mobile: !!outgoing.isMobile, requested: !!self.config.autoLoot && self.config.lootMode === "mobile" };
             self.joinState = joinRecord;
             self.report("protocol", `Join protocol ${self.protocol}; mobile loot ${self.config.autoLoot && self.config.lootMode === "mobile" ? "yêu cầu bật" : "tắt"}.`);
+          }
+          if (type === 12 && self.protocol === VERIFIED_PROTOCOL && typeof data2?.item === "string" && data2.item.length > 0 && Number.isInteger(data2.weapIdx) && typeof data2.serialize === "function") {
+            self.pickupPauseUntil = self.win.performance.now() + 3500;
+            self.pickupPulse = false;
+            self.stats.lootState = "paused-after-drop";
           }
           if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
             if (!inputShape(data2)) return Reflect.apply(original, this, arguments);
@@ -8227,6 +8274,7 @@ THE SOFTWARE.
               latency: track && cfg.latencyCompensation ? this.timing.transit() : 0,
               lead: (cfg.leadAdjustment ?? 100) / 100,
               radius: at2(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
+              stabilize: mode === "lock",
               muzzleFor: /* @__PURE__ */ __name((origin, dir2, model) => clippedMuzzle(origin, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1, selfRadius), "muzzleFor")
             });
             if (shot.dir && cfg.predict && !track) {
@@ -8586,6 +8634,10 @@ THE SOFTWARE.
         this.stats.lootState = "missing-pickup-contract";
         return;
       }
+      if (now < this.pickupPauseUntil) {
+        this.stats.lootState = "paused-after-drop";
+        return;
+      }
       if (!this.inputReady()) {
         this.stats.lootState = "paused";
         return;
@@ -8807,7 +8859,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     ],
     Misc: [
       ["Map Highlights", [["mapHighlights", "Special map markers", "mapHighlights"], ["smallerTrees", "Smaller minimap trees", "mapHighlights"], [null, "Clone shape khi render minimap; chỉ redraw khi đổi setting/map. Không hook Array.sort hoặc đổi collider."]]],
-      ["Auto Loot", [["autoLoot", "Enabled", "sender"], ["lootMode", "Pickup mode", "sender"], [null, "Nearby chỉ yêu cầu khi client thấy ammo / heal / boost / throwable; server tự chọn loot gần nhất, có thể khác khi trễ mạng. Mobile: cần Join mới, có cả mở cửa."]]],
+      ["Auto Loot", [["autoLoot", "Enabled", "sender"], ["lootMode", "Pickup mode", "sender"], [null, "Nearby tạm nghỉ 3,5 giây sau khi gửi lệnh vứt; server tự chọn loot gần nhất, có thể khác khi trễ mạng. Mobile: cần Join mới, có cả mở cửa."]]],
       ["Mobile Movement", [["mobileMovement", "Enabled", "mobile"], ["movementSmooth", "Direction Smooth", "mobile"], [null, "Làm mượt đổi hướng khi giữ phím; nhả phím dừng ngay, không ghi đè input gốc."]]]
     ]
   };

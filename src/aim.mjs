@@ -25,6 +25,43 @@ export function smoothDamp(current, target, velocity, smoothTime, maxSpeed, dt) 
 }
 export const modeOf = cfg => cfg.aim === false ? 'off' : cfg.aimMode === 'assist' ? 'assist' : cfg.aimMode === 'off' ? 'off' : 'lock';
 
+function rememberMotion(s, pos, now) {
+  const motion = s.motion || (s.motion = []);
+  if (motion.length && now - motion.at(-1).t < 8) motion.pop();
+  motion.push({ p: point(pos), t: now });
+  s.motion = motion.filter(o => now - o.t <= 900).slice(-32);
+}
+
+// Only infer a bounded weave after observing a complete reversal cycle within
+// a small region. A long snapshot gap or missing history disables this model.
+export function boundedOscillation(track, radius) {
+  const samples = track?.motion;
+  if (!Array.isArray(samples) || samples.length < 8 || !finite(track.age) || track.age > .15 || !finite(radius) || radius <= 0) return null;
+  if (samples.at(-1).t - samples[0].t < 550) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < samples.length; i++) {
+    const { p, t } = samples[i];
+    if (!vec(p) || !finite(t) || i && (t <= samples[i - 1].t || t - samples[i - 1].t > 150)) return null;
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  }
+  const last = samples.at(-1), previous = samples.at(-2);
+  // A fast departure invalidates the bounded hypothesis immediately.
+  if (Math.hypot(last.p.x - previous.p.x, last.p.y - previous.p.y) / ((last.t - previous.t) / 1000) > 5) return null;
+  const dx = maxX - minX, dy = maxY - minY, diameter = Math.hypot(dx, dy);
+  if (diameter < .2 || diameter > Math.min(1.3 * radius, 2)) return null;
+  const axis = dx >= dy ? 'x' : 'y';
+  let sign = 0, turns = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const delta = samples[i].p[axis] - samples[i - 1].p[axis];
+    if (Math.abs(delta) < .035) continue;
+    const next = Math.sign(delta);
+    if (sign && sign !== next) turns++;
+    sign = next;
+  }
+  return turns >= 2 ? { x: (minX + maxX) / 2, y: (minY + maxY) / 2, diameter } : null;
+}
+
 // Observations only: never add a synthetic zero-velocity sample on render frames.
 export class SnapshotTracker {
   states = new WeakMap();
@@ -35,13 +72,14 @@ export class SnapshotTracker {
     let s = this.states.get(entity);
     if (!s || s.id !== entity.__id || s.layer !== layer || now - s.time > 500 || now <= s.time || Math.hypot(pos.x - s.pos.x, pos.y - s.pos.y) > 20) {
       s = { id: entity.__id, layer, pos: point(pos), time: now, vx: 0, vy: 0, error: 0, velocityError: 0, samples: [{ p: point(pos), t: now }] };
+      rememberMotion(s, pos, now);
       this.states.set(entity, s); return s;
     }
     // A websocket backlog can deliver many ordered samples in one local tick.
     // Replace the coalesced endpoint, never manufacture tiny-dt velocity spikes.
     if (now - s.time < 8) {
       if (s.samples.length < 2) {
-        s.pos = point(pos); s.time = now; s.samples = [{ p: point(pos), t: now }]; return s;
+        s.pos = point(pos); s.time = now; s.samples = [{ p: point(pos), t: now }]; rememberMotion(s, pos, now); return s;
       }
       s.samples.pop(); const previous = s.samples.at(-1); s.pos = point(previous.p); s.time = previous.t;
     }
@@ -75,7 +113,7 @@ export class SnapshotTracker {
     // Quantization floor follows 16-bit positions over 1024 world units.
     s.error = Math.sqrt(rss / Math.max(w, 1)) + 1024 / 65535;
     s.velocityError = Math.sqrt((rss / Math.max(1, s.samples.length - 2) + (1024 / 65535) ** 2) / Math.max(tt - t * t / w, .0001));
-    s.pos = point(pos); s.time = now; return s;
+    s.pos = point(pos); s.time = now; rememberMotion(s, pos, now); return s;
   }
   estimate(entity, now) {
     const s = this.states.get(entity);
@@ -100,10 +138,11 @@ export function weaponProfile(defs, type, perks = []) {
 export function muzzleAt(pos, dir, profile) {
   return { x: pos.x - dir.y * profile.offset + dir.x * profile.barrel, y: pos.y + dir.x * profile.offset + dir.y * profile.barrel };
 }
-export function predictShot({ origin, target, track, profile, latency = 0, lead = 1, radius = 1, muzzleFor = muzzleAt }) {
+export function predictShot({ origin, target, track, profile, latency = 0, lead = 1, radius = 1, muzzleFor = muzzleAt, stabilize = false }) {
   if (!vec(origin) || !vec(target) || !profile) return { state: 'missing-profile' };
-  target = track?.pos || target;
-  const age = track?.age || 0, vx = track?.vx || 0, vy = track?.vy || 0;
+  const bounded = stabilize ? boundedOscillation(track, radius) : null;
+  target = bounded || track?.pos || target;
+  const age = track?.age || 0, vx = bounded ? 0 : track?.vx || 0, vy = bounded ? 0 : track?.vy || 0;
   const transit = clamp(latency, 0, .1), ahead = age + transit;
   const current = { x: target.x + vx * ahead, y: target.y + vy * ahead };
   let dir = unit({ x: current.x - origin.x, y: current.y - origin.y });
@@ -117,7 +156,7 @@ export function predictShot({ origin, target, track, profile, latency = 0, lead 
     dir = unit({ x: world.x - muzzle.x, y: world.y - muzzle.y }); if (!dir) return { state: 'coincident' };
   }
   if (profile.speed * time > profile.range) return { state: 'out-of-range-or-horizon' };
-  const error = (track?.error || 0) + (track?.velocityError || 0) * (ahead + time);
+  const error = (track?.error || 0) + (bounded ? bounded.diameter / 2 : (track?.velocityError || 0) * (ahead + time));
   if (age > .15 || (track?.error || 0) > Math.max(.75, radius) * 2) return { state: 'uncertain' };
   // Continuous, explicit fallback for slope uncertainty: reduce speculative
   // flight lead, not physical flight time. No motion-pattern classification.
@@ -138,7 +177,7 @@ export function predictShot({ origin, target, track, profile, latency = 0, lead 
   }
   const finalMuzzle = muzzleFor(origin, dir, profile);
   const mouseLen = Math.hypot(world.x - finalMuzzle.x, world.y - finalMuzzle.y) / (profile.variance || 1) + profile.barrel;
-  return { mouseLen, state: confidence < 1 ? 'reduced-lead-uncertainty' : track ? 'predicted' : 'direct-no-history', world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
+  return { mouseLen, state: confidence < 1 ? 'reduced-lead-uncertainty' : bounded ? 'bounded-oscillation' : track ? 'predicted' : 'direct-no-history', world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
 }
 export class AimController {
   reset() { this.angle = null; this.time = null; this.target = null; this.mode = null; this.angularVelocity = 0; }

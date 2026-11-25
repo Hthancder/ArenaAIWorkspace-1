@@ -204,3 +204,34 @@ test('ESP supports actual PIXI7 Container visibility and inherited TextStyle API
   names.clear(); assert.equal(text.style.fill, nativeFill); assert.equal(text.visible, false);
   text.destroy();
 });
+
+test('bounded small oscillation stabilizes Lock, not Assist or fast departure', () => {
+  const tracker = new SnapshotTracker(), target = { __id: 52 }; let now = 0;
+  for (let i = 0; i <= 29; i++) {
+    now = i * 33;
+    tracker.observe(target, { x: 50, y: .34 * Math.sin(now / 1000 * 2 * Math.PI * 1.4) }, now);
+  }
+  const track = tracker.estimate(target, now);
+  const opts = { origin: { x: 0, y: 0 }, target: track.pos, track, profile, radius: 1 };
+  const stable = predictShot({ ...opts, stabilize: true });
+  assert.equal(stable.state, 'bounded-oscillation');
+  assert.ok(Math.abs(stable.world.y) < .03);
+  const assist = predictShot(opts);
+  assert.notEqual(assist.state, 'bounded-oscillation');
+  assert.deepEqual(assist, predictShot({ ...opts, stabilize: false }));
+  now += 33; tracker.observe(target, { x: 50, y: track.pos.y + .4 }, now);
+  const fastTrack = tracker.estimate(target, now);
+  assert.notEqual(predictShot({ ...opts, target: fastTrack.pos, track: fastTrack, stabilize: true }).state, 'bounded-oscillation');
+  assert.notEqual(predictShot({ ...opts, track: { ...track, age: .16 }, stabilize: true }).state, 'bounded-oscillation');
+});
+
+test('small-oscillation hypothesis rejects straight motion, gaps and insufficient history', () => {
+  const tracker = new SnapshotTracker(), p = { __id: 53 };
+  for (let i = 0; i < 28; i++) tracker.observe(p, { x: 50, y: Math.round(i * .03 * 100) / 100 }, i * 33);
+  const track = tracker.estimate(p, 27 * 33), opts = { origin: { x: 0, y: 0 }, target: track.pos, track, profile, stabilize: true };
+  assert.notEqual(predictShot(opts).state, 'bounded-oscillation');
+  const samples = Array.from({ length: 30 }, (_, i) => ({ t: i * 33, p: { x: 50, y: .3 * Math.sin(i * 33 / 1000 * 2 * Math.PI * 1.4) } }));
+  const broken = samples.filter((_, i) => i < 10 || i > 15);
+  assert.notEqual(predictShot({ ...opts, track: { ...track, motion: broken } }).state, 'bounded-oscillation');
+  assert.notEqual(predictShot({ ...opts, track: { ...track, motion: samples.slice(-5) } }).state, 'bounded-oscillation');
+});

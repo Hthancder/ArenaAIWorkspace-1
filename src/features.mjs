@@ -138,7 +138,7 @@ export class Features {
     this.stats = { frames: 0, mappingRuns: 0, featureMs: 0, lastError: null, aimState: 'disabled', aimRejections: {} };
     this.joinState = { observed: false, forwarded: false, mobile: null, requested: false };
     this.capabilities = {}; this.failed = new Set();
-    this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.lootBackoff = new LootBackoff();
+    this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.pickupPauseUntil = 0; this.lootBackoff = new LootBackoff();
     this.stats.lootState = 'disabled'; this.stats.pickupPulses = 0;
     this.espRenderer = new EspRenderer(); this.stats.esp = emptyEspStats();
     this.smokeSources = []; this.stats.xray = emptyXrayStats(); this.stats.semi = { state: 'disabled', pulses: 0 };
@@ -189,7 +189,7 @@ export class Features {
     this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset();
     this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.local = null; this.mapping = null; this.effects = [];
-    this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.lootBackoff.reset();
+    this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.pickupPauseUntil = 0; this.lootBackoff.reset();
     this.binds = null; this.bindsInstalled = false; this.stickyId = null; this.lastInput = -Infinity;
     this.repeatFire.reset(); this.movement.reset(); this.weaponSwitch.reset(); this.layerOverrides.clear(); this.layerHeld = false; this.mapHighlights.dispose(); this.smokeSources = []; this.stats.xray = emptyXrayStats('waiting-contract');
     this.espRenderer.reset(); this.stats.esp = emptyEspStats('waiting-mapping'); this.stats.semi = { state: 'waiting-contract', pulses: this.repeatFire.pulses }; this.stats.switchState = 'waiting-contract'; this.stats.layerState = 'disabled'; this.stats.previews = { cones: 0, bulletPaths: 0, throwPaths: 0, unsupportedColliders: 0 };
@@ -223,6 +223,14 @@ export class Features {
           joinRecord = { observed: true, forwarded: false, mobile: !!outgoing.isMobile, requested: !!self.config.autoLoot && self.config.lootMode === 'mobile' };
           self.joinState = joinRecord;
           self.report('protocol', `Join protocol ${self.protocol}; mobile loot ${self.config.autoLoot && self.config.lootMode === 'mobile' ? 'yêu cầu bật' : 'tắt'}.`);
+        }
+        // Source protocol 1028 DropItem is message 12; pause before forwarding,
+        // including a Loot pulse already prepared earlier in this same frame.
+        if (type === 12 && self.protocol === VERIFIED_PROTOCOL && typeof data?.item === 'string' && data.item.length > 0
+          && Number.isInteger(data.weapIdx) && typeof data.serialize === 'function') {
+          self.pickupPauseUntil = self.win.performance.now() + 3500;
+          self.pickupPulse = false;
+          self.stats.lootState = 'paused-after-drop';
         }
         if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
           if (!inputShape(data)) return Reflect.apply(original, this, arguments);
@@ -488,7 +496,7 @@ export class Features {
         } else {
           shot = predictShot({ origin: pos, target: candidate.pos, track, profile,
             latency: track && cfg.latencyCompensation ? this.timing.transit() : 0, lead: (cfg.leadAdjustment ?? 100) / 100,
-            radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
+            radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1, stabilize: mode === 'lock',
             muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, muzzleObstacles, layerFor(dir), rawLayer & 1, selfRadius) });
           if (shot.dir && cfg.predict && !track) { shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable'; shot.approximate = true; }
           // Strict prediction is an accuracy-first fallback policy: do not invent a
@@ -738,6 +746,7 @@ export class Features {
     if (!this.config.autoLoot || this.config.lootMode === 'mobile') return;
     const now = this.win.performance.now();
     if (!this.capabilities.autoPickup || !this.bindsInstalled) { this.stats.lootState = 'missing-pickup-contract'; return; }
+    if (now < this.pickupPauseUntil) { this.stats.lootState = 'paused-after-drop'; return; }
     if (!this.inputReady()) { this.stats.lootState = 'paused'; return; }
     const loot = read(this.lootSource.owner, this.lootSource.key);
     if (!this.pickupEligible(loot)) { this.stats.lootState = 'no-eligible-loot'; return; }

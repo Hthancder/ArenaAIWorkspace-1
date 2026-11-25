@@ -76,7 +76,7 @@ const GROUPS = {
   ],
   Misc: [
     ['Map Highlights', [['mapHighlights', 'Special map markers', 'mapHighlights'], ['smallerTrees', 'Smaller minimap trees', 'mapHighlights'], [null, 'Clone shape khi render minimap; chỉ redraw khi đổi setting/map. Không hook Array.sort hoặc đổi collider.']]],
-    ['Auto Loot', [['autoLoot', 'Enabled', 'sender'], ['lootMode', 'Pickup mode', 'sender'], [null, 'Nearby chỉ yêu cầu khi client thấy ammo / heal / boost / throwable; server tự chọn loot gần nhất, có thể khác khi trễ mạng. Mobile: cần Join mới, có cả mở cửa.']]],
+    ['Auto Loot', [['autoLoot', 'Enabled', 'sender'], ['lootMode', 'Pickup mode', 'sender'], [null, 'Nearby tạm nghỉ 3,5 giây sau khi gửi lệnh vứt; server tự chọn loot gần nhất, có thể khác khi trễ mạng. Mobile: cần Join mới, có cả mở cửa.']]],
     ['Mobile Movement', [['mobileMovement', 'Enabled', 'mobile'], ['movementSmooth', 'Direction Smooth', 'mobile'], [null, 'Làm mượt đổi hướng khi giữ phím; nhả phím dừng ngay, không ghi đè input gốc.']]],
   ],
 };
