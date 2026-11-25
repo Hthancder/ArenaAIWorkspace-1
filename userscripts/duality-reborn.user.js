@@ -6912,6 +6912,7 @@ THE SOFTWARE.
     if (!Array.isArray(samples) || samples.length < 8 || !finite(track.age) || track.age > 0.15 || !finite(radius) || radius <= 0) return null;
     if (samples.at(-1).t - samples[0].t < 550) return null;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let prevMinX = Infinity, prevMaxX = -Infinity, prevMinY = Infinity, prevMaxY = -Infinity;
     for (let i = 0; i < samples.length; i++) {
       const { p, t } = samples[i];
       if (!vec(p) || !finite(t) || i && (t <= samples[i - 1].t || t - samples[i - 1].t > 150)) return null;
@@ -6919,11 +6920,18 @@ THE SOFTWARE.
       maxX = Math.max(maxX, p.x);
       minY = Math.min(minY, p.y);
       maxY = Math.max(maxY, p.y);
+      if (i < samples.length - 1) {
+        prevMinX = Math.min(prevMinX, p.x);
+        prevMaxX = Math.max(prevMaxX, p.x);
+        prevMinY = Math.min(prevMinY, p.y);
+        prevMaxY = Math.max(prevMaxY, p.y);
+      }
     }
-    const last = samples.at(-1), previous = samples.at(-2);
-    if (Math.hypot(last.p.x - previous.p.x, last.p.y - previous.p.y) / ((last.t - previous.t) / 1e3) > 5) return null;
+    const last = samples.at(-1);
+    const margin = 0.06;
+    if (last.p.x < prevMinX - margin || last.p.x > prevMaxX + margin || last.p.y < prevMinY - margin || last.p.y > prevMaxY + margin) return null;
     const dx = maxX - minX, dy = maxY - minY, diameter = Math.hypot(dx, dy);
-    if (diameter < 0.2 || diameter > Math.min(1.3 * radius, 2)) return null;
+    if (diameter < 0.2 || diameter > Math.min(2.5 * radius, 2)) return null;
     const axis = dx >= dy ? "x" : "y";
     let sign = 0, turns = 0;
     for (let i = 1; i < samples.length; i++) {
@@ -8344,7 +8352,7 @@ THE SOFTWARE.
               latency: track && cfg.latencyCompensation ? this.timing.transit() : 0,
               lead: (cfg.leadAdjustment ?? 100) / 100,
               radius: at2(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
-              stabilize: mode === "lock",
+              stabilize: mode === "lock" && cfg.stabilizeStrafe !== false,
               muzzleFor: /* @__PURE__ */ __name((origin, dir2, model) => clippedMuzzle(origin, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1, selfRadius), "muzzleFor")
             });
             if (shot.dir && cfg.predict && !track) {
@@ -8798,7 +8806,7 @@ THE SOFTWARE.
         inputBlockReason: this.inputBlockReason(),
         mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
-        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || "responsive" },
+        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || "responsive" },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
         missingContracts: Object.keys(checks).filter((key) => !checks[key]),
         capabilities: { ...this.capabilities },
@@ -8841,6 +8849,7 @@ THE SOFTWARE.
     showFov: true,
     wallcheck: true,
     predict: true,
+    stabilizeStrafe: true,
     melee: false,
     autoMelee: false,
     autoSwitch: false,
@@ -8941,7 +8950,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
       ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["wallcheck", "Wallcheck", "wallcheck"], [null, "Khi vật cản hoặc người chơi chắn đường bắn, aim sẽ nhả; Sticky giữ ưu tiên mục tiêu còn trong FOV. Chỉ ước lượng theo dữ liệu client."]]],
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
-      ["Aim — Prediction", [["predict", "Auto prediction", "prediction"]]],
+      ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
       ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
       ["Auto Switch", [["autoSwitch", "Enabled", "switch"], ["useOneGun", "Use One Gun (switch away then return)", "switch"], [null, "Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server."]]],
@@ -9026,7 +9035,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       flushPersistence();
     }, "persist");
     const refreshRows = /* @__PURE__ */ __name(() => {
-      const parents = { targetStyle: "showTarget", smooth: "humanLikeAim", smoothProfile: "humanLikeAim", useOneGun: "autoSwitch", autoMelee: "melee", smokeOpacity: "xray", treeOpacity: "xray", ceilings: "xray", darkerSmokes: "xray", zoomFactor: "zoom", movementSmooth: "mobileMovement", lootMode: "autoLoot", espOpacity: "lines", espLineWidth: "lines", espShowEnemies: "esp", espShowAllies: "esp", smallerTrees: "mapHighlights", latencyCompensation: "predict", leadAdjustment: "predict", predictionStrict: "predict" };
+      const parents = { stabilizeStrafe: "predict", targetStyle: "showTarget", smooth: "humanLikeAim", smoothProfile: "humanLikeAim", useOneGun: "autoSwitch", autoMelee: "melee", smokeOpacity: "xray", treeOpacity: "xray", ceilings: "xray", darkerSmokes: "xray", zoomFactor: "zoom", movementSmooth: "mobileMovement", lootMode: "autoLoot", espOpacity: "lines", espLineWidth: "lines", espShowEnemies: "esp", espShowAllies: "esp", smallerTrees: "mapHighlights", latencyCompensation: "predict", leadAdjustment: "predict", predictionStrict: "predict" };
       for (const input of panel.querySelectorAll("[data-config]")) {
         const parent = parents[input.dataset.config];
         if (parent) input.closest("label").hidden = !config[parent];

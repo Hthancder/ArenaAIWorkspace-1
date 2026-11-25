@@ -240,3 +240,26 @@ test('bullet wallcheck ends at first hitbox edge or the exit if spawned inside',
   assert.deepEqual(pathToTarget({ x: 0, y: 0 }, { x: 10, y: 0 }, 1), { x: 9, y: 0 });
   assert.deepEqual(pathToTarget({ x: 9.5, y: 0 }, { x: 10, y: 0 }, 1), { x: 11, y: 0 });
 });
+
+test('fast bounded strafes tolerate speed but not region departures or excessive diameter', () => {
+  const tracker = new SnapshotTracker(), entity = { __id: 150 };
+  const ys = [0, .4, .8, 1.2, .8, .4, 0, .4, .8, 1.2, .8, .4, 0, .4, .8, 1.2, .8, .4, 0, .4, .8];
+  ys.forEach((y, i) => tracker.observe(entity, { x: 50, y }, i * 33));
+  const track = tracker.estimate(entity, 20 * 33);
+  const opts = { origin: { x: 0, y: 0 }, target: track.pos, track, profile, radius: .75, stabilize: true };
+  assert.equal(predictShot(opts).state, 'bounded-oscillation');
+  assert.notEqual(predictShot({ ...opts, radius: .4 }).state, 'bounded-oscillation');
+  assert.notEqual(predictShot({ ...opts, stabilize: false }).state, 'bounded-oscillation');
+  tracker.observe(entity, { x: 50, y: 1.4 }, 21 * 33);
+  const departure = tracker.estimate(entity, 21 * 33);
+  assert.notEqual(predictShot({ ...opts, target: departure.pos, track: departure }).state, 'bounded-oscillation');
+  tracker.observe(entity, { x: 50.4, y: 1.4 }, 22 * 33);
+  const side = tracker.estimate(entity, 22 * 33);
+  assert.notEqual(predictShot({ ...opts, target: side.pos, track: side }).state, 'bounded-oscillation');
+});
+
+test('strafe stabilization setting defaults on and preserves explicit opt-out', () => {
+  assert.equal(normalizeConfig({}).stabilizeStrafe, true);
+  assert.equal(normalizeConfig({ version: 3, stabilizeStrafe: false }).stabilizeStrafe, false);
+  assert.equal(normalizeConfig({ stabilizeStrafe: 'false' }).stabilizeStrafe, true);
+});

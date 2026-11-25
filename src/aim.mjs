@@ -39,17 +39,24 @@ export function boundedOscillation(track, radius) {
   if (!Array.isArray(samples) || samples.length < 8 || !finite(track.age) || track.age > .15 || !finite(radius) || radius <= 0) return null;
   if (samples.at(-1).t - samples[0].t < 550) return null;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let prevMinX = Infinity, prevMaxX = -Infinity, prevMinY = Infinity, prevMaxY = -Infinity;
   for (let i = 0; i < samples.length; i++) {
     const { p, t } = samples[i];
     if (!vec(p) || !finite(t) || i && (t <= samples[i - 1].t || t - samples[i - 1].t > 150)) return null;
     minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
     minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    if (i < samples.length - 1) {
+      prevMinX = Math.min(prevMinX, p.x); prevMaxX = Math.max(prevMaxX, p.x);
+      prevMinY = Math.min(prevMinY, p.y); prevMaxY = Math.max(prevMaxY, p.y);
+    }
   }
-  const last = samples.at(-1), previous = samples.at(-2);
-  // A fast departure invalidates the bounded hypothesis immediately.
-  if (Math.hypot(last.p.x - previous.p.x, last.p.y - previous.p.y) / ((last.t - previous.t) / 1000) > 5) return null;
+  const last = samples.at(-1);
+  // Reversals can happen at full strafe speed: speed alone is not evidence of
+  // escape. Detect a departure from the previously observed region instead.
+  const margin = .06;
+  if (last.p.x < prevMinX - margin || last.p.x > prevMaxX + margin || last.p.y < prevMinY - margin || last.p.y > prevMaxY + margin) return null;
   const dx = maxX - minX, dy = maxY - minY, diameter = Math.hypot(dx, dy);
-  if (diameter < .2 || diameter > Math.min(1.3 * radius, 2)) return null;
+  if (diameter < .2 || diameter > Math.min(2.5 * radius, 2)) return null;
   const axis = dx >= dy ? 'x' : 'y';
   let sign = 0, turns = 0;
   for (let i = 1; i < samples.length; i++) {

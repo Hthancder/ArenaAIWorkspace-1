@@ -510,7 +510,7 @@ export class Features {
         } else {
           shot = predictShot({ origin: pos, target: candidate.pos, track, profile,
             latency: track && cfg.latencyCompensation ? this.timing.transit() : 0, lead: (cfg.leadAdjustment ?? 100) / 100,
-            radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1, stabilize: mode === 'lock',
+            radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1, stabilize: mode === 'lock' && cfg.stabilizeStrafe !== false,
             muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, muzzleObstacles, layerFor(dir), rawLayer & 1, selfRadius) });
           if (shot.dir && cfg.predict && !track) { shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable'; shot.approximate = true; }
           // Strict prediction is an accuracy-first fallback policy: do not invent a
@@ -821,7 +821,7 @@ export class Features {
       inputBlockReason: this.inputBlockReason(),
       mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
       registry: { state: m?.registryState ?? 'waiting-mapping', ...m?.registryEvidence },
-      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || 'responsive' },
+      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || 'responsive' },
       aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
       missingContracts: Object.keys(checks).filter(key => !checks[key]),
       capabilities: { ...this.capabilities },

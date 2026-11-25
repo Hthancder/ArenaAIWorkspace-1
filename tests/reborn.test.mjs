@@ -1267,3 +1267,12 @@ test('wallcheck stops at target hitbox, but checks the actual smoothed direction
     assert.equal(f.engine.stats.aimState, 'input-applied', 'direct path to target is clear');
   } finally { f.close(); }
 });
+
+test('strafe stabilization toggle is exposed and can be disabled', () => {
+  const dom = env(), config = { ...DEFAULTS }, menu = createMenu(dom.window, config, {});
+  try {
+    const toggle = menu.root.querySelector('[data-config=stabilizeStrafe]');
+    assert.ok(toggle); assert.equal(toggle.checked, true);
+    toggle.click(); assert.equal(config.stabilizeStrafe, false);
+  } finally { menu.dispose(); dom.window.close(); }
+});
