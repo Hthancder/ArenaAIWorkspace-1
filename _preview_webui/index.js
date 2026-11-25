@@ -1440,7 +1440,17 @@ $("#ota-start-btn").addEventListener("click", async () => {
     otaCommitting = true;
     $("#ota-cancel-btn").classList.add("hidden");
     $("#ota-prog-msg").textContent = "Verifying & committing OTA slot...";
-    const fr = await fetch(base + "/ota/commit", { method: "POST", headers: { "X-OTA-Session": session } });
+    // Commit verifies the image and answers in one go. Every other OTA step has
+    // a timeout; without one here a dropped reply left the page sitting on
+    // "Verifying & committing OTA slot..." forever with no way out.
+    otaAbortCtrl = new AbortController();
+    const commitTimer = setTimeout(() => otaAbortCtrl.abort(), 30000);
+    let fr;
+    try {
+      fr = await fetch(base + "/ota/commit", { method: "POST", headers: { "X-OTA-Session": session }, signal: otaAbortCtrl.signal });
+    } finally {
+      clearTimeout(commitTimer);
+    }
     const fd = await fr.json().catch(() => ({}));
     if (!fr.ok || !fd.ok) throw new Error(fd.msg || "OTA commit failed");
     if (fd.restartScheduled === false) {

@@ -92,6 +92,16 @@ for i, line in enumerate(js.splitlines(), 1):
         continue
     fails.append(f"index.js:{i}: Vietnamese UI string in an English interface: {line.strip()[:70]}")
 
+
+# 7) Every OTA network step must be able to time out. /ota/commit used to be the
+#    one bare fetch(): a lost reply left the page on "Verifying..." forever.
+for m in re.finditer(r'fetch\(([^;]{0,400}?)\)', js):
+    call = m.group(1)
+    if "/ota/commit" not in call and "/ota/chunk" not in call and "/ota/begin" not in call:
+        continue
+    if "signal" not in call:
+        fails.append(f"OTA fetch without timeout: {call[:80]}")
+
 if fails:
     print("UI/UX consistency checks FAILED:")
     for f in fails:
