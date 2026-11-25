@@ -7781,8 +7781,9 @@ THE SOFTWARE.
       if (this.receiverKey) {
         const self2 = this;
         patchMethod(game, this.receiverKey, (original) => function(msg) {
+          const arrivedAt = self2.win.performance.now();
           const result = Reflect.apply(original, this, arguments);
-          self2.observeUpdate(msg);
+          self2.observeUpdate(msg, arrivedAt);
           return result;
         }, this.gameHooks);
       }
@@ -7981,7 +7982,6 @@ THE SOFTWARE.
       }
       this.reconcile(!!staleIdentity);
       this.updateLayer();
-      this.updateLoot();
       this.switchSlot = null;
       if (this.inputReady()) this.updateSwitch();
       else this.weaponSwitch.reset();
@@ -7999,11 +7999,12 @@ THE SOFTWARE.
           this.aimEvidence.requests++;
         }
       }
+      this.updateLoot();
     }
-    observeUpdate(msg) {
+    observeUpdate(msg, arrivedAt = this.win.performance.now()) {
       this.guard("snapshot-update", () => {
         this.reconcile();
-        const m = this.mapping, fields = this.sourceFields, now = this.win.performance.now();
+        const m = this.mapping, fields = this.sourceFields, now = arrivedAt;
         this.timing.received(msg, now);
         if (!m?.schema || !fields?.pos) return;
         for (const id of msg.delObjIds || []) {
@@ -8011,7 +8012,9 @@ THE SOFTWARE.
           if (old) this.tracker.forget(old);
           this.observedEntities.delete(id);
         }
-        const ids = new Set([...msg.fullObjects || [], ...msg.partObjects || []].filter((o) => vec(o.pos)).map((o) => o.__id));
+        const ids = /* @__PURE__ */ new Set();
+        for (const list of [msg.fullObjects || [], msg.partObjects || []]) for (const o of list) if (vec(o.pos)) ids.add(o.__id);
+        if (!ids.size) return;
         const players = m.players(), live = new Set(players);
         for (const [id, p] of this.observedEntities) if (!live.has(p) || p.__id !== id) {
           this.tracker.forget(p);
@@ -8112,9 +8115,14 @@ THE SOFTWARE.
         y: read(camera.camera, camera.heightKey) / 2 - physical.y * native.toMouseLen * scale
       } : mouse;
       const rawLayer = this.sourceLayer(m.active), selfRadius = at2(m.active, [m.schema.netKey, this.sourceFields?.scale]) || 1;
-      const structures = entries(read(m.creator, m.registryKey)).map(([, o]) => o).filter((o) => Array.isArray(read(o, "stairs")));
-      const obstacles = m.obstacles();
-      const layerFor = /* @__PURE__ */ __name((dir) => shotLayer(pos, dir, rawLayer, selfRadius, structures), "layerFor");
+      let structures;
+      const layerFor = /* @__PURE__ */ __name((dir) => shotLayer(
+        pos,
+        dir,
+        rawLayer,
+        selfRadius,
+        structures ||= entries(read(m.creator, m.registryKey)).map(([, o]) => o).filter((o) => Array.isArray(read(o, "stairs")))
+      ), "layerFor");
       const candidates = [], reject = /* @__PURE__ */ __name((key) => {
         this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1;
       }, "reject");
@@ -8122,10 +8130,6 @@ THE SOFTWARE.
         if (p === m.active || at2(p, [m.schema.netKey, m.schema.deadKey])) continue;
         if (!cfg.knocked && p.downed) {
           reject("downed");
-          continue;
-        }
-        if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: this.sourcePos(p)?.x - pos.x, y: this.sourcePos(p)?.y - pos.y }) || physical))) {
-          reject("otherLayer");
           continue;
         }
         const relation = relations.classify(p.__id).kind;
@@ -8142,14 +8146,20 @@ THE SOFTWARE.
           reject("outsideFov");
           continue;
         }
+        if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical))) {
+          reject("otherLayer");
+          continue;
+        }
         const score = distance * (stickyCurrent ? 0.65 : 1);
         candidates.push({ p, pos: target, distance, score, stickyCurrent });
       }
       candidates.sort((a, b) => a.score - b.score || a.distance - b.distance);
       const sticky = cfg.sticky && candidates.find((c) => c.stickyCurrent);
       const ordered = sticky ? [sticky, ...candidates.filter((c) => c !== sticky)] : candidates;
+      if (!ordered.length) return fail("no-candidate");
       const perks = at2(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
       const profile = weaponProfile(this.definitions, localWeapon(m), perks);
+      const obstacles = profile || cfg.wallcheck ? m.obstacles() : [];
       const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
       if (profile && muzzleObstacles.length > 1024) return fail("muzzle-obstacle-budget");
       for (const candidate of ordered.slice(0, 6)) {

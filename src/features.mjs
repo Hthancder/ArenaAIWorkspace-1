@@ -200,8 +200,10 @@ export class Features {
     if (this.receiverKey) {
       const self = this;
       patchMethod(game, this.receiverKey, original => function (msg) {
+        // Capture arrival before native processing; main-thread work is not network latency.
+        const arrivedAt = self.win.performance.now();
         const result = Reflect.apply(original, this, arguments);
-        self.observeUpdate(msg); return result;
+        self.observeUpdate(msg, arrivedAt); return result;
       }, this.gameHooks);
     }
     this.senderReady = false;
@@ -346,7 +348,6 @@ export class Features {
     if (staleIdentity) { this.releaseMatch(); this.lastActive = null; }
     this.reconcile(!!staleIdentity);
     this.updateLayer();
-    this.updateLoot();
     this.switchSlot = null;
     if (this.inputReady()) this.updateSwitch(); else this.weaponSwitch.reset();
     const aimFrame = ++this.aimFrame, directMouse = this.config.directMouseInput !== false && !!this.flushReady;
@@ -358,18 +359,23 @@ export class Features {
       const d = Object.getOwnPropertyDescriptor(this.app.game, this.timeoutKey);
       if (d && 'value' in d && d.writable) { this.app.game[this.timeoutKey] = 0; this.aimEvidence.requests++; }
     }
+    // Loot is not needed for aim or aim scheduling; process it afterwards.
+    this.updateLoot();
   }
-  observeUpdate(msg) {
+  observeUpdate(msg, arrivedAt = this.win.performance.now()) {
     this.guard('snapshot-update', () => {
       this.reconcile();
-      const m = this.mapping, fields = this.sourceFields, now = this.win.performance.now();
+      const m = this.mapping, fields = this.sourceFields, now = arrivedAt;
       this.timing.received(msg, now);
       if (!m?.schema || !fields?.pos) return;
       for (const id of msg.delObjIds || []) {
         const old = this.observedEntities.get(id); if (old) this.tracker.forget(old);
         this.observedEntities.delete(id);
       }
-      const ids = new Set([...(msg.fullObjects || []), ...(msg.partObjects || [])].filter(o => vec(o.pos)).map(o => o.__id));
+      const ids = new Set();
+      for (const list of [msg.fullObjects || [], msg.partObjects || []]) for (const o of list) if (vec(o.pos)) ids.add(o.__id);
+      // Most control-only updates do not change positions: avoid a full player scan.
+      if (!ids.size) return;
       const players = m.players(), live = new Set(players);
       for (const [id, p] of this.observedEntities) if (!live.has(p) || p.__id !== id) { this.tracker.forget(p); this.observedEntities.delete(id); }
       for (const p of players) if (ids.has(p.__id)) {
@@ -433,14 +439,14 @@ export class Features {
     const inputCursor = native ? { x: read(camera.camera, camera.widthKey) / 2 + physical.x * native.toMouseLen * scale,
       y: read(camera.camera, camera.heightKey) / 2 - physical.y * native.toMouseLen * scale } : mouse;
     const rawLayer = this.sourceLayer(m.active), selfRadius = at(m.active, [m.schema.netKey, this.sourceFields?.scale]) || 1;
-    const structures = entries(read(m.creator, m.registryKey)).map(([, o]) => o).filter(o => Array.isArray(read(o, 'stairs')));
-    const obstacles = m.obstacles();
-    const layerFor = dir => shotLayer(pos, dir, rawLayer, selfRadius, structures);
+    // Defer the registry and obstacle scans until a plausible target needs them.
+    let structures;
+    const layerFor = dir => shotLayer(pos, dir, rawLayer, selfRadius,
+      structures ||= entries(read(m.creator, m.registryKey)).map(([, o]) => o).filter(o => Array.isArray(read(o, 'stairs'))));
     const candidates = [], reject = key => { this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1; };
     for (const p of m.players().slice(0, 256)) {
       if (p === m.active || at(p, [m.schema.netKey, m.schema.deadKey])) continue;
       if (!cfg.knocked && p.downed) { reject('downed'); continue; }
-      if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: this.sourcePos(p)?.x - pos.x, y: this.sourcePos(p)?.y - pos.y }) || physical))) { reject('otherLayer'); continue; }
       const relation = relations.classify(p.__id).kind;
       if (relation !== 'enemy') { reject(relation === 'unknown' ? 'unknownTeam' : 'teammate'); continue; }
       const target = this.sourcePos(p), screen = aimPoint(camera, target, pos); if (!screen) continue;
@@ -448,6 +454,7 @@ export class Features {
       const stickyCurrent = !!cfg.sticky && p.__id === this.stickyId;
       const radius = melee ? reach : cfg.fov * (stickyCurrent ? 1.25 : 1);
       if (distance > radius) { reject('outsideFov'); continue; }
+      if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical))) { reject('otherLayer'); continue; }
       // A real switch margin prevents two enemies on opposite sides of the FOV from
       // trading ownership every frame. The current target needs to be meaningfully
       // better before Lock/Assist changes targets.
@@ -457,8 +464,10 @@ export class Features {
     candidates.sort((a, b) => a.score - b.score || a.distance - b.distance);
     const sticky = cfg.sticky && candidates.find(c => c.stickyCurrent);
     const ordered = sticky ? [sticky, ...candidates.filter(c => c !== sticky)] : candidates;
+    if (!ordered.length) return fail('no-candidate');
     const perks = at(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
     const profile = weaponProfile(this.definitions, localWeapon(m), perks);
+    const obstacles = profile || cfg.wallcheck ? m.obstacles() : [];
     const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
     if (profile && muzzleObstacles.length > 1024) return fail('muzzle-obstacle-budget');
     for (const candidate of ordered.slice(0, 6)) {

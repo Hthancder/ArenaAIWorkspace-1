@@ -1061,3 +1061,46 @@ test('far map objects cannot exhaust wallcheck or hide a nearby blocker beyond t
     f.advance(); f.send(); assert.equal(f.engine.stats.aimRejections.wall, 1);
   } finally { f.close(); }
 });
+
+test('Aim precedes loot, avoids obstacle scans without candidates, and samples arrival time', () => {
+  const f = coordinated();
+  try {
+    let obstacleScans = 0;
+    const obstacles = f.engine.mapping.obstacles;
+    f.engine.mapping.obstacles = () => { obstacleScans++; return obstacles(); };
+    const order = [], process = f.engine.processAim.bind(f.engine), loot = f.engine.updateLoot.bind(f.engine);
+    f.engine.processAim = (...args) => { order.push('aim'); return process(...args); };
+    f.engine.updateLoot = () => { order.push('loot'); return loot(); };
+    const enemy = f.app.game.barn.playerPool.list[1];
+    enemy.p = { x: 100, y: 100 };
+    f.engine.pre();
+    assert.deepEqual(order, ['aim', 'loot']);
+    assert.equal(obstacleScans, 0, 'no plausible candidate means no obstacle scan');
+    enemy.n.sourcePos = { ...enemy.p };
+    f.engine.sourceFields = { pos: 'sourcePos' };
+    let playerScans = 0;
+    const players = f.engine.mapping.players;
+    f.engine.mapping.players = () => { playerScans++; return players(); };
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [], delObjIds: [] }, 990);
+    assert.equal(playerScans, 0, 'non-position update does not scan players');
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [{ __id: 2, pos: enemy.n.sourcePos }], delObjIds: [] }, 990);
+    assert.equal(f.engine.tracker.states.get(enemy).time, 990, 'uses arrival rather than processing completion time');
+  } finally { f.close(); }
+});
+
+test('snapshot hook captures RTT before native update processing', () => {
+  const dom = env(), app = fixture(); let clock = 1000;
+  Object.defineProperty(dom.window.performance, 'now', { value: () => clock, configurable: true });
+  app.game.receive = function (msg) {
+    void msg.fullObjects; void msg.partObjects; void msg.delObjIds; void msg.activePlayerData;
+    clock += 40;
+  };
+  const engine = new Features(dom.window, app, { ...DEFAULTS }, () => {}, defs);
+  try {
+    assert.equal(engine.receiverKey, 'receive');
+    engine.timing.sent({ seq: 7 }, 1000);
+    clock = 1080;
+    app.game.receive({ ack: 7, fullObjects: [], partObjects: [], delObjIds: [], activePlayerData: {} });
+    assert.equal(engine.timing.rtt, 80);
+  } finally { engine.dispose(); dom.window.close(); }
+});
