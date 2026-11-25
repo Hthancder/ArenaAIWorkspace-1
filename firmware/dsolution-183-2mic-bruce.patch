@@ -15242,10 +15242,10 @@ index 00000000..0fb739c1
 +
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c1..da88249d 100644
+index 2e6512c1..4da96afa 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
-@@ -16,149 +16,270 @@
+@@ -16,149 +16,279 @@
  #include "modules/wifi/netcut.h"
  #include "modules/wifi/responder.h"
  #include "modules/wifi/scan_hosts.h"
@@ -15297,6 +15297,10 @@ index 2e6512c1..da88249d 100644
 +Option backOption() { return Option("Back", []() {}); }
 +
 +String connectionLabel() {
++    // A running chain owns the radio even when neither STA nor our own AP is up
++    // (Evil Twin clone, Portal->NAPT, NAPT router). Reporting "WiFi: off" there is
++    // what made a working chain look like it had crashed the radio.
++    if (isChainRadioActive()) return "WiFi: chain running";
 +    if (WiFi.getMode() == WIFI_MODE_NULL) return "WiFi: off";
 +    if (WiFi.isConnected()) return "WiFi: connected";
 +    if (WiFi.AP.started()) return "WiFi: AP mode";
@@ -15361,6 +15365,11 @@ index 2e6512c1..da88249d 100644
 +        options.push_back({connectionLabel(), [this]() { connectionMenu(); }});
 +        // Turning the radio off was two taps deep inside "WiFi: connected".
 +        if (WiFi.getMode() != WIFI_MODE_NULL) options.push_back({"Turn Off WiFi", turnOffWifi});
++#if !defined(LITE_VERSION)
++        // While a chain owns the radio, "WiFi: off" is wrong and the way back to
++        // the running chain should be one tap, not WiFi -> Chains -> chain name.
++        if (isChainRadioActive()) options.push_back({"Chain: running (open)", [this]() { chainsMenu(); }});
++#endif
 +        options.push_back({webUiLabel, loopOptionsWebUi});
 +        options.push_back({"WiFi Tools", [this]() { toolsMenu(); }});
 +#ifndef LITE_VERSION
@@ -15623,7 +15632,7 @@ index 2e6512c1..da88249d 100644
  }
  
  void WifiMenu::drawIcon(float scale) {
-@@ -168,23 +289,11 @@ void WifiMenu::drawIcon(float scale) {
+@@ -168,23 +298,11 @@ void WifiMenu::drawIcon(float scale) {
  
      tft.fillCircle(iconCenterX, iconCenterY + deltaY, radius, bruceConfig.priColor);
      tft.drawArc(
@@ -30119,10 +30128,10 @@ index 00000000..819464cc
 +}
 diff --git a/src/modules/wifi/chain_orchestrator.cpp b/src/modules/wifi/chain_orchestrator.cpp
 new file mode 100644
-index 00000000..32b64cf0
+index 00000000..57148a3e
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.cpp
-@@ -0,0 +1,938 @@
+@@ -0,0 +1,1064 @@
 +#include "chain_orchestrator.h"
 +#if !defined(LITE_VERSION)
 +
@@ -30136,9 +30145,11 @@ index 00000000..32b64cf0
 +#include "core/seclab_util.h"
 +#include "core/utils.h"
 +#include "core/wifi/webInterface.h"
++#include "core/wifi/wifi_common.h"
 +#include "modules/badusb_ble/smart_badusb.h"
 +#include "modules/ble/ble_gatt_cloner.h"
 +#include "modules/ble/ble_security_audit.h"
++#include "modules/ble/ble_common.h"
 +#include "modules/ble/ble_tracker_guard.h"
 +#include "modules/wifi/channel_analyzer.h"
 +#include "modules/wifi/lan_auditor.h"
@@ -30152,6 +30163,8 @@ index 00000000..32b64cf0
 +#include "modules/wifi/responder_plus.h"
 +#include <Arduino.h>
 +#include <LittleFS.h>
++#include <algorithm>
++#include <vector>
 +#include <WiFi.h>
 +#include <globals.h>
 +
@@ -30274,14 +30287,11 @@ index 00000000..32b64cf0
 +    return true;
 +}
 +
-+// Explain *why* a tap did nothing instead of silently returning: the old menus
-+// bounced straight back to the list with no message, which reads as "tap does
-+// nothing" on the device.
-+static void explainNoTarget(const char *what) {
-+    displayWarning(
-+        String("No ") + what + " yet.\nRun WiFi -> WiFi Atks -> Select target\n(or Scan & Analyze), then retry.",
-+        true
-+    );
++// Turn a scan failure into an actionable line instead of a dead end. The old
++// message pointed at "WiFi -> WiFi Atks -> Select target", which no longer exists.
++static String noTargetHint(const String &why) {
++    if (!why.isEmpty()) return why;
++    return String("No target yet.\nScan & Analyze -> run the Analyzer,\n or type the SSID by hand.");
 +}
 +
 +// Evil Twin needs a target; asking here means the entry never dead-ends.
@@ -30651,91 +30661,211 @@ index 00000000..32b64cf0
 +}
 +
 +
++// Pick the evil-twin target from a real scan.
++//
++// The old flow only looked at a leftover /wifi_airtime.json (written by the
++// Channel Analyzer for *hidden* networks only) and otherwise asked for an SSID
++// with the keyboard. On a board with three buttons that is a dead end: the
++// keyboard needs arrow/Sel handling the user is not expecting, and cancelling it
++// returns silently, so "select target" looks like a button that does nothing and
++// the list just reopens showing "WiFi: off".
++static bool scanEvilTwinTargets(std::vector<ChainTarget> &out, String &err) {
++    out.clear();
++    out.reserve(24);
++    if (!radioHasMemForWifi()) {
++        err = "Low RAM for Wi-Fi scan. Close the WebUI/BLE first.";
++        return false;
++    }
++    // Bring the radio up without starting the attacker AP: scanning only needs
++    // STA. Full cleanup first so a leftover AP/STA state cannot make the scan
++    // return 0 networks (that path reads as "no target" and bounces back).
++    cancelWebUiAutoStart();
++    cleanlyStopWebUiForWiFiFeature();
++    if (FORCE_RADIO_TEARDOWN_ON_SWITCH) radioFreeBleForWifi();
++    ensureWifiPlatform();
++    if (WiFi.getMode() != WIFI_MODE_STA) {
++        WiFi.mode(WIFI_MODE_STA);
++        vTaskDelay(pdMS_TO_TICKS(120));
++    }
++    displayTextLine("Scanning for targets..");
++    int n = WiFi.scanNetworks(false, true);
++    if (n <= 0) {
++        WiFi.scanDelete();
++        err = "No network found. Move closer and retry.";
++        return false;
++    }
++    for (int i = 0; i < n && out.size() < 24; i++) {
++        String ssid = WiFi.SSID(i);
++        uint8_t *b = WiFi.BSSID(i);
++        int ch = WiFi.channel(i);
++        if (ssid.isEmpty() || !b || ch < 1 || ch > 14) continue;
++        ChainTarget t;
++        memcpy(t.bssid, b, 6);
++        strncpy(t.ssid, ssid.c_str(), sizeof(t.ssid) - 1);
++        t.channel = (uint8_t)ch;
++        t.rssi = WiFi.RSSI(i);
++        t.cleanScore = -1;
++        t.decloaked = true; // the SSID is known: usable as a clone name
++        chainScoreTargetInPlace(t);
++        out.push_back(t);
++    }
++    WiFi.scanDelete();
++    if (out.empty()) {
++        err = "Every network had an empty SSID (hidden).";
++        return false;
++    }
++    // Strongest first: that is the one the victim is most likely to rejoin.
++    std::sort(out.begin(), out.end(), [](const ChainTarget &a, const ChainTarget &b) {
++        return a.score > b.score;
++    });
++    return true;
++}
++
 +static void evilTwinRouteMenu() {
 +    // Deauth + Clone + Verify + Route
-+    // Steps: 1) pick target AP, 2) Deauth (EvilPortal deauth loop), 3) Clone AP, 4) Verify password, 5) Route via real AP (NAPT)
++    // Steps: 1) pick target AP, 2) Deauth (EvilPortal deauth loop), 3) Clone AP,
++    //        4) Verify password, 5) Route via real AP (NAPT).
++    //
++    // The old picker had a "Target: none yet" row that did nothing and then
++    // returned, i.e. tapping the target row dropped the user back on the WiFi
++    // menu (which reads "WiFi: off" because the chain never brought the radio
++    // up). Now the target row is a real scan list, and the chosen target gets a
++    // confirmation screen, so a tap always produces visible feedback.
 +    if (portalNaptIsRunning()) {
-+        int choice = -1;
++        int running = -1;
 +        {
-+        std::vector<Option> opts = {
-+                {"Stop Evil Twin Route", [&]() { choice = 0; }},
-+                {"View Portal creds", [&]() { choice = 1; }},
-+                {"Back", [&]() { choice = -1; }},
++            std::vector<Option> opts = {
++                {"Stop Evil Twin Route", [&]() { running = 0; }},
++                {"View Portal creds", [&]() { running = 1; }},
++                {"Back", [&]() { running = -1; }},
 +            };
 +            loopOptions(opts, MENU_TYPE_SUBMENU, "Evil Twin Route [ON]");
-+    }
-+        if (choice == 0) { portalNaptStop(); displayInfo("Evil Twin stopped", true); return; }
-+        if (choice == 1) {
-+            // Show captured creds file if exists
-+            if (LittleFS.exists("/BruceEvilCreds/default_creds.csv")) loopSD(LittleFS, false, "*", "/BruceEvilCreds");
++        }
++        if (running == 0) { portalNaptStop(); displayInfo("Evil Twin stopped", true); return; }
++        if (running == 1) {
++            if (LittleFS.exists("/BruceEvilCreds/default_creds.csv"))
++                loopSD(LittleFS, false, "*", "/BruceEvilCreds");
 +            else displayInfo("No creds yet", true);
 +            return;
 +        }
 +        return;
 +    }
-+    // Need target - scan or manual
-+    String targetSsid;
-+    uint8_t targetCh = 6;
-+    // Try to get target from recent scan via chain target picker, else ask user
++
 +    ChainTarget picked;
-+    int bestCh=0;
-+    String pickErr;
-+    bool hasPick=false;
-+    if (pickReconTarget(picked, bestCh, pickErr)) {
-+        hasPick=true;
-+        targetSsid = String(picked.ssid);
-+        targetCh = picked.channel;
-+    }
-+    int choice=-1;
-+    {
-+        std::vector<Option> opts = {
-+            {hasPick ? (String("Target: ") + targetSsid + " CH" + String(targetCh) + " (from scan)")
-+                     : String("Target: none yet"), [&]() { choice = 0; }},
-+            {"Enter SSID manually", [&]() { choice=1; }},
-+            {"Start Deauth+Clone+Verify+Route", [&]() { choice=2; }},
-+            {"Back", [&]() { choice=-1; }},
-+        };
-+        loopOptions(opts, MENU_TYPE_SUBMENU, "Deauth+Clone+Verify+Route");
-+    }
-+    if (choice==0 && hasPick) {
-+        displayInfo(String(targetSsid)+" CH"+String(targetCh)+"\nTap Start to begin", true);
-+        return;
-+    }
-+    if (choice==1) {
-+        if (!askEvilTwinTarget(targetSsid, targetCh)) return;
-+        picked = ChainTarget();
-+        strncpy(picked.ssid, targetSsid.c_str(), sizeof(picked.ssid) - 1);
-+        picked.channel = targetCh;
-+        hasPick = true;
-+        choice = 2; // go straight to start with the target just entered
-+    }
-+    if (choice!=2) return;
-+    if (!hasPick) {
-+        // Never dead-end: ask right here instead of bouncing back silently.
-+        if (!askEvilTwinTarget(targetSsid, targetCh)) {
-+            explainNoTarget("target");
++    bool hasPick = false;
++    std::vector<ChainTarget> targets;
++    bool scanned = false;
++    String scanErr;
++    bool go = false;
++
++    while (!go) {
++        if (!hasPick) {
++            // --- 1) pick a target -------------------------------------------
++            if (!scanned) {
++                scanned = scanEvilTwinTargets(targets, scanErr);
++                if (!scanned) {
++                    // The Analyzer snapshot still knows hidden APs a scan cannot name.
++                    ChainTarget hid;
++                    int bestCh = 0;
++                    String analyzerErr;
++                    if (pickReconTarget(hid, bestCh, analyzerErr)) {
++                        targets.clear();
++                        targets.push_back(hid);
++                        scanned = true;
++                    }
++                }
++            }
++            // Explicit row codes: "Rescan" must rescan, not look like a failed scan.
++            int pickIdx = -1;
++            bool wantRescan = false;
++            bool wantManual = false;
++            {
++                std::vector<Option> opts;
++                opts.reserve(targets.size() + 4);
++                for (size_t i = 0; i < targets.size(); i++) {
++                    const ChainTarget &t = targets[i];
++                    String lbl = String(t.ssid).substring(0, 12) + " ch" + String(t.channel) + " " +
++                                 String(t.rssi) + "dB";
++                    opts.push_back({lbl, [&, i]() { pickIdx = (int)i; }});
++                }
++                if (!scanned) {
++                    // Informational row: the reason the list is empty.
++                    opts.push_back({String("Scan: ") + scanErr.substring(0, 22), []() {}});
++                }
++                opts.push_back({"Rescan", [&]() { wantRescan = true; }});
++                opts.push_back({"Enter SSID manually", [&]() { wantManual = true; }});
++                opts.push_back({"Back", []() {}});
++                loopOptions(opts, MENU_TYPE_SUBMENU, "1/2 Pick target");
++            }
++            if (wantRescan) {
++                scanned = false;
++                targets.clear();
++                continue;
++            }
++            if (wantManual) {
++                String ssid;
++                uint8_t ch = 6;
++                if (!askEvilTwinTarget(ssid, ch)) {
++                    displayInfo("Cancelled", true);
++                    continue;
++                }
++                picked = ChainTarget();
++                strncpy(picked.ssid, ssid.c_str(), sizeof(picked.ssid) - 1);
++                picked.channel = ch;
++                hasPick = true;
++                continue;
++            }
++            if (pickIdx >= 0 && pickIdx < (int)targets.size()) {
++                picked = targets[pickIdx];
++                hasPick = true;
++                continue;
++            }
++            // Back/Esc with nothing picked: leave, but say why if the scan was empty.
++            if (!hasPick && !scanned) displayWarning(noTargetHint(scanErr), true);
 +            return;
 +        }
-+        picked = ChainTarget();
-+        strncpy(picked.ssid, targetSsid.c_str(), sizeof(picked.ssid) - 1);
-+        picked.channel = targetCh;
-+        hasPick = true;
++
++        // --- 2) confirm before the radio starts -------------------------------
++        int confirm = -1;
++        {
++            String want = String("Start: ") + picked.ssid + "  CH" + String(picked.channel);
++            std::vector<Option> opts = {
++                {want, [&]() { confirm = 1; }},
++                {"Change target", [&]() { confirm = 0; }},
++                {"Back", [&]() { confirm = -1; }},
++            };
++            loopOptions(opts, MENU_TYPE_SUBMENU, "2/2 Confirm");
++        }
++        if (confirm == 0) {
++            hasPick = false;
++            scanned = false;
++            targets.clear();
++            continue;
++        }
++        if (confirm != 1) return;
++        go = true;
 +    }
-+    // Need uplink - try to use saved wifi or ask user to have connected once
-+    String uplinkSsid, uplinkPwd;
-+    // We will use portalNaptStartEvilTwin which handles fallback to verified creds
-+    // For now use same targetSsid as AP clone, and uplink will be filled after verify
++
++    String targetSsid = String(picked.ssid);
++    uint8_t targetCh = picked.channel;
 +    String err;
 +    // Deauth ON, verify ON, clone on the *target* channel, route in place.
 +    // The target BSSID + channel are forwarded so the clone beacons exactly
 +    // where the victim expects its network and verification never re-tunes the
 +    // SoftAP (the old path did, which dropped every attached client).
-+    bool ok = portalNaptStartEvilTwinEx(targetSsid, targetCh, hasPick ? picked.bssid : nullptr, true, true, &err);
-+    if (!ok) { displayError(String("Start failed: ")+err, true); chainLog("evil-twin-route","start",false,err); return; }
++    bool ok = portalNaptStartEvilTwinEx(targetSsid, targetCh, picked.bssid, true, true, &err);
++    if (!ok) {
++        displayError(String("Start failed: ") + err + "\n(" + targetSsid + " CH" + String(targetCh) + ")", true);
++        chainLog("evil-twin-route", "start", false, err);
++        return;
++    }
 +    markActive(CHAIN_EVIL_TWIN);
-+    chainLog("evil-twin-route","start",true,targetSsid+" CH"+String(targetCh)+" deauth+clone+verify+route");
-+    displaySuccess(String("Running: ")+targetSsid+" CH"+String(targetCh)+
-+                   "\nDeauth is a short kick window.\nVictim joins clone -> key checked -> auto Route (no drop)", true);
++    chainLog("evil-twin-route", "start", true, targetSsid + " CH" + String(targetCh) + " deauth+clone+verify+route");
++    displaySuccess(
++        String("Running: ") + targetSsid + " CH" + String(targetCh) +
++            "\nShort deauth kick -> clone -> key check\n-> auto Route (no drop)",
++        true
++    );
 +}
 +
 +static void usbVerifyMenu() {
@@ -30801,6 +30931,10 @@ index 00000000..32b64cf0
 +// ---------------------------------------------------------------------------
 +// Public API
 +// ---------------------------------------------------------------------------
++
++bool isChainRadioActive() {
++    return s_activeChain != CHAIN_NONE || portalNaptIsRunning() || naptIsRunning();
++}
 +
 +void chainWatcherEnsure() {
 +    if (s_watcherTask) return;
@@ -31059,14 +31193,15 @@ index 00000000..32b64cf0
 +String chainGetStateJson() { return "{}"; }
 +String chainListJson() { return "{}"; }
 +void chainWatcherEnsure() {}
++bool isChainRadioActive() { return false; }
 +
 +#endif
 diff --git a/src/modules/wifi/chain_orchestrator.h b/src/modules/wifi/chain_orchestrator.h
 new file mode 100644
-index 00000000..cdfa3faa
+index 00000000..e2e699e8
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.h
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,40 @@
 +#ifndef __CHAIN_ORCHESTRATOR_H__
 +#define __CHAIN_ORCHESTRATOR_H__
 +
@@ -31096,6 +31231,11 @@ index 00000000..cdfa3faa
 +bool chainIsRunning(const String &id);
 +String chainGetStateJson();
 +String chainListJson();
++
++// True while any chain owns the radio/AP (Evil Twin clone, Portal->NAPT, NAPT).
++// The WiFi menu uses this so a running chain does not have to masquerade as
++// "WiFi: off" just because neither STA nor the default AP is up.
++bool isChainRadioActive();
 +
 +// Start the auto-arm watcher (NAPT/Portal/Guard -> LAN tools) if any chain
 +// auto flag is enabled. Safe to call repeatedly; runs once per boot.
@@ -37235,10 +37375,10 @@ index 00000000..021ceb4c
 +#endif
 diff --git a/src/modules/wifi/portal_napt.cpp b/src/modules/wifi/portal_napt.cpp
 new file mode 100644
-index 00000000..e8301288
+index 00000000..e6864c37
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.cpp
-@@ -0,0 +1,692 @@
+@@ -0,0 +1,690 @@
 +#include "portal_napt.h"
 +#if !defined(LITE_VERSION)
 +
@@ -37791,11 +37931,9 @@ index 00000000..e8301288
 +        memcpy(s_cloneBssid, targetBssid, 6);
 +        s_haveCloneBssid = true;
 +    }
-+    // Cloning on a different channel than the target is the #1 cause of "the
-+    // victim sees two networks and joins the wrong one"; warn loudly.
-+    if (!evilTwinCloneChannelMatchesTarget(s_apChannel, s_targetCh)) {
-+        setErr("Clone channel differs from target channel");
-+    }
++    // The clone is started *on* the target channel below, so comparing against the
++    // previous run's s_apChannel only produced a false "channels differ" error on
++    // every start (and that error is what the menu showed the user).
 +    return startEngineEx(targetSsid, s_targetCh, deauth, verify, targetSsid, "", true, errOut);
 +}
 +

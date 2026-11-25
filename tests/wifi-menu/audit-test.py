@@ -101,6 +101,12 @@ expected = ["WiFi Tools", "Survey & Analyze", "Defense", "LAN & HTTP", "Remote A
 # Turning the radio off must be one tap from the top level, not a nested entry.
 assert "Turn Off WiFi" in top, "WiFi off should be reachable from the top level"
 assert top.count('"Turn Off WiFi"') == 1
+# A running chain owns the radio: the header must not say "WiFi: off" and the way
+# back into that chain must be one tap.
+assert "isChainRadioActive()" in code, "the WiFi header must know a chain owns the radio"
+assert '"WiFi: chain running"' in code
+assert '"Chain: running (open)"' in top
+assert 'chain_orchestrator.h' in code
 for label in expected:
     assert label in top, f"missing top-level group {label}"
 assert "addOptionToMainMenu()" in top

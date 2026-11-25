@@ -225,12 +225,39 @@ assert "options.clear()" not in chains, "chain menus must not clear the shared g
 assert "loopOptions(options" not in chains, "chain menus must pass their own vector"
 assert chains.count("std::vector<Option> opts") >= 8, "every chain submenu needs a local vector"
 # A tap must never dead-end silently.
-assert "static void explainNoTarget" in chains, "a tap with no target must explain itself"
+assert "static String noTargetHint" in chains, "a tap with no target must explain itself"
 assert "static bool askEvilTwinTarget" in chains, "the evil-twin entry must be able to ask for a target"
 assert "(need target)" not in chains, "stale dead-end label"
 route_menu = body(chains, "static void evilTwinRouteMenu")
-assert "askEvilTwinTarget(targetSsid" in route_menu, "evil-twin route must ask for a target in place"
-assert "explainNoTarget(" in route_menu, "evil-twin route must explain a missing target"
+assert "askEvilTwinTarget(" in route_menu, "evil-twin route must ask for a target in place"
+assert "noTargetHint(" in route_menu, "evil-twin route must explain a missing target"
+
+# Tapping the target row used to run an empty callback and return: on the device
+# that is "select target does nothing" followed by a jump back to WiFi (which
+# shows "WiFi: off"). The picker must come from a live scan and every row must
+# actually select something.
+assert "static bool scanEvilTwinTargets" in chains, "the target list must come from a Wi-Fi scan"
+scan_fn = body(chains, "static bool scanEvilTwinTargets")
+assert "WiFi.scanNetworks(" in scan_fn, "target list must be a real scan"
+assert "cleanlyStopWebUiForWiFiFeature()" in scan_fn, "scan must release the WebUI radio first"
+assert "displayTextLine(" in scan_fn, "scan must show progress, not look frozen"
+for dead in ("Target: none yet", "Tap Start to begin"):
+    assert dead not in route_menu, f"dead-end row still present: {dead}"
+assert '"1/2 Pick target"' in route_menu and '"2/2 Confirm"' in route_menu, \
+    "picking a target must have its own screen and a confirmation step"
+# Every row of the picker must do something when tapped.
+picker = region(route_menu, '"1/2 Pick target"', '"2/2 Confirm"')
+assert "picked = targets[pickIdx];" in picker and "hasPick = true;" in picker, \
+    "tapping a scanned AP must select it"
+# "Rescan" must actually rescan instead of falling into the empty-selection exit.
+assert "wantRescan" in picker and "scanned = false;" in picker, "Rescan must re-run the scan"
+assert "wantManual" in picker, "manual entry must be reachable from the picker"
+
+# The stale "clone channel differs" error fired on every start (it compared the
+# new target channel against the previous run's AP channel) and was what the
+# start-failure popup showed.
+assert "setErr(\"Clone channel differs from target channel\");" not in portal_napt, \
+    "stale channel mismatch error removed from the start path"
 
 
 # ------------------------------------------------------------ menu dispatch
