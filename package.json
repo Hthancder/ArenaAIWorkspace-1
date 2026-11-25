@@ -1,0 +1,23 @@
+{
+  "name": "survev-duality-reborn",
+  "version": "0.5.0-preview.8",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "pretest": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm test && node --check userscripts/duality-reborn.user.js",
+    "check:upstream": "node scripts/check-upstream.mjs",
+    "benchmark:aim": "node scripts/benchmark-aim.mjs"
+  },
+  "dependencies": {
+    "acorn": "8.15.0"
+  },
+  "devDependencies": {
+    "@pixi/display": "7.4.3",
+    "@pixi/text": "7.4.3",
+    "esbuild": "0.25.12",
+    "jsdom": "26.1.0"
+  }
+}
