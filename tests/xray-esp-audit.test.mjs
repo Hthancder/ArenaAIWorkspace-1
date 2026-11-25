@@ -112,3 +112,33 @@ test('ESP default range is the slider maximum, so distant replicated players are
   const legacyFallback = buildEspFrame(mapping, [self, far], { esp: true, espShowEnemies: true, espMaxDistance: undefined }, 800, 600);
   assert.equal(legacyFallback.stats.culled, 0, 'missing espMaxDistance falls back to the slider maximum, not the old 200');
 });
+
+test('X-Ray traverses source-shaped pools past 2048, tracks building ceilings and releases recycled objects', () => {
+  const { dom, app, engine, config } = engineFixture();
+  const filler = Array.from({ length: 2050 }, () => ({ active: false, type: 'stone_01', sprite: { alpha: 1 } }));
+  const bush = { active: true, type: 'new_bush', isBush: true, sprite: { alpha: 1 } };
+  const floor = { isCeiling: false, sprite: { visible: true } };
+  const roof = { isCeiling: true, sprite: { visible: true } };
+  const building = { active: true, type: 'house_01', imgs: [floor, roof] };
+  app.game.map = { mapTexture: null, getGroundSurface() {}, m_obstaclePool: { m_pool: [...filler, bush] }, m_buildingPool: { m_pool: [building] } };
+  engine.mapping.map = app.game.map;
+  engine.lastVisual = engine.lastScan = -Infinity; engine.post();
+  assert.equal(bush.sprite.alpha, .5);
+  assert.equal(roof.sprite.visible, false);
+  assert.equal(floor.sprite.visible, true);
+  // Pool reuse between scans must release stale overrides immediately.
+  bush.type = 'stone_01'; bush.isBush = false;
+  building.active = false;
+  engine.lastVisual = -Infinity; engine.post();
+  assert.equal(bush.sprite.alpha, 1);
+  assert.equal(roof.sprite.visible, true);
+  building.active = true;
+  const newRoof = { isCeiling: true, sprite: { visible: true } };
+  building.imgs = [floor, newRoof];
+  engine.lastVisual = engine.lastScan = -Infinity; engine.post();
+  assert.equal(newRoof.sprite.visible, false);
+  config.xray = false;
+  engine.lastVisual = -Infinity; engine.post();
+  assert.equal(newRoof.sprite.visible, true);
+  engine.dispose(); dom.window.close();
+});

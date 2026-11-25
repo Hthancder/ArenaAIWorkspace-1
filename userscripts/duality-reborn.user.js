@@ -8264,23 +8264,45 @@ THE SOFTWARE.
     scanEffects() {
       const m = this.mapping, out = [], seen = /* @__PURE__ */ new Set();
       if (!m) return;
-      const roots = [m.map];
       let budget = 12e3;
-      const visit = /* @__PURE__ */ __name((o, depth) => {
+      const visit = /* @__PURE__ */ __name((o, depth, building = null) => {
         if (!object(o) || depth < 0 || seen.has(o) || --budget < 0) return;
         seen.add(o);
-        const sprite = read(o, "sprite");
-        const kind = fadeObjectKind(read(o, "type"), this.mapDefinitions);
-        if (sprite && kind) out.push({ owner: sprite, kind, entity: o });
-        if (read(o, "isCeiling") === true && sprite) out.push({ owner: sprite, kind: "ceiling", entity: o });
+        const sprite = read(o, "sprite"), type = read(o, "type");
+        const kind = fadeObjectKind(type, this.mapDefinitions) || (read(o, "isBush") === true ? "vegetation" : null);
+        if (sprite && kind) out.push({ owner: sprite, kind, entity: o, type });
+        if (read(o, "isCeiling") === true && sprite) out.push({ owner: sprite, kind: "ceiling", entity: o, building });
+        const imgs = read(o, "imgs");
+        if (Array.isArray(imgs)) {
+          for (const img of imgs) {
+            if (budget <= 0) break;
+            visit(img, depth - 1, o);
+          }
+          return;
+        }
+        if (sprite) return;
+        const parent = building;
         for (const [k, v] of entries(o)) {
           if (["parent", "children", "container", "sprite", "texture", "_texture", "game", "renderer"].includes(k)) continue;
           if (Array.isArray(v)) {
-            for (const child of v.slice(0, 2048)) visit(child, depth - 1);
-          } else if (depth > 0 && object(v)) visit(v, depth - 1);
+            for (const child of v) {
+              if (budget <= 0) break;
+              visit(child, depth - 1, parent);
+            }
+          } else if (depth > 0 && object(v)) visit(v, depth - 1, parent);
         }
       }, "visit");
-      roots.forEach((root) => visit(root, 4));
+      for (const [, pool] of entries(m.map)) {
+        for (const [, values] of entries(pool)) {
+          if (Array.isArray(values) && values.some((v) => object(v) && typeof read(v, "active") === "boolean" && (object(read(v, "sprite")) || Array.isArray(read(v, "imgs"))))) {
+            for (const value of values) {
+              if (budget <= 0) break;
+              if (read(value, "active") !== false) visit(value, 2);
+            }
+          }
+        }
+      }
+      visit(m.map, 4);
       this.effects = out;
     }
     post() {
@@ -8320,15 +8342,15 @@ THE SOFTWARE.
         this.lastScan = now;
       }
       for (const effect of cfg.xray ? this.effects : []) {
-        const { owner, kind, entity } = effect;
-        if (read(entity, "active") === false || owner.destroyed) continue;
-        if (kind === "ceiling" && cfg.ceilings && read(entity, "isCeiling") === true) {
+        const { owner, kind, entity, building, type } = effect;
+        if (read(entity, "active") === false || read(building, "active") === false || owner.destroyed || read(entity, "sprite") !== owner) continue;
+        if (kind === "ceiling" && cfg.ceilings && read(entity, "isCeiling") === true && (!building || read(building, "imgs")?.includes(entity))) {
           if (this.overrides.set(owner, "visible", () => false)) {
             want(owner, "visible");
             this.stats.xray.ceilings++;
           }
         }
-        if (kind === "vegetation" || kind === "furniture") {
+        if ((kind === "vegetation" || kind === "furniture") && read(entity, "type") === type) {
           if (this.overrides.set(owner, "alpha", (raw) => Math.min(raw, cfg.treeOpacity / 100))) {
             want(owner, "alpha");
             this.stats.xray.vegetation++;

@@ -532,22 +532,40 @@ export class Features {
     const m = this.mapping, out = [], seen = new Set();
     if (!m) return;
     // Bounded shallow traversal of known map/barn owners, not arbitrary window/DOM graphs.
-    const roots = [m.map];
     let budget = 12000;
-    const visit = (o, depth) => {
+    const visit = (o, depth, building = null) => {
       if (!object(o) || depth < 0 || seen.has(o) || --budget < 0) return;
       seen.add(o);
-      const sprite = read(o, 'sprite');
-      const kind = fadeObjectKind(read(o, 'type'), this.mapDefinitions);
-      if (sprite && kind) out.push({ owner: sprite, kind, entity: o });
-      if (read(o, 'isCeiling') === true && sprite) out.push({ owner: sprite, kind: 'ceiling', entity: o });
+      const sprite = read(o, 'sprite'), type = read(o, 'type');
+      const kind = fadeObjectKind(type, this.mapDefinitions) || (read(o, 'isBush') === true ? 'vegetation' : null);
+      if (sprite && kind) out.push({ owner: sprite, kind, entity: o, type });
+      if (read(o, 'isCeiling') === true && sprite) out.push({ owner: sprite, kind: 'ceiling', entity: o, building });
+      // Building.imgs entries have no active flag; their owning pooled building does.
+      const imgs = read(o, 'imgs');
+      if (Array.isArray(imgs)) {
+        for (const img of imgs) { if (budget <= 0) break; visit(img, depth - 1, o); }
+        return;
+      }
+      // Pooled obstacles and building image records are leaves for this feature.
+      if (sprite) return;
+      const parent = building;
       for (const [k, v] of entries(o)) {
         if (['parent', 'children', 'container', 'sprite', 'texture', '_texture', 'game', 'renderer'].includes(k)) continue;
-        if (Array.isArray(v)) { for (const child of v.slice(0, 2048)) visit(child, depth - 1); }
-        else if (depth > 0 && object(v)) visit(v, depth - 1);
+        if (Array.isArray(v)) { for (const child of v) { if (budget <= 0) break; visit(child, depth - 1, parent); } }
+        else if (depth > 0 && object(v)) visit(v, depth - 1, parent);
       }
     };
-    roots.forEach(root => visit(root, 4));
+    // The current client stores obstacles and buildings in map pool arrays.
+    // Traverse those first so unrelated map metadata cannot consume the budget,
+    // and don't silently discard entries after index 2048.
+    for (const [, pool] of entries(m.map)) {
+      for (const [, values] of entries(pool)) {
+        if (Array.isArray(values) && values.some(v => object(v) && typeof read(v, 'active') === 'boolean' && (object(read(v, 'sprite')) || Array.isArray(read(v, 'imgs'))))) {
+          for (const value of values) { if (budget <= 0) break; if (read(value, 'active') !== false) visit(value, 2); }
+        }
+      }
+    }
+    visit(m.map, 4);
     this.effects = out;
   }
   post() {
@@ -573,10 +591,10 @@ export class Features {
     const want = (owner, key) => { if (!keep.has(owner)) keep.set(owner, new Set()); keep.get(owner).add(key); };
     if (cfg.xray && now - this.lastScan > 500) { this.scanEffects(); this.lastScan = now; }
     for (const effect of cfg.xray ? this.effects : []) {
-      const { owner, kind, entity } = effect;
-      if (read(entity, 'active') === false || owner.destroyed) continue;
-      if (kind === 'ceiling' && cfg.ceilings && read(entity, 'isCeiling') === true) { if (this.overrides.set(owner, 'visible', () => false)) { want(owner, 'visible'); this.stats.xray.ceilings++; } }
-      if (kind === 'vegetation' || kind === 'furniture') { if (this.overrides.set(owner, 'alpha', raw => Math.min(raw, cfg.treeOpacity / 100))) { want(owner, 'alpha'); this.stats.xray.vegetation++; } }
+      const { owner, kind, entity, building, type } = effect;
+      if (read(entity, 'active') === false || read(building, 'active') === false || owner.destroyed || read(entity, 'sprite') !== owner) continue;
+      if (kind === 'ceiling' && cfg.ceilings && read(entity, 'isCeiling') === true && (!building || read(building, 'imgs')?.includes(entity))) { if (this.overrides.set(owner, 'visible', () => false)) { want(owner, 'visible'); this.stats.xray.ceilings++; } }
+      if ((kind === 'vegetation' || kind === 'furniture') && read(entity, 'type') === type) { if (this.overrides.set(owner, 'alpha', raw => Math.min(raw, cfg.treeOpacity / 100))) { want(owner, 'alpha'); this.stats.xray.vegetation++; } }
     }
     if (cfg.xray) {
       const smoke = smokeParticles(this.smokeSources), stats = this.stats.xray;

@@ -66,7 +66,7 @@ Bản `0.5.0-preview.2` sửa những đường lỗi đã tái hiện: schedule
 | Layer Spoofer | Local render preview; gameplay aim/wallcheck/loot dùng layer chưa override |
 | ESP / X-Ray / Zoom / Map | Overrides riêng; đổi setting không clear toàn bộ; Canvas lỗi không gỡ names/zoom hoặc chặn input |
 
-X-Ray giữ smoke alpha legacy (`50 → 0.05` mỗi particle), darker smoke/ceiling/vegetation; vegetation/bàn/cầu thang phân loại theo def latest (`isBush`/`isTree`, gồm `brush_*`), fallback regex khi registry không capture được. Map Highlights clone native minimap shapes. Flashlights/bullet/throw/grenade previews chỉ là ước lượng, không phải collision/hit/fuse guarantee. Zoom bounded 1–3×. Full feature set trước đó vẫn có implementation; xem [lịch sử 0.4.0](docs/reborn-0.4.0.vi.md).
+X-Ray giữ smoke alpha legacy (`50 → 0.05` mỗi particle), darker smoke/ceiling/vegetation; vegetation/bàn/cầu thang phân loại theo def latest (`isBush`/`isTree`, gồm `brush_*`), fallback regex khi registry không capture được. Bản sửa quét pool và xử lý object tái sử dụng được mô tả tại [X-Ray pool hotfix](docs/xray-pool-hotfix.vi.md); chưa xác nhận live. Map Highlights clone native minimap shapes. Flashlights/bullet/throw/grenade previews chỉ là ước lượng, không phải collision/hit/fuse guarantee. Zoom bounded 1–3×. Full feature set trước đó vẫn có implementation; xem [lịch sử 0.4.0](docs/reborn-0.4.0.vi.md).
 
 ## Bằng chứng và giới hạn
 
