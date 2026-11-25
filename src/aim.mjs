@@ -56,7 +56,9 @@ export function boundedOscillation(track, radius) {
   const margin = .06;
   if (last.p.x < prevMinX - margin || last.p.x > prevMaxX + margin || last.p.y < prevMinY - margin || last.p.y > prevMaxY + margin) return null;
   const dx = maxX - minX, dy = maxY - minY, diameter = Math.hypot(dx, dy);
-  if (diameter < .2 || diameter > Math.min(2.5 * radius, 2)) return null;
+  // A wider bounded strafe can still favor its midpoint; cap it by hitbox
+  // size and world distance. Beyond one diameter the midpoint may still miss.
+  if (diameter < .2 || diameter > Math.min(3.5 * radius, 3.5)) return null;
   const axis = dx >= dy ? 'x' : 'y';
   let sign = 0, turns = 0;
   for (let i = 1; i < samples.length; i++) {

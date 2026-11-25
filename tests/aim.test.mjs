@@ -248,7 +248,7 @@ test('fast bounded strafes tolerate speed but not region departures or excessive
   const track = tracker.estimate(entity, 20 * 33);
   const opts = { origin: { x: 0, y: 0 }, target: track.pos, track, profile, radius: .75, stabilize: true };
   assert.equal(predictShot(opts).state, 'bounded-oscillation');
-  assert.notEqual(predictShot({ ...opts, radius: .4 }).state, 'bounded-oscillation');
+  assert.notEqual(predictShot({ ...opts, radius: .3 }).state, 'bounded-oscillation');
   assert.notEqual(predictShot({ ...opts, stabilize: false }).state, 'bounded-oscillation');
   tracker.observe(entity, { x: 50, y: 1.4 }, 21 * 33);
   const departure = tracker.estimate(entity, 21 * 33);
@@ -278,4 +278,19 @@ test('Lock linear snapshot compensation is bounded, history-gated and opt-in', (
   assert.deepEqual(predictShot({ ...opts, compensateSnapshot: true, track: { ...track, motion } }), predictShot({ ...opts, track: { ...track, motion } }));
   const gap = track.motion.filter((_, i) => i < 10 || i > 14);
   assert.deepEqual(predictShot({ ...opts, compensateSnapshot: true, track: { ...track, motion: gap } }), predictShot({ ...opts, track: { ...track, motion: gap } }));
+});
+
+test('wider repeated A-D aims at the middle only while bounded; escape and Assist remain separate', () => {
+  const tracker = new SnapshotTracker(), entity = { __id: 152 };
+  const ys = [0,.4,.8,1.2,1.6,2,2.4,2.8,3,2.6,2.2,1.8,1.4,1,.6,.2,0,.4,.8,1.2,1.6,2,2.4,2.8,3,2.6,2.2,1.8];
+  ys.forEach((y, i) => tracker.observe(entity, { x: 50, y }, i * 33));
+  const track = tracker.estimate(entity, (ys.length - 1) * 33);
+  const opts = { origin: { x: 0, y: 0 }, target: track.pos, track, profile, radius: 1 };
+  const shot = predictShot({ ...opts, stabilize: true });
+  assert.equal(shot.state, 'bounded-oscillation'); assert.ok(Math.abs(shot.world.y - 1.5) < .01);
+  assert.notEqual(predictShot({ ...opts, stabilize: false }).state, 'bounded-oscillation');
+  assert.notEqual(predictShot({ ...opts, radius: .75, stabilize: true }).state, 'bounded-oscillation');
+  tracker.observe(entity, { x: 50, y: 3.2 }, ys.length * 33);
+  const escape = tracker.estimate(entity, ys.length * 33);
+  assert.notEqual(predictShot({ ...opts, target: escape.pos, track: escape, stabilize: true }).state, 'bounded-oscillation');
 });

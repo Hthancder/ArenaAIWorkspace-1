@@ -6931,7 +6931,7 @@ THE SOFTWARE.
     const margin = 0.06;
     if (last.p.x < prevMinX - margin || last.p.x > prevMaxX + margin || last.p.y < prevMinY - margin || last.p.y > prevMaxY + margin) return null;
     const dx = maxX - minX, dy = maxY - minY, diameter = Math.hypot(dx, dy);
-    if (diameter < 0.2 || diameter > Math.min(2.5 * radius, 2)) return null;
+    if (diameter < 0.2 || diameter > Math.min(3.5 * radius, 3.5)) return null;
     const axis = dx >= dy ? "x" : "y";
     let sign = 0, turns = 0;
     for (let i = 1; i < samples.length; i++) {

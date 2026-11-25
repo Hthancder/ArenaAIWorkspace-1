@@ -1,6 +1,6 @@
 # Ổn định A–D và hitbox nhỏ
 
-Lock + Auto prediction có tùy chọn **Ổn định dao động A–D (Lock)**, mặc định bật; có thể tắt khi không phù hợp. Assist không dùng cơ chế này. Bộ dự đoán chỉ giả định mục tiêu dao động quanh giữa vùng sau ít nhất 550 ms lịch sử hợp lệ, hai lần đổi chiều và đường kính không quá `min(2.5 × bán kính, 2)` world unit. Không còn loại giả thuyết chỉ vì vận tốc tức thời lớn: A–D nhanh cũng có thể là dao động. Nếu điểm mới vượt vùng quan sát trước hơn 0.06 wu trên một trục, giả thuyết bị bỏ ngay ở snapshot đó; khoảng trống >150 ms, dữ liệu cũ hay vùng quá rộng cũng vô hiệu hóa nó. Trước khi có snapshot vượt vùng, không thể biết đối phương đã quyết định chạy; nhiễu hoặc vùng đang trôi vẫn có thể gây kích hoạt sai. Tắt tùy chọn nếu thấy bám chậm khi mục tiêu thoát.
+Lock + Auto prediction có tùy chọn **Ổn định dao động A–D (Lock)**, mặc định bật; có thể tắt khi không phù hợp. Assist không dùng cơ chế này. Bộ dự đoán chỉ giả định mục tiêu dao động quanh giữa vùng sau ít nhất 550 ms lịch sử hợp lệ, hai lần đổi chiều và đường kính không quá `min(3.5 × bán kính, 3.5)` world unit (thay đổi mới và đánh đổi được đo trong `aim-giua-vung-ad.vi.md`). Không còn loại giả thuyết chỉ vì vận tốc tức thời lớn: A–D nhanh cũng có thể là dao động. Nếu điểm mới vượt vùng quan sát trước hơn 0.06 wu trên một trục, giả thuyết bị bỏ ngay ở snapshot đó; khoảng trống >150 ms, dữ liệu cũ hay vùng quá rộng cũng vô hiệu hóa nó. Trước khi có snapshot vượt vùng, không thể biết đối phương đã quyết định chạy; nhiễu hoặc vùng đang trôi vẫn có thể gây kích hoạt sai. Tắt tùy chọn nếu thấy bám chậm khi mục tiêu thoát.
 
 ## Đối chiếu nguồn
 
@@ -9,6 +9,8 @@ Survev `08346fb6ea74c5a8b961a153d2d7d0411e31c8ff`: `server/src/game/objects/play
 ## Benchmark tổng hợp (không phải hit rate)
 
 Chạy `node scripts/benchmark-micro-strafe.mjs`. Snapshot giả lập 33 Hz, lượng tử hóa vị trí 16 bit trên 1024 wu, trễ 35 ms, trường hợp có jitter và gap, render 30/60/144 Hz, 3 seed và tốc độ đạn 66/100/182; mục tiêu chạy hình tam giác tốc độ 12 wu/s, có kịch bản thoát theo hai hướng và trôi chậm. Mỗi hàng 37.620 phép tính. Thước đo là khoảng cách vuông góc từ tia ngắm dự đoán đến tâm tương lai giả lập, không mô phỏng toàn bộ đường đạn, va chạm, spread, vật cản, bắn thật hay hành vi người chơi. So sánh cùng seed đã dùng để thiết kế, không phải tập kiểm định độc lập.
+
+Các con số dưới đây là phép so sánh lịch sử của lần triển khai trước, không phải bảng so sánh cho giới hạn 3.5 mới.
 
 | Kịch bản | Trung vị trước → sau (wu) | p95 trước → sau (wu) | Ngoài bán kính trước → sau |
 |---|---:|---:|---:|

@@ -1,5 +1,5 @@
 // Synthetic A/D movement and abrupt departure. Development-only, not live hit rate.
-import { SnapshotTracker, predictShot } from '../src/aim.mjs';
+import { AimController, SnapshotTracker, predictShot } from '../src/aim.mjs';
 const q = (xs, f) => [...xs].sort((a, b) => a - b)[Math.floor((xs.length - 1) * f)];
 const quant = n => Math.round(n * 65535 / 1024) * 1024 / 65535;
 const rng = seed => () => { seed = (1664525 * seed + 1013904223) >>> 0; return seed / 2 ** 32; };
@@ -27,20 +27,24 @@ function run({ width, radius, escape, cadence, hz, seed, speed, drift = 0 }) {
     const p = truth(t);
     packets.push({ t: Math.max(t + delay, (packets.at(-1)?.t || 0) + .0001), p: { x: quant(p.x), y: quant(p.y) } });
   }
-  const tracker = new SnapshotTracker(), entity = { __id: 1 }, origin = { x: 0, y: 0 };
-  const profile = { speed, range: 1000, barrel: 0, offset: 0 }, errors = [], misses = []; let i = 0, current = packets[0].p, stable = 0, rejected = 0, total = 0;
+  const tracker = new SnapshotTracker(), controller = new AimController(), entity = { __id: 1 }, origin = { x: 0, y: 0 };
+  const profile = { speed, range: 1000, barrel: 0, offset: 0 }, errors = [], misses = [], departureErrors = []; let i = 0, current = packets[0].p, stable = 0, rejected = 0, total = 0;
   for (let now = .07; now < 9; now += 1 / hz) {
     while (i < packets.length && packets[i].t <= now) { const p = packets[i++]; current = p.p; tracker.observe(entity, current, p.t * 1000); }
     const track = tracker.estimate(entity, now * 1000);
     const shot = predictShot({ origin, target: current, track, profile, radius, latency: .035, stabilize: true, compensateSnapshot: true });
     const flight = shot.time ?? Math.hypot(current.x, current.y) / speed;
-    const actual = truth(now + .035 + flight), d = shot.dir || { x: current.x / Math.hypot(current.x, current.y), y: current.y / Math.hypot(current.x, current.y) };
+    const actual = truth(now + .035 + flight), direct = { x: current.x / Math.hypot(current.x, current.y), y: current.y / Math.hypot(current.x, current.y) };
+    if (!shot.dir) controller.reset();
+    const d = shot.dir && process.argv.includes('--human') ? controller.step(direct, shot.dir, { mode: 'lock', smooth: 50, humanLike: true, profile: 'responsive', target: entity, now: now * 1000 }) : shot.dir || direct;
     const miss = Math.abs(d.x * actual.y - d.y * actual.x);
     errors.push(miss); misses.push(miss > radius ? 1 : 0); total++;
+    // Separate the decision to depart from the many pre-departure frames.
+    if (escape && now % 3 >= 2.2 && now % 3 < 2.8) departureErrors.push(miss);
     if (shot.state === 'bounded-oscillation') stable++;
     if (!shot.dir) rejected++;
   }
-  return { errors, misses, stable, rejected, total };
+  return { errors, misses, departureErrors, stable, rejected, total };
 }
 
 for (const [name, width, radius, escape, drift = 0] of [
@@ -49,11 +53,14 @@ for (const [name, width, radius, escape, drift = 0] of [
   ['escape-035', .55, .35, 'side'], ['escape-050', .8, .5, 'side'], ['escape-min-source-075', 1.2, .75, 'side'],
   ['escape-inline-035', .55, .35, 'inline'], ['escape-inline-050', .8, .5, 'inline'], ['escape-inline-min-source-075', 1.2, .75, 'inline'],
   ['drift-min-source-075', 1.2, .75, false, .4],
+  ['ad-width-20', 2, 1, false], ['ad-width-30', 3, 1, false], ['ad-width-40', 4, 1, false],
+  ['escape-inline-width-30', 3, 1, 'inline'], ['escape-side-width-30', 3, 1, 'side'],
 ]) {
-  const all = { errors: [], misses: [], stable: 0, rejected: 0, total: 0 };
+  const all = { errors: [], misses: [], departureErrors: [], stable: 0, rejected: 0, total: 0 };
   for (const cadence of ['regular', 'jitter']) for (const hz of [30, 60, 144]) for (const seed of [731, 7283, 51743]) for (const speed of [66, 100, 182]) {
     const r = run({ width, radius, escape, cadence, hz, seed, speed, drift });
-    all.errors.push(...r.errors); all.misses.push(...r.misses); all.stable += r.stable; all.rejected += r.rejected; all.total += r.total;
+    all.errors.push(...r.errors); all.misses.push(...r.misses); all.departureErrors.push(...r.departureErrors); all.stable += r.stable; all.rejected += r.rejected; all.total += r.total;
   }
-  console.log(`${name}\tn=${all.total}\tmedian=${q(all.errors, .5).toFixed(3)}\tp95=${q(all.errors, .95).toFixed(3)}\toutside-radius=${(100 * all.misses.reduce((a, b) => a + b, 0) / all.total).toFixed(2)}%\tstable=${(100 * all.stable / all.total).toFixed(2)}%\tfallback=${(100 * all.rejected / all.total).toFixed(2)}%`);
+  const departure = all.departureErrors.length ? `\tdeparture-n=${all.departureErrors.length}\tdeparture-median=${q(all.departureErrors, .5).toFixed(3)}\tdeparture-p95=${q(all.departureErrors, .95).toFixed(3)}` : '';
+  console.log(`${name}\tn=${all.total}\tmedian=${q(all.errors, .5).toFixed(3)}\tp95=${q(all.errors, .95).toFixed(3)}\toutside-radius=${(100 * all.misses.reduce((a, b) => a + b, 0) / all.total).toFixed(2)}%\tstable=${(100 * all.stable / all.total).toFixed(2)}%\tfallback=${(100 * all.rejected / all.total).toFixed(2)}%${departure}`);
 }
