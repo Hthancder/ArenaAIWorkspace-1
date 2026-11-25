@@ -275,6 +275,31 @@ nạp sai địa chỉ). Thứ tự kiểm tra khi có log serial: (1) banner bo
 - Bản mới từ chối phiên OTA thứ hai đang hoạt động, gắn mã phiên cho các yêu cầu chia khối/hủy/hoàn tất và không cho hai yêu cầu dùng chung bộ đệm đồng thời. Nếu kết nối bị ngắt, có thể thử lại khối; phiên bỏ dở quá 90 giây được thu hồi khi bắt đầu phiên OTA mới. Khi bấm hủy trong lúc khởi tạo, trình duyệt chờ nhận phiên rồi mới gửi hủy; trong bước hoàn tất không thể hủy an toàn.
 - Nếu mất phản hồi khi hoàn tất, chưa thể biết chắc cập nhật đã xong hay chưa: kiểm tra màn hình và kết nối máy trước khi thử lại; không tự rút nguồn. Nếu firmware báo không tạo được tác vụ khởi động lại, hãy khởi động lại thủ công. Kiểm thử máy chủ/màn hình ở đây là mô phỏng; cần xác nhận OTA thực tế, nguồn và màn hình trên thiết bị.
 
+### Vì sao màn hình máy đơ khi bấm Flash OTA (đã tìm ra đúng gốc)
+
+Đây là **lỗi trong code của bản vá này**, không phải lỗi phần cứng hay file `.bin`.
+
+Chuỗi nhân quả, đọc từ dưới lên:
+
+1. Mỗi vòng lặp menu gọi hàm đọc phím `check()` **tới 9 lần** (menu dùng 3 nút: lên/xuống/chọn, mỗi nút phải kiểm tra nhấn, giữ, nhả).
+2. Bản vá cũ chèn một màn hình tiến trình OTA vào chính `check()`.
+3. Hàm đó **ngủ tới 300 ms mỗi lần được gọi**, và **chỉ lần gọi đầu tiên vẽ** — các lần sau chỉ ngủ rồi thoát.
+4. Vậy một vòng menu = 9 × 300 ms = **2,7 giây bị chặn**, trong khi vòng lặp chỉ có 2 giây. Menu không bao giờ kịp vẽ lại, và cú bấm nút phải chờ hết 2,7 giây mới được nhìn tới.
+5. Nó còn bật cờ "cần vẽ lại toàn màn hình" ở **mọi lần gọi**, nên màn hình WebUI info bị vẽ lại liên tục → càng đơ.
+
+Kết quả đúng như bạn thấy: bấm Flash OTA trên trình duyệt là màn hình máy đứng hình, không nút nào ăn, phải giữ nút Boot để tắt.
+
+**Đã sửa:** hàm này giờ chỉ **so sánh trạng thái, không chờ, không ngủ**. Nó vẽ đúng 1 lần khi phần trăm đổi, và chỉ xin vẽ lại màn hình đúng 1 lần khi quá trình kết thúc.
+
+| Trước | Bây giờ |
+| --- | --- |
+| Mỗi lần đọc phím ngủ tới 300 ms | Không chờ một chút nào |
+| 1 vòng menu mất 2,7 giây → đơ | 1 vòng menu giữ nguyên tốc độ bình thường |
+| Bật "vẽ lại toàn màn hình" mỗi lần đọc phím | Chỉ vẽ khi % đổi; chỉ xin vẽ lại 1 lần khi xong |
+| Nút bấm bị nuốt trong lúc chờ | Nút được xử lý ngay như bình thường |
+
+Test hồi quy mới khoá đúng lỗi này: gọi hàm 9 lần liên tiếp phải **không có lần ngủ nào**, và ảnh chỉ được vẽ **1 lần**; khi quá trình kết thúc, phải xin vẽ lại đúng **1 lần** rồi im.
+
 ### Vì sao trước đây trang đứng ở "Initializing OTA slot..." (đã sửa)
 
 Hiểu đơn giản: trước kia, khi bấm **Upload**, trình duyệt hỏi máy "chuẩn bị chỗ nhớ mới đi", và máy làm **toàn bộ** việc chuẩn bị đó ngay trong lúc đang trả lời câu hỏi. Việc chuẩn bị gồm nâng xung nhịp CPU, tắt chế độ tiết kiệm Wi-Fi và xoá dần vùng nhớ 6 MB. Chừng nào việc đó chưa xong thì câu trả lời chưa được gửi, nên trang không có số % nào để hiện và cũng **không có giới hạn thời gian** — nhìn như treo vĩnh viễn.

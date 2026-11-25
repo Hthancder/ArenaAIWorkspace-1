@@ -1,6 +1,6 @@
 diff --git a/boards/dsolution-183-2mic/NV3023_Panel.h b/boards/dsolution-183-2mic/NV3023_Panel.h
 new file mode 100644
-index 00000000..d021320f
+index 0000000..d021320
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/NV3023_Panel.h
 @@ -0,0 +1,159 @@
@@ -165,7 +165,7 @@ index 00000000..d021320f
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 00000000..0a5308a2
+index 0000000..0a5308a
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
 @@ -0,0 +1,262 @@
@@ -433,7 +433,7 @@ index 00000000..0a5308a2
 +  Concurrent serial/audio tasks are not covered by the host tests; hardware stress testing is required.
 diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 new file mode 100644
-index 00000000..77a421df
+index 0000000..77a421d
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 @@ -0,0 +1,210 @@
@@ -649,7 +649,7 @@ index 00000000..77a421df
 +	https://github.com/lovyan03/LovyanGFX#develop
 diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
 new file mode 100644
-index 00000000..5252cb2e
+index 0000000..5252cb2
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/interface.cpp
 @@ -0,0 +1,661 @@
@@ -1316,7 +1316,7 @@ index 00000000..5252cb2e
 +}
 diff --git a/boards/dsolution-183-2mic/merge_bin.py b/boards/dsolution-183-2mic/merge_bin.py
 new file mode 100644
-index 00000000..372b2f96
+index 0000000..372b2f9
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/merge_bin.py
 @@ -0,0 +1,133 @@
@@ -1455,7 +1455,7 @@ index 00000000..372b2f96
 +env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", merge_bin)
 diff --git a/boards/dsolution-183-2mic/partitions_16Mb_ota.csv b/boards/dsolution-183-2mic/partitions_16Mb_ota.csv
 new file mode 100644
-index 00000000..610fef1b
+index 0000000..610fef1
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/partitions_16Mb_ota.csv
 @@ -0,0 +1,19 @@
@@ -1479,7 +1479,7 @@ index 00000000..610fef1b
 +spiffs,   data, spiffs,   0xC10000, 0x3E0000,
 +coredump, data, coredump, 0xFF0000, 0x10000,
 diff --git a/embedded_resources/web_interface/index.css b/embedded_resources/web_interface/index.css
-index bda7b42a..0bbd995f 100644
+index bda7b42..0bbd995 100644
 --- a/embedded_resources/web_interface/index.css
 +++ b/embedded_resources/web_interface/index.css
 @@ -1,584 +1,761 @@
@@ -2758,7 +2758,7 @@ index bda7b42a..0bbd995f 100644
 +.monitor-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 +#mon-last { font-size:11px; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300b..b27bf10a 100644
+index 5290300..b27bf10 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
 @@ -1,700 +1,1261 @@
@@ -4659,7 +4659,7 @@ index 5290300b..b27bf10a 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..33d5a6bd 100644
+index fd61602..33d5a6b 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -9061,7 +9061,7 @@ index fd616029..33d5a6bd 100644
 +   }
 + })();
 diff --git a/embedded_resources/web_interface/login.html b/embedded_resources/web_interface/login.html
-index f3947c88..c165f33b 100644
+index f3947c8..c165f33 100644
 --- a/embedded_resources/web_interface/login.html
 +++ b/embedded_resources/web_interface/login.html
 @@ -1,43 +1,50 @@
@@ -9155,7 +9155,7 @@ index f3947c88..c165f33b 100644
  </html>
 diff --git a/embedded_resources/web_interface/qr_local.js b/embedded_resources/web_interface/qr_local.js
 new file mode 100644
-index 00000000..212b519d
+index 0000000..212b519
 --- /dev/null
 +++ b/embedded_resources/web_interface/qr_local.js
 @@ -0,0 +1,2310 @@
@@ -11470,7 +11470,7 @@ index 00000000..212b519d
 +    return qrcode;
 +}));
 diff --git a/include/DisplayDrivers_User_Setup.h b/include/DisplayDrivers_User_Setup.h
-index f67b6331..9dd4164c 100644
+index f67b633..9dd4164 100644
 --- a/include/DisplayDrivers_User_Setup.h
 +++ b/include/DisplayDrivers_User_Setup.h
 @@ -26,4 +26,19 @@
@@ -11494,7 +11494,7 @@ index f67b6331..9dd4164c 100644
 +
  #endif // _BRUCE_DISPLAYDRIVERS_USER_SETUP_H
 diff --git a/include/globals.h b/include/globals.h
-index 180e105e..61f922e7 100644
+index 180e105..61f922e 100644
 --- a/include/globals.h
 +++ b/include/globals.h
 @@ -242,7 +242,14 @@ void inputLockInit();
@@ -11513,7 +11513,7 @@ index 180e105e..61f922e7 100644
  #ifdef HAS_ENCODER
      // NextPress/PrevPress here are rotary-encoder-derived, not raw mechanical
 diff --git a/include/tftLogger.h b/include/tftLogger.h
-index ffb96fe4..0ff81d97 100644
+index ffb96fe..0ff81d9 100644
 --- a/include/tftLogger.h
 +++ b/include/tftLogger.h
 @@ -27,22 +27,25 @@ enum tftFuncs : uint8_t { // DO NOT CHANGE THE ORDER, ADD NEW FUNCTIONS TO THE E
@@ -11598,7 +11598,7 @@ index ffb96fe4..0ff81d97 100644
      void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t color);
      void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t color);
 diff --git a/platformio.ini b/platformio.ini
-index d8ec5e0b..d1c5953f 100644
+index d8ec5e0..d1c5953 100644
 --- a/platformio.ini
 +++ b/platformio.ini
 @@ -20,6 +20,7 @@ default_envs =
@@ -11610,7 +11610,7 @@ index d8ec5e0b..d1c5953f 100644
  	; elecrow-28B
  	; elecrow-35B
 diff --git a/src/core/config.cpp b/src/core/config.cpp
-index e7ceca14..3bc596c7 100644
+index e7ceca1..3bc596c 100644
 --- a/src/core/config.cpp
 +++ b/src/core/config.cpp
 @@ -14,6 +14,8 @@ JsonDocument BruceConfig::toJson() const {
@@ -11943,7 +11943,7 @@ index e7ceca14..3bc596c7 100644
      if (!_mifareKeysLoaded) {
          MifareKeysManager::ensureLoaded(mifareKeys);
 diff --git a/src/core/config.h b/src/core/config.h
-index 72d69eba..7fbd4ede 100644
+index 72d69eb..7fbd4ed 100644
 --- a/src/core/config.h
 +++ b/src/core/config.h
 @@ -17,12 +17,77 @@
@@ -12107,7 +12107,7 @@ index 72d69eba..7fbd4ede 100644
      void addWebUISession(const String &token);
      void removeWebUISession(const String &token);
 diff --git a/src/core/display.cpp b/src/core/display.cpp
-index d3fe50ac..0bd8c75c 100644
+index d3fe50a..0bd8c75 100644
 --- a/src/core/display.cpp
 +++ b/src/core/display.cpp
 @@ -1,8 +1,11 @@
@@ -12600,7 +12600,7 @@ index d3fe50ac..0bd8c75c 100644
  
      int iconCount = 0;
 diff --git a/src/core/display.h b/src/core/display.h
-index 0345168b..7502c904 100644
+index 0345168..7502c90 100644
 --- a/src/core/display.h
 +++ b/src/core/display.h
 @@ -7,6 +7,7 @@
@@ -12629,7 +12629,7 @@ index 0345168b..7502c904 100644
  
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
-index 00000000..b49f5b4a
+index 0000000..b49f5b4
 --- /dev/null
 +++ b/src/core/dsolution_ux.cpp
 @@ -0,0 +1,269 @@
@@ -12904,7 +12904,7 @@ index 00000000..b49f5b4a
 +#endif
 diff --git a/src/core/dsolution_ux.h b/src/core/dsolution_ux.h
 new file mode 100644
-index 00000000..c56d7aef
+index 0000000..c56d7ae
 --- /dev/null
 +++ b/src/core/dsolution_ux.h
 @@ -0,0 +1,24 @@
@@ -12934,7 +12934,7 @@ index 00000000..c56d7aef
 +#endif
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 00000000..563f7811
+index 0000000..563f781
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
 @@ -0,0 +1,1159 @@
@@ -14099,7 +14099,7 @@ index 00000000..563f7811
 +}
 diff --git a/src/core/feature_guide.h b/src/core/feature_guide.h
 new file mode 100644
-index 00000000..e9a47f79
+index 0000000..e9a47f7
 --- /dev/null
 +++ b/src/core/feature_guide.h
 @@ -0,0 +1,13 @@
@@ -14117,7 +14117,7 @@ index 00000000..e9a47f79
 +
 +#endif
 diff --git a/src/core/main_menu.cpp b/src/core/main_menu.cpp
-index 7420b9e8..81774cb4 100644
+index 7420b9e..81774cb 100644
 --- a/src/core/main_menu.cpp
 +++ b/src/core/main_menu.cpp
 @@ -1,12 +1,17 @@
@@ -14390,7 +14390,7 @@ index 7420b9e8..81774cb4 100644
      int thumbH = max(6, trackH * _grid.visibleRows / _grid.rows);
      int thumbY = trackY + (trackH - thumbH) * _gridScroll / (_grid.rows - _grid.visibleRows);
 diff --git a/src/core/main_menu.h b/src/core/main_menu.h
-index e8ba9314..18327ac7 100644
+index e8ba931..18327ac 100644
 --- a/src/core/main_menu.h
 +++ b/src/core/main_menu.h
 @@ -4,22 +4,29 @@
@@ -14484,7 +14484,7 @@ index e8ba9314..18327ac7 100644
      int _totalItems = 0;
 diff --git a/src/core/menu_items/BadUsbMenu.cpp b/src/core/menu_items/BadUsbMenu.cpp
 new file mode 100644
-index 00000000..af352837
+index 0000000..af35283
 --- /dev/null
 +++ b/src/core/menu_items/BadUsbMenu.cpp
 @@ -0,0 +1,57 @@
@@ -14547,7 +14547,7 @@ index 00000000..af352837
 +}
 diff --git a/src/core/menu_items/BadUsbMenu.h b/src/core/menu_items/BadUsbMenu.h
 new file mode 100644
-index 00000000..83c7f4bc
+index 0000000..83c7f4b
 --- /dev/null
 +++ b/src/core/menu_items/BadUsbMenu.h
 @@ -0,0 +1,19 @@
@@ -14571,7 +14571,7 @@ index 00000000..83c7f4bc
 +
 +#endif
 diff --git a/src/core/menu_items/BleMenu.cpp b/src/core/menu_items/BleMenu.cpp
-index ed144ba6..437c14c5 100644
+index ed144ba..437c14c 100644
 --- a/src/core/menu_items/BleMenu.cpp
 +++ b/src/core/menu_items/BleMenu.cpp
 @@ -3,12 +3,14 @@
@@ -14635,7 +14635,7 @@ index ed144ba6..437c14c5 100644
  
      loopOptions(options, MENU_TYPE_SUBMENU, "Bluetooth", 0, false);
 diff --git a/src/core/menu_items/ConfigMenu.cpp b/src/core/menu_items/ConfigMenu.cpp
-index 6e44fd4d..4a294969 100644
+index 6e44fd4..4a29496 100644
 --- a/src/core/menu_items/ConfigMenu.cpp
 +++ b/src/core/menu_items/ConfigMenu.cpp
 @@ -1,4 +1,6 @@
@@ -14869,7 +14869,7 @@ index 6e44fd4d..4a294969 100644
              //{"Serial use USB",  [this]() { switchToUSBSerial(); }                       },
              //{"Serial use UART", [this]() { switchToUARTSerial(); }                      },
 diff --git a/src/core/menu_items/ConfigMenu.h b/src/core/menu_items/ConfigMenu.h
-index 1854faa7..dbbb659d 100644
+index 1854faa..dbbb659 100644
 --- a/src/core/menu_items/ConfigMenu.h
 +++ b/src/core/menu_items/ConfigMenu.h
 @@ -15,6 +15,7 @@ public:
@@ -14881,7 +14881,7 @@ index 1854faa7..dbbb659d 100644
      void audioMenu(void);
      void systemMenu(void);
 diff --git a/src/core/menu_items/FileMenu.cpp b/src/core/menu_items/FileMenu.cpp
-index 443e395c..00572e16 100644
+index 443e395..00572e1 100644
 --- a/src/core/menu_items/FileMenu.cpp
 +++ b/src/core/menu_items/FileMenu.cpp
 @@ -3,6 +3,7 @@
@@ -14929,7 +14929,7 @@ index 443e395c..00572e16 100644
  
 diff --git a/src/core/menu_items/MenuGroups.h b/src/core/menu_items/MenuGroups.h
 new file mode 100644
-index 00000000..b5b5ff4a
+index 0000000..b5b5ff4
 --- /dev/null
 +++ b/src/core/menu_items/MenuGroups.h
 @@ -0,0 +1,36 @@
@@ -14970,7 +14970,7 @@ index 00000000..b5b5ff4a
 +
 +} // namespace menu_groups
 diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
-index 40f99560..ede44951 100644
+index 40f9956..ede4495 100644
 --- a/src/core/menu_items/OthersMenu.cpp
 +++ b/src/core/menu_items/OthersMenu.cpp
 @@ -1,16 +1,18 @@
@@ -15063,7 +15063,7 @@ index 40f99560..ede44951 100644
      clearIconArea();
 diff --git a/src/core/menu_items/QuickMenu.cpp b/src/core/menu_items/QuickMenu.cpp
 new file mode 100644
-index 00000000..f42af790
+index 0000000..f42af79
 --- /dev/null
 +++ b/src/core/menu_items/QuickMenu.cpp
 @@ -0,0 +1,81 @@
@@ -15150,7 +15150,7 @@ index 00000000..f42af790
 +#endif
 diff --git a/src/core/menu_items/QuickMenu.h b/src/core/menu_items/QuickMenu.h
 new file mode 100644
-index 00000000..d4117a2c
+index 0000000..d4117a2
 --- /dev/null
 +++ b/src/core/menu_items/QuickMenu.h
 @@ -0,0 +1,12 @@
@@ -15168,7 +15168,7 @@ index 00000000..d4117a2c
 +#endif
 diff --git a/src/core/menu_items/StudioMenu.cpp b/src/core/menu_items/StudioMenu.cpp
 new file mode 100644
-index 00000000..8ce95c20
+index 0000000..8ce95c2
 --- /dev/null
 +++ b/src/core/menu_items/StudioMenu.cpp
 @@ -0,0 +1,80 @@
@@ -15254,7 +15254,7 @@ index 00000000..8ce95c20
 +}
 diff --git a/src/core/menu_items/StudioMenu.h b/src/core/menu_items/StudioMenu.h
 new file mode 100644
-index 00000000..0fb739c1
+index 0000000..0fb739c
 --- /dev/null
 +++ b/src/core/menu_items/StudioMenu.h
 @@ -0,0 +1,20 @@
@@ -15279,7 +15279,7 @@ index 00000000..0fb739c1
 +
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c1..4da96afa 100644
+index 2e6512c..4da96af 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
 @@ -16,149 +16,279 @@
@@ -15696,7 +15696,7 @@ index 2e6512c1..4da96afa 100644
      );
  }
 diff --git a/src/core/menu_items/WifiMenu.h b/src/core/menu_items/WifiMenu.h
-index 9dee9d7b..543660fd 100644
+index 9dee9d7..543660f 100644
 --- a/src/core/menu_items/WifiMenu.h
 +++ b/src/core/menu_items/WifiMenu.h
 @@ -13,7 +13,16 @@ public:
@@ -15718,7 +15718,7 @@ index 9dee9d7b..543660fd 100644
  
  #endif
 diff --git a/src/core/mykeyboard.cpp b/src/core/mykeyboard.cpp
-index 1b3c43c2..e59dea12 100644
+index 1b3c43c..e59dea1 100644
 --- a/src/core/mykeyboard.cpp
 +++ b/src/core/mykeyboard.cpp
 @@ -1,9 +1,11 @@
@@ -15776,7 +15776,7 @@ index 1b3c43c2..e59dea12 100644
                  /* Down Btn to move in X axis (to the right) */
                  if (check(NextPress)) {
 diff --git a/src/core/powerSave.cpp b/src/core/powerSave.cpp
-index 718e3bfe..e67b94bb 100644
+index 718e3bf..e67b94b 100644
 --- a/src/core/powerSave.cpp
 +++ b/src/core/powerSave.cpp
 @@ -1,43 +1,103 @@
@@ -15917,7 +15917,7 @@ index 718e3bfe..e67b94bb 100644
 +    delay(120);
  }
 diff --git a/src/core/powerSave.h b/src/core/powerSave.h
-index 5bb1c613..e3324ac4 100644
+index 5bb1c61..e3324ac 100644
 --- a/src/core/powerSave.h
 +++ b/src/core/powerSave.h
 @@ -1,3 +1,6 @@
@@ -15938,7 +15938,7 @@ index 5bb1c613..e3324ac4 100644
 +
 +#endif
 diff --git a/src/core/radio_mem.h b/src/core/radio_mem.h
-index 0d88860f..4daad610 100644
+index 0d88860..4daad61 100644
 --- a/src/core/radio_mem.h
 +++ b/src/core/radio_mem.h
 @@ -15,11 +15,17 @@
@@ -16080,7 +16080,7 @@ index 0d88860f..4daad610 100644
  }
  
 diff --git a/src/core/sd_functions.cpp b/src/core/sd_functions.cpp
-index 054b6298..99454343 100644
+index 054b629..9945434 100644
 --- a/src/core/sd_functions.cpp
 +++ b/src/core/sd_functions.cpp
 @@ -3,16 +3,20 @@
@@ -16142,7 +16142,7 @@ index 054b6298..99454343 100644
                  options.insert(options.begin(), {"JS Script Run", [&]() {
 diff --git a/src/core/seclab_util.cpp b/src/core/seclab_util.cpp
 new file mode 100644
-index 00000000..7f743fe8
+index 0000000..7f743fe
 --- /dev/null
 +++ b/src/core/seclab_util.cpp
 @@ -0,0 +1,123 @@
@@ -16271,7 +16271,7 @@ index 00000000..7f743fe8
 +}
 diff --git a/src/core/seclab_util.h b/src/core/seclab_util.h
 new file mode 100644
-index 00000000..13a9f7a9
+index 0000000..13a9f7a
 --- /dev/null
 +++ b/src/core/seclab_util.h
 @@ -0,0 +1,26 @@
@@ -16302,7 +16302,7 @@ index 00000000..13a9f7a9
 +
 +#endif
 diff --git a/src/core/serial_commands/cli.cpp b/src/core/serial_commands/cli.cpp
-index 1fd47501..35880ab5 100644
+index 1fd4750..35880ab 100644
 --- a/src/core/serial_commands/cli.cpp
 +++ b/src/core/serial_commands/cli.cpp
 @@ -4,18 +4,21 @@
@@ -16353,7 +16353,7 @@ index 1fd47501..35880ab5 100644
  #endif
  
 diff --git a/src/core/serial_commands/power_commands.cpp b/src/core/serial_commands/power_commands.cpp
-index 49138d4a..0bea13fb 100644
+index 49138d4..0bea13f 100644
 --- a/src/core/serial_commands/power_commands.cpp
 +++ b/src/core/serial_commands/power_commands.cpp
 @@ -1,5 +1,6 @@
@@ -16392,7 +16392,7 @@ index 49138d4a..0bea13fb 100644
  }
 diff --git a/src/core/serial_commands/seclab_commands.cpp b/src/core/serial_commands/seclab_commands.cpp
 new file mode 100644
-index 00000000..de37131f
+index 0000000..de37131
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.cpp
 @@ -0,0 +1,504 @@
@@ -16902,7 +16902,7 @@ index 00000000..de37131f
 +}
 diff --git a/src/core/serial_commands/seclab_commands.h b/src/core/serial_commands/seclab_commands.h
 new file mode 100644
-index 00000000..40f54b01
+index 0000000..40f54b0
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.h
 @@ -0,0 +1,8 @@
@@ -16915,7 +16915,7 @@ index 00000000..40f54b01
 +
 +#endif
 diff --git a/src/core/serial_commands/settings_commands.cpp b/src/core/serial_commands/settings_commands.cpp
-index 9c26f281..38fc0aeb 100644
+index 9c26f28..38fc0ae 100644
 --- a/src/core/serial_commands/settings_commands.cpp
 +++ b/src/core/serial_commands/settings_commands.cpp
 @@ -62,10 +62,13 @@ uint32_t settingsCallback(cmd *c) {
@@ -16933,7 +16933,7 @@ index 9c26f281..38fc0aeb 100644
          bruceConfig.setWebUICreds(
              setting_value.substring(0, setting_value.indexOf(",")),
 diff --git a/src/core/serial_commands/util_commands.cpp b/src/core/serial_commands/util_commands.cpp
-index af3650f3..669ce423 100644
+index af3650f..669ce42 100644
 --- a/src/core/serial_commands/util_commands.cpp
 +++ b/src/core/serial_commands/util_commands.cpp
 @@ -7,6 +7,7 @@
@@ -16964,7 +16964,7 @@ index af3650f3..669ce423 100644
          serialDevice->println(
              TFT_WIDTH + String("x") + TFT_HEIGHT + String("x") + bruceConfigPins.rotation
 diff --git a/src/core/serial_commands/wifi_commands.cpp b/src/core/serial_commands/wifi_commands.cpp
-index 95c54ced..7e3efce7 100644
+index 95c54ce..7e3efce 100644
 --- a/src/core/serial_commands/wifi_commands.cpp
 +++ b/src/core/serial_commands/wifi_commands.cpp
 @@ -5,6 +5,9 @@
@@ -17035,7 +17035,7 @@ index 95c54ced..7e3efce7 100644
      // Command responderCmd = cli->addCommand("responder", responderCallback); TODO
  }
 diff --git a/src/core/serialcmds.cpp b/src/core/serialcmds.cpp
-index 908c2c31..1675e1ef 100644
+index 908c2c3..1675e1e 100644
 --- a/src/core/serialcmds.cpp
 +++ b/src/core/serialcmds.cpp
 @@ -9,8 +9,77 @@ QueueHandle_t cmdQueue = nullptr;
@@ -17195,7 +17195,7 @@ index 908c2c31..1675e1ef 100644
  
      xTaskCreatePinnedToCore(
 diff --git a/src/core/serialcmds.h b/src/core/serialcmds.h
-index fbef2fe2..46c3d25b 100644
+index fbef2fe..46c3d25 100644
 --- a/src/core/serialcmds.h
 +++ b/src/core/serialcmds.h
 @@ -8,4 +8,5 @@ extern TaskHandle_t serialcmdsTaskHandle;
@@ -17205,7 +17205,7 @@ index fbef2fe2..46c3d25b 100644
 +bool parseSerialCommandCapture(const String &command, String &output, uint32_t timeoutMs = 1500);
  #endif
 diff --git a/src/core/settings.cpp b/src/core/settings.cpp
-index df8bbcb6..08dd98ad 100644
+index df8bbcb..08dd98a 100644
 --- a/src/core/settings.cpp
 +++ b/src/core/settings.cpp
 @@ -8,13 +8,17 @@
@@ -17416,7 +17416,7 @@ index df8bbcb6..08dd98ad 100644
               bruceConfig.ledBright = 50;
               bruceConfig.ledColor = 0x960064;
 diff --git a/src/core/settings.h b/src/core/settings.h
-index eed52ee9..063a2f70 100644
+index eed52ee..063a2f7 100644
 --- a/src/core/settings.h
 +++ b/src/core/settings.h
 @@ -60,6 +60,7 @@ void setEvilPasswordMode();
@@ -17447,7 +17447,7 @@ index eed52ee9..063a2f70 100644
  
  void runClockLoop(bool showMenuHint = false);
 diff --git a/src/core/settingsColor.h b/src/core/settingsColor.h
-index 035a8164..bad7141a 100644
+index 035a816..bad7141 100644
 --- a/src/core/settingsColor.h
 +++ b/src/core/settingsColor.h
 @@ -57,6 +57,14 @@ struct ColorEntry {
@@ -17466,7 +17466,7 @@ index 035a8164..bad7141a 100644
      {"White",         UI_COLOR_WHITE_PRI,         UI_COLOR_WHITE_SEC,         UI_COLOR_WHITE_BG        },
      {"Dark Gray",     UI_COLOR_DARK_GRAY_PRI,     UI_COLOR_DARK_GRAY_SEC,     UI_COLOR_DARK_GRAY_BG    },
 diff --git a/src/core/startup_app.cpp b/src/core/startup_app.cpp
-index 4663a0d5..7e647cc0 100644
+index 4663a0d..7e647cc 100644
 --- a/src/core/startup_app.cpp
 +++ b/src/core/startup_app.cpp
 @@ -13,14 +13,16 @@
@@ -17514,7 +17514,7 @@ index 4663a0d5..7e647cc0 100644
      _startupApps["JS Interpreter"] = []() {
 diff --git a/src/core/tftLogger/legacy_text_packet.h b/src/core/tftLogger/legacy_text_packet.h
 new file mode 100644
-index 00000000..147cd1fe
+index 0000000..147cd1f
 --- /dev/null
 +++ b/src/core/tftLogger/legacy_text_packet.h
 @@ -0,0 +1,16 @@
@@ -17535,7 +17535,7 @@ index 00000000..147cd1fe
 +    return size - 1;
 +}
 diff --git a/src/core/tftLogger/tftLogger.cpp b/src/core/tftLogger/tftLogger.cpp
-index 85b9dbe9..43b40406 100644
+index 85b9dbe..43b4040 100644
 --- a/src/core/tftLogger/tftLogger.cpp
 +++ b/src/core/tftLogger/tftLogger.cpp
 @@ -2,6 +2,10 @@
@@ -17953,7 +17953,7 @@ index 85b9dbe9..43b40406 100644
      uint8_t pos = 0;
      logWriteHeader(buffer, pos, PRINT);
 diff --git a/src/core/theme.cpp b/src/core/theme.cpp
-index c32e8644..0ba5698f 100644
+index c32e864..0ba5698 100644
 --- a/src/core/theme.cpp
 +++ b/src/core/theme.cpp
 @@ -140,6 +140,12 @@ bool BruceTheme::validateImgFile(FS *fs, String filepath) {
@@ -17970,7 +17970,7 @@ index c32e8644..0ba5698f 100644
      bgColor = background == nullptr ? 0x0 : *background;
  }
 diff --git a/src/core/theme.h b/src/core/theme.h
-index 1e7c94ef..8c58e95f 100644
+index 1e7c94e..8c58e95 100644
 --- a/src/core/theme.h
 +++ b/src/core/theme.h
 @@ -3,8 +3,12 @@
@@ -18000,7 +18000,7 @@ index 1e7c94ef..8c58e95f 100644
      // UI Color
 diff --git a/src/core/ui_sound_wav.h b/src/core/ui_sound_wav.h
 new file mode 100644
-index 00000000..7aa98f0f
+index 0000000..7aa98f0
 --- /dev/null
 +++ b/src/core/ui_sound_wav.h
 @@ -0,0 +1,21 @@
@@ -18026,7 +18026,7 @@ index 00000000..7aa98f0f
 +    return true;
 +}
 diff --git a/src/core/utils.cpp b/src/core/utils.cpp
-index aacdf98b..e66d0771 100644
+index aacdf98..e66d077 100644
 --- a/src/core/utils.cpp
 +++ b/src/core/utils.cpp
 @@ -1,8 +1,17 @@
@@ -18143,7 +18143,7 @@ index aacdf98b..e66d0771 100644
 +    esp_restart();
 +}
 diff --git a/src/core/utils.h b/src/core/utils.h
-index 043a5d2d..1f05180b 100644
+index 043a5d2..1f05180 100644
 --- a/src/core/utils.h
 +++ b/src/core/utils.h
 @@ -5,6 +5,12 @@
@@ -18167,7 +18167,7 @@ index 043a5d2d..1f05180b 100644
  #endif
 diff --git a/src/core/virtual_msc.cpp b/src/core/virtual_msc.cpp
 new file mode 100644
-index 00000000..713fb990
+index 0000000..713fb99
 --- /dev/null
 +++ b/src/core/virtual_msc.cpp
 @@ -0,0 +1,1035 @@
@@ -19208,7 +19208,7 @@ index 00000000..713fb990
 +#endif
 diff --git a/src/core/virtual_msc.h b/src/core/virtual_msc.h
 new file mode 100644
-index 00000000..a28c8b56
+index 0000000..a28c8b5
 --- /dev/null
 +++ b/src/core/virtual_msc.h
 @@ -0,0 +1,20 @@
@@ -19233,7 +19233,7 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..ea3a41d3 100644
+index a8679bd..ee4b1ce 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,49 @@
@@ -20299,7 +20299,7 @@ index a8679bd6..ea3a41d3 100644
      }
  }
  
-@@ -272,43 +1072,180 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +1072,196 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -20401,39 +20401,55 @@ index a8679bd6..ea3a41d3 100644
 +    return redraw;
 +}
 +
-+// The OTA screen is drawn by the UI owner task, but that task must never be
-+// parked inside this function for the whole transfer: it also owns every menu,
-+// the backlight and the watchdog. The old code looped while the transfer was
-+// active, so a stalled or abandoned upload froze the device for up to
-+// kOtaIdleTimeoutMs (90 s) with no button response -- the "WebUI hangs" report.
-+// Each call now draws one slice and returns; callers keep running.
-+static constexpr uint32_t kOtaUiSliceMs = 300;
++// The OTA screen is drawn by the UI owner task. This function is reached from
++// check(), which a menu calls 6-9 times per loop iteration, and the InputHandler
++// task calls it too -- so it MUST NOT WAIT AT ALL.
++//
++// The previous version held the task here for up to 300 ms per call. With 6 calls
++// per loop that is 1.8 s of a 2 s budget inside this function, and only the FIRST
++// call drew anything: every later call just slept. The menu therefore could not
++// repaint, and a key press had to survive a block of several hundred ms before
++// the loop looked at it again -- the reported symptom was exactly that: pressing
++// Flash OTA made the on-device WebUI info screen freeze and no button worked.
++// Setting s_webUiScreenDirty on every call made it worse: the whole WebUI info
++// page was repainted continuously until the device stopped responding.
++//
++// The correct behaviour is a plain non-blocking checkpoint: draw only when the
++// published snapshot actually changed, never delay, and request a redraw only on
++// the active->idle transition. The old code also set s_webUiScreenDirty on every
++// single call from check(), so the WebUI info page was repainted continuously.
++static int s_otaUiLastPct = -1;
++static bool s_otaUiLastDone = false;
++static bool s_otaUiLastPreparing = false;
++static bool s_otaUiWasActive = false;
 +
 +void otaUiCheckpoint() {
-+    if (!uxIsMenuTask() || !isOtaInProgress()) return;
-+    wakeUpScreen();
-+    OtaUiSnapshot previous = {};
-+    bool first = true;
-+    const uint32_t sliceStart = millis();
-+    while (isOtaInProgress() && (uint32_t)(millis() - sliceStart) < kOtaUiSliceMs) {
-+        const OtaUiSnapshot current = otaUiSnapshot();
-+        if (first || current.pct != previous.pct || current.written != previous.written ||
-+            current.total != previous.total || current.done != previous.done) {
-+            drawWebUiOtaOverlay();
-+            previous = current;
-+            first = false;
++    if (!uxIsMenuTask()) return;
++    const bool active = isOtaInProgress();
++    if (!active) {
++        // The transfer just ended: ask for ONE repaint so whatever screen was
++        // showing (a menu, the WebUI info page) comes back. Never per call.
++        if (s_otaUiWasActive) {
++            s_otaUiWasActive = false;
++            s_otaUiLastPct = -1;
++            s_otaUiLastDone = false;
++            s_otaUiLastPreparing = false;
++            s_otaUiNeedsRedraw = true;
 +        }
-+        if (esp_task_wdt_status(nullptr) == ESP_OK) esp_task_wdt_reset();
-+        vTaskDelay(pdMS_TO_TICKS(100));
++        return;
 +    }
-+    // Deliberately do NOT clear the key globals here any more. The old code
-+    // swallowed every press for as long as the transfer was active, so Esc (and
-+    // Sel-after-hold, which is Esc) never reached the caller that was waiting on
-+    // it: the device looked frozen" while a stalled upload held the state.
-+    // A slice is only a few hundred ms now, so a stale click self-heals on the
-+    // next redraw instead of being eaten forever.
-+    s_otaUiNeedsRedraw = true;
-+    s_webUiScreenDirty = true;
++    const OtaUiSnapshot current = otaUiSnapshot();
++    s_otaUiWasActive = true;
++    // At most 101 distinct percentages: cheap enough to run on every check(), and
++    // nothing is drawn (and no repaint requested) when the picture is unchanged.
++    if ((int)current.pct == s_otaUiLastPct && current.done == s_otaUiLastDone &&
++        current.preparing == s_otaUiLastPreparing)
++        return;
++    s_otaUiLastPct = (int)current.pct;
++    s_otaUiLastDone = current.done;
++    s_otaUiLastPreparing = current.preparing;
++    wakeUpScreen();
++    drawWebUiOtaOverlay();
 +}
 +#endif
  
@@ -20506,7 +20522,7 @@ index a8679bd6..ea3a41d3 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -348,11 +1285,16 @@ void serveWebUIFile(
+@@ -348,11 +1301,16 @@ void serveWebUIFile(
  ) {
      AsyncWebServerResponse *response = nullptr;
      FS *fs = NULL;
@@ -20527,7 +20543,7 @@ index a8679bd6..ea3a41d3 100644
      if (fs) {
          response = request->beginResponse(*fs, "/BruceWebUI/" + filename, contentType);
      } else {
-@@ -379,11 +1321,12 @@ void serveWebUIFile(
+@@ -379,11 +1337,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -20542,7 +20558,7 @@ index a8679bd6..ea3a41d3 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -456,155 +1399,1223 @@ void configureWebServer() {
+@@ -456,154 +1415,1222 @@ void configureWebServer() {
      server->on("/index.js", HTTP_GET, [](AsyncWebServerRequest *request) {
          serveWebUIFile(request, "index.js", "text/javascript", true, index_js, index_js_size);
      });
@@ -20726,11 +20742,11 @@ index a8679bd6..ea3a41d3 100644
 +            if (name.isEmpty() || content.isEmpty()) {
 +                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Name and content required\"}");
 +                return;
-             }
++            }
 +            bool updated=false;
 +            for (auto &e : bruceConfig.qrCodes) {
 +                if (e.menuName.equalsIgnoreCase(name)) { e.content = content; updated=true; break; }
-+            }
+             }
 +            if (!updated) bruceConfig.addQrCodeEntry(name, content);
 +            else bruceConfig.saveFile();
 +            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"QR \'"+jsonEscape(name)+"\' saved\"}");
@@ -21067,7 +21083,7 @@ index a8679bd6..ea3a41d3 100644
 +                }
              }
 +            if (!found) { netsList.push_back({ssid, rssi, enc, bruceConfig.hasWifiCredential(ssid)}); }
-         }
++        }
 +        WiFi.scanDelete();
 +        std::sort(netsList.begin(), netsList.end(), [](const NetEntry &a, const NetEntry &b) {
 +            return a.rssi > b.rssi;
@@ -21080,7 +21096,7 @@ index a8679bd6..ea3a41d3 100644
 +            json += "{\"ssid\":\"" + jsonEscape(netsList[i].ssid) + "\",\"rssi\":" +
 +                    String(netsList[i].rssi) + ",\"enc\":" + (netsList[i].enc ? "true" : "false") +
 +                    ",\"saved\":" + (netsList[i].saved ? "true" : "false") + "}";
-+        }
+         }
 +        json += "]}";
 +        request->send(200, "application/json", json);
      });
@@ -21095,7 +21111,6 @@ index a8679bd6..ea3a41d3 100644
 -                bool useSD = false;
 -                if (fileSys == "SD") useSD = true;
 -
--                FS *fs;
 +    server->on("/wificonnect", HTTP_POST, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
 +        if (isOtaInProgress() || s_wifiSwitchBusy) {
@@ -21880,11 +21895,10 @@ index a8679bd6..ea3a41d3 100644
 +                bool useSD = false;
 +                if (fileSys == "SD") useSD = true;
 +
-+                FS *fs;
+                 FS *fs;
                  if (useSD) {
                      fs = &SD;
-                 } else fs = &LittleFS;
-@@ -632,6 +2643,11 @@ void configureWebServer() {
+@@ -632,6 +2659,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -21896,7 +21910,7 @@ index a8679bd6..ea3a41d3 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2716,7 @@ void configureWebServer() {
+@@ -700,7 +2732,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -21905,7 +21919,7 @@ index a8679bd6..ea3a41d3 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2736,13 @@ void configureWebServer() {
+@@ -720,7 +2752,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -21920,7 +21934,7 @@ index a8679bd6..ea3a41d3 100644
          handleUpload
      );
  
-@@ -737,6 +2759,427 @@ void configureWebServer() {
+@@ -737,6 +2775,427 @@ void configureWebServer() {
              }
          }
      });
@@ -22348,7 +22362,7 @@ index a8679bd6..ea3a41d3 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +3188,78 @@ void configureWebServer() {
+@@ -745,25 +3204,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -22436,7 +22450,7 @@ index a8679bd6..ea3a41d3 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +3267,213 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +3283,213 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -22664,7 +22678,7 @@ index a8679bd6..ea3a41d3 100644
      }
  }
 diff --git a/src/core/wifi/webInterface.h b/src/core/wifi/webInterface.h
-index d14ae9f0..775ed9f3 100644
+index d14ae9f..775ed9f 100644
 --- a/src/core/wifi/webInterface.h
 +++ b/src/core/wifi/webInterface.h
 @@ -23,5 +23,18 @@ void serveWebUIFile(
@@ -22688,7 +22702,7 @@ index d14ae9f0..775ed9f3 100644
  void cleanlyStopWebUiForWiFiFeature();
 diff --git a/src/core/wifi/web_navigation.h b/src/core/wifi/web_navigation.h
 new file mode 100644
-index 00000000..e5e30ea6
+index 0000000..e5e30ea
 --- /dev/null
 +++ b/src/core/wifi/web_navigation.h
 @@ -0,0 +1,37 @@
@@ -22730,7 +22744,7 @@ index 00000000..e5e30ea6
 +    return true;
 +}
 diff --git a/src/core/wifi/wifi_common.cpp b/src/core/wifi/wifi_common.cpp
-index 0e32e4dd..9040921c 100644
+index 0e32e4d..9040921 100644
 --- a/src/core/wifi/wifi_common.cpp
 +++ b/src/core/wifi/wifi_common.cpp
 @@ -1,11 +1,13 @@
@@ -22873,7 +22887,7 @@ index 0e32e4dd..9040921c 100644
          // Start timezone update in background if not already running
          if (timezoneTaskHandle == NULL) {
 diff --git a/src/core/wifi/wifi_common.h b/src/core/wifi/wifi_common.h
-index 8d97a20f..e0d84536 100644
+index 8d97a20..e0d8453 100644
 --- a/src/core/wifi/wifi_common.h
 +++ b/src/core/wifi/wifi_common.h
 @@ -11,6 +11,8 @@
@@ -22886,7 +22900,7 @@ index 8d97a20f..e0d84536 100644
  /**
   * @brief Opens a menu to connect to a wifi
 diff --git a/src/main.cpp b/src/main.cpp
-index eebc4a91..c3d04789 100644
+index eebc4a9..c3d0478 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
 @@ -1,3 +1,4 @@
@@ -23381,7 +23395,7 @@ index eebc4a91..c3d04789 100644
      if (bruceConfig.startupApp != "" && !startupApp.startApp(bruceConfig.startupApp)) {
 diff --git a/src/modules/badusb_ble/badusb_autorun.cpp b/src/modules/badusb_ble/badusb_autorun.cpp
 new file mode 100644
-index 00000000..5d50f8ff
+index 0000000..5d50f8f
 --- /dev/null
 +++ b/src/modules/badusb_ble/badusb_autorun.cpp
 @@ -0,0 +1,359 @@
@@ -23746,7 +23760,7 @@ index 00000000..5d50f8ff
 +#endif
 diff --git a/src/modules/badusb_ble/badusb_autorun.h b/src/modules/badusb_ble/badusb_autorun.h
 new file mode 100644
-index 00000000..2779eda3
+index 0000000..2779eda
 --- /dev/null
 +++ b/src/modules/badusb_ble/badusb_autorun.h
 @@ -0,0 +1,25 @@
@@ -23776,7 +23790,7 @@ index 00000000..2779eda3
 +
 +#endif
 diff --git a/src/modules/badusb_ble/ducky_typer.cpp b/src/modules/badusb_ble/ducky_typer.cpp
-index c6fd084b..faae9b38 100644
+index c6fd084..faae9b3 100644
 --- a/src/modules/badusb_ble/ducky_typer.cpp
 +++ b/src/modules/badusb_ble/ducky_typer.cpp
 @@ -6,6 +6,7 @@
@@ -23890,7 +23904,7 @@ index c6fd084b..faae9b38 100644
  
  // ============================================================================
 diff --git a/src/modules/badusb_ble/ducky_typer.h b/src/modules/badusb_ble/ducky_typer.h
-index bb5aeb4f..f0460124 100644
+index bb5aeb4..f046012 100644
 --- a/src/modules/badusb_ble/ducky_typer.h
 +++ b/src/modules/badusb_ble/ducky_typer.h
 @@ -16,6 +16,7 @@
@@ -23912,7 +23926,7 @@ index bb5aeb4f..f0460124 100644
  void key_input_from_string(const String &text);
 diff --git a/src/modules/badusb_ble/smart_badusb.cpp b/src/modules/badusb_ble/smart_badusb.cpp
 new file mode 100644
-index 00000000..b5be732d
+index 0000000..b5be732
 --- /dev/null
 +++ b/src/modules/badusb_ble/smart_badusb.cpp
 @@ -0,0 +1,783 @@
@@ -24701,7 +24715,7 @@ index 00000000..b5be732d
 +#endif
 diff --git a/src/modules/badusb_ble/smart_badusb.h b/src/modules/badusb_ble/smart_badusb.h
 new file mode 100644
-index 00000000..8df9cc85
+index 0000000..8df9cc8
 --- /dev/null
 +++ b/src/modules/badusb_ble/smart_badusb.h
 @@ -0,0 +1,40 @@
@@ -24747,7 +24761,7 @@ index 00000000..8df9cc85
 +#endif
 diff --git a/src/modules/badusb_ble/usb_identity.h b/src/modules/badusb_ble/usb_identity.h
 new file mode 100644
-index 00000000..bb2cef91
+index 0000000..bb2cef9
 --- /dev/null
 +++ b/src/modules/badusb_ble/usb_identity.h
 @@ -0,0 +1,26 @@
@@ -24778,7 +24792,7 @@ index 00000000..bb2cef91
 +    displayInfo(info, true);
 +}
 diff --git a/src/modules/bjs_interpreter/display_js.cpp b/src/modules/bjs_interpreter/display_js.cpp
-index 11423ba3..5638ab00 100644
+index 11423ba..5638ab0 100644
 --- a/src/modules/bjs_interpreter/display_js.cpp
 +++ b/src/modules/bjs_interpreter/display_js.cpp
 @@ -37,13 +37,13 @@ void native_sprite_finalizer(JSContext *ctx, void *opaque) {
@@ -24856,7 +24870,7 @@ index 11423ba3..5638ab00 100644
      return JS_UNDEFINED;
  }
 diff --git a/src/modules/bjs_interpreter/ir_js.cpp b/src/modules/bjs_interpreter/ir_js.cpp
-index e23370d7..fb1d66e0 100644
+index e23370d..fb1d66e 100644
 --- a/src/modules/bjs_interpreter/ir_js.cpp
 +++ b/src/modules/bjs_interpreter/ir_js.cpp
 @@ -1,11 +1,24 @@
@@ -24894,7 +24908,7 @@ index e23370d7..fb1d66e0 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/nrf24_js.cpp b/src/modules/bjs_interpreter/nrf24_js.cpp
-index a3015ffe..c23e9d77 100644
+index a3015ff..c23e9d7 100644
 --- a/src/modules/bjs_interpreter/nrf24_js.cpp
 +++ b/src/modules/bjs_interpreter/nrf24_js.cpp
 @@ -1,6 +1,24 @@
@@ -24930,7 +24944,7 @@ index a3015ffe..c23e9d77 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/protopirate_js.cpp b/src/modules/bjs_interpreter/protopirate_js.cpp
-index 09920d59..6f964a12 100644
+index 09920d5..6f964a1 100644
 --- a/src/modules/bjs_interpreter/protopirate_js.cpp
 +++ b/src/modules/bjs_interpreter/protopirate_js.cpp
 @@ -1,6 +1,20 @@
@@ -24961,7 +24975,7 @@ index 09920d59..6f964a12 100644
  #endif
 +#endif
 diff --git a/src/modules/bjs_interpreter/rfid_js.cpp b/src/modules/bjs_interpreter/rfid_js.cpp
-index 6c585422..54ffa9b0 100644
+index 6c58542..54ffa9b 100644
 --- a/src/modules/bjs_interpreter/rfid_js.cpp
 +++ b/src/modules/bjs_interpreter/rfid_js.cpp
 @@ -7,6 +7,28 @@
@@ -25001,7 +25015,7 @@ index 6c585422..54ffa9b0 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/subghz_js.cpp b/src/modules/bjs_interpreter/subghz_js.cpp
-index ffd58b47..0e2ad2bd 100644
+index ffd58b4..0e2ad2b 100644
 --- a/src/modules/bjs_interpreter/subghz_js.cpp
 +++ b/src/modules/bjs_interpreter/subghz_js.cpp
 @@ -1,11 +1,20 @@
@@ -25035,7 +25049,7 @@ index ffd58b47..0e2ad2bd 100644
  
  #endif
 diff --git a/src/modules/ble/BLE_Suite.cpp b/src/modules/ble/BLE_Suite.cpp
-index 27c887d0..a470dd03 100644
+index 27c887d..a470dd0 100644
 --- a/src/modules/ble/BLE_Suite.cpp
 +++ b/src/modules/ble/BLE_Suite.cpp
 @@ -20,7 +20,9 @@
@@ -25157,7 +25171,7 @@ index 27c887d0..a470dd03 100644
  
  void showPayloadSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
 diff --git a/src/modules/ble/BLE_Suite.h b/src/modules/ble/BLE_Suite.h
-index 538c342e..0e605aed 100644
+index 538c342..0e605ae 100644
 --- a/src/modules/ble/BLE_Suite.h
 +++ b/src/modules/ble/BLE_Suite.h
 @@ -611,8 +611,7 @@ void runFastPairHIDChain(NimBLEAddress target);
@@ -25172,7 +25186,7 @@ index 538c342e..0e605aed 100644
  void showFastPairSubMenu(NimBLEAddress target);
 diff --git a/src/modules/ble/ble_audit_logic.h b/src/modules/ble/ble_audit_logic.h
 new file mode 100644
-index 00000000..ce6f7d28
+index 0000000..ce6f7d2
 --- /dev/null
 +++ b/src/modules/ble/ble_audit_logic.h
 @@ -0,0 +1,23 @@
@@ -25200,7 +25214,7 @@ index 00000000..ce6f7d28
 +    return selection == 2 && enabled;
 +}
 diff --git a/src/modules/ble/ble_common.cpp b/src/modules/ble/ble_common.cpp
-index 5494bfba..7d16fab8 100644
+index 5494bfb..7d16fab 100644
 --- a/src/modules/ble/ble_common.cpp
 +++ b/src/modules/ble/ble_common.cpp
 @@ -1,4 +1,5 @@
@@ -25280,7 +25294,7 @@ index 5494bfba..7d16fab8 100644
  }
 diff --git a/src/modules/ble/ble_gatt_cloner.cpp b/src/modules/ble/ble_gatt_cloner.cpp
 new file mode 100644
-index 00000000..594ca01a
+index 0000000..594ca01
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_cloner.cpp
 @@ -0,0 +1,1101 @@
@@ -26387,7 +26401,7 @@ index 00000000..594ca01a
 +#endif
 diff --git a/src/modules/ble/ble_gatt_cloner.h b/src/modules/ble/ble_gatt_cloner.h
 new file mode 100644
-index 00000000..a0ad8d2e
+index 0000000..a0ad8d2
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_cloner.h
 @@ -0,0 +1,12 @@
@@ -26405,7 +26419,7 @@ index 00000000..a0ad8d2e
 +#endif
 diff --git a/src/modules/ble/ble_gatt_types.h b/src/modules/ble/ble_gatt_types.h
 new file mode 100644
-index 00000000..0f4c3c93
+index 0000000..0f4c3c9
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_types.h
 @@ -0,0 +1,44 @@
@@ -26455,7 +26469,7 @@ index 00000000..0f4c3c93
 +#endif
 diff --git a/src/modules/ble/ble_guard_logic.h b/src/modules/ble/ble_guard_logic.h
 new file mode 100644
-index 00000000..0cd28104
+index 0000000..0cd2810
 --- /dev/null
 +++ b/src/modules/ble/ble_guard_logic.h
 @@ -0,0 +1,34 @@
@@ -26495,7 +26509,7 @@ index 00000000..0cd28104
 +inline uint16_t bleGuardIncrement(uint16_t hits) { return hits == UINT16_MAX ? hits : hits + 1; }
 diff --git a/src/modules/ble/ble_security_audit.cpp b/src/modules/ble/ble_security_audit.cpp
 new file mode 100644
-index 00000000..15fa7aad
+index 0000000..15fa7aa
 --- /dev/null
 +++ b/src/modules/ble/ble_security_audit.cpp
 @@ -0,0 +1,785 @@
@@ -27286,7 +27300,7 @@ index 00000000..15fa7aad
 +#endif
 diff --git a/src/modules/ble/ble_security_audit.h b/src/modules/ble/ble_security_audit.h
 new file mode 100644
-index 00000000..bafd4e40
+index 0000000..bafd4e4
 --- /dev/null
 +++ b/src/modules/ble/ble_security_audit.h
 @@ -0,0 +1,29 @@
@@ -27320,7 +27334,7 @@ index 00000000..bafd4e40
 +
 +#endif
 diff --git a/src/modules/ble/ble_sniffer.cpp b/src/modules/ble/ble_sniffer.cpp
-index 496ff9a7..9935b4dc 100644
+index 496ff9a..9935b4d 100644
 --- a/src/modules/ble/ble_sniffer.cpp
 +++ b/src/modules/ble/ble_sniffer.cpp
 @@ -1,5 +1,5 @@
@@ -27368,7 +27382,7 @@ index 496ff9a7..9935b4dc 100644
 -
  #endif
 diff --git a/src/modules/ble/ble_sniffer.h b/src/modules/ble/ble_sniffer.h
-index a1c3936b..bce93b31 100644
+index a1c3936..bce93b3 100644
 --- a/src/modules/ble/ble_sniffer.h
 +++ b/src/modules/ble/ble_sniffer.h
 @@ -1,12 +1,12 @@
@@ -27388,7 +27402,7 @@ index a1c3936b..bce93b31 100644
 +void BLE_SnifferMenu();
  #endif
 diff --git a/src/modules/ble/ble_spam.cpp b/src/modules/ble/ble_spam.cpp
-index a702b848..545a9b84 100644
+index a702b84..545a9b8 100644
 --- a/src/modules/ble/ble_spam.cpp
 +++ b/src/modules/ble/ble_spam.cpp
 @@ -569,7 +569,8 @@ enum BleSpamAttackType {
@@ -27501,7 +27515,7 @@ index a702b848..545a9b84 100644
                  configChanged = false;
 diff --git a/src/modules/ble/ble_tracker_guard.cpp b/src/modules/ble/ble_tracker_guard.cpp
 new file mode 100644
-index 00000000..afbf7171
+index 0000000..afbf717
 --- /dev/null
 +++ b/src/modules/ble/ble_tracker_guard.cpp
 @@ -0,0 +1,324 @@
@@ -27831,7 +27845,7 @@ index 00000000..afbf7171
 +}
 diff --git a/src/modules/ble/ble_tracker_guard.h b/src/modules/ble/ble_tracker_guard.h
 new file mode 100644
-index 00000000..1464a9ef
+index 0000000..1464a9e
 --- /dev/null
 +++ b/src/modules/ble/ble_tracker_guard.h
 @@ -0,0 +1,6 @@
@@ -27842,7 +27856,7 @@ index 00000000..1464a9ef
 +
 +#endif
 diff --git a/src/modules/others/audio.cpp b/src/modules/others/audio.cpp
-index 89b670ea..3ca98cf5 100644
+index 89b670e..3ca98cf 100644
 --- a/src/modules/others/audio.cpp
 +++ b/src/modules/others/audio.cpp
 @@ -28,7 +28,12 @@ static const UBaseType_t AUDIO_TASK_PRIORITY = 1;
@@ -27873,7 +27887,7 @@ index 89b670ea..3ca98cf5 100644
      if (waveType == 0) {
          file->addAudioGenerators([volumeScale, hz, toneSec](const float time) {
 diff --git a/src/modules/others/mic.cpp b/src/modules/others/mic.cpp
-index 6409d539..291d78e8 100644
+index 6409d53..291d78e 100644
 --- a/src/modules/others/mic.cpp
 +++ b/src/modules/others/mic.cpp
 @@ -50,6 +50,9 @@ static void apply_gain_to_buffer(int16_t *buffer, size_t samples, float gain) {
@@ -28332,7 +28346,7 @@ index 6409d539..291d78e8 100644
  bool mic_record_wav_to_path(
      FS *fs, const String &path, uint32_t max_ms, uint32_t *out_bytes, float gain,
 diff --git a/src/modules/others/mic.h b/src/modules/others/mic.h
-index ca5806a0..18d2aa25 100644
+index ca5806a..18d2aa2 100644
 --- a/src/modules/others/mic.h
 +++ b/src/modules/others/mic.h
 @@ -53,6 +53,7 @@ struct MicConfig {
@@ -28345,7 +28359,7 @@ index ca5806a0..18d2aa25 100644
      std::function<bool(void)> onProgress = nullptr
 diff --git a/src/modules/others/sonar_guard.cpp b/src/modules/others/sonar_guard.cpp
 new file mode 100644
-index 00000000..9976780c
+index 0000000..9976780
 --- /dev/null
 +++ b/src/modules/others/sonar_guard.cpp
 @@ -0,0 +1,727 @@
@@ -29078,7 +29092,7 @@ index 00000000..9976780c
 +#endif
 diff --git a/src/modules/others/sonar_guard.h b/src/modules/others/sonar_guard.h
 new file mode 100644
-index 00000000..028022a3
+index 0000000..028022a
 --- /dev/null
 +++ b/src/modules/others/sonar_guard.h
 @@ -0,0 +1,6 @@
@@ -29090,7 +29104,7 @@ index 00000000..028022a3
 +#endif
 diff --git a/src/modules/others/sonar_signal.h b/src/modules/others/sonar_signal.h
 new file mode 100644
-index 00000000..21043031
+index 0000000..2104303
 --- /dev/null
 +++ b/src/modules/others/sonar_signal.h
 @@ -0,0 +1,46 @@
@@ -29141,7 +29155,7 @@ index 00000000..21043031
 +    }
 +};
 diff --git a/src/modules/others/tururururu.cpp b/src/modules/others/tururururu.cpp
-index 4d2ea723..eab48826 100644
+index 4d2ea72..eab4882 100644
 --- a/src/modules/others/tururururu.cpp
 +++ b/src/modules/others/tururururu.cpp
 @@ -3,31 +3,37 @@
@@ -29574,7 +29588,7 @@ index 4d2ea723..eab48826 100644
      Serial.println();
 diff --git a/src/modules/pwnagotchi/pet_layout.h b/src/modules/pwnagotchi/pet_layout.h
 new file mode 100644
-index 00000000..9df0a69a
+index 0000000..9df0a69
 --- /dev/null
 +++ b/src/modules/pwnagotchi/pet_layout.h
 @@ -0,0 +1,15 @@
@@ -29594,7 +29608,7 @@ index 00000000..9df0a69a
 +            footer - 20, availableW};
 +}
 diff --git a/src/modules/pwnagotchi/pwnagotchi.cpp b/src/modules/pwnagotchi/pwnagotchi.cpp
-index f0eaee5d..dbfc0ad2 100644
+index f0eaee5..dbfc0ad 100644
 --- a/src/modules/pwnagotchi/pwnagotchi.cpp
 +++ b/src/modules/pwnagotchi/pwnagotchi.cpp
 @@ -318,6 +318,12 @@ static void advertisePhase(BruceState &s) {
@@ -29634,7 +29648,7 @@ index f0eaee5d..dbfc0ad2 100644
              lastUiUpdate = millis();
          }
 diff --git a/src/modules/pwnagotchi/ui.cpp b/src/modules/pwnagotchi/ui.cpp
-index ca1f9def..82603dcc 100644
+index ca1f9de..82603dc 100644
 --- a/src/modules/pwnagotchi/ui.cpp
 +++ b/src/modules/pwnagotchi/ui.cpp
 @@ -9,6 +9,35 @@ Thanks to @bmorcelli for his help doing a better code.
@@ -29840,7 +29854,7 @@ index ca1f9def..82603dcc 100644
      tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
  #if defined(STACKCHAN)
 diff --git a/src/modules/pwnagotchi/ui.h b/src/modules/pwnagotchi/ui.h
-index 23e8e3c4..697864a2 100644
+index 23e8e3c..697864a 100644
 --- a/src/modules/pwnagotchi/ui.h
 +++ b/src/modules/pwnagotchi/ui.h
 @@ -12,6 +12,13 @@ Thanks to @bmorcelli for his help doing a better code.
@@ -29859,7 +29873,7 @@ index 23e8e3c4..697864a2 100644
  void drawTime();
 diff --git a/src/modules/wifi/chain_logic.h b/src/modules/wifi/chain_logic.h
 new file mode 100644
-index 00000000..819464cc
+index 0000000..819464c
 --- /dev/null
 +++ b/src/modules/wifi/chain_logic.h
 @@ -0,0 +1,554 @@
@@ -30419,7 +30433,7 @@ index 00000000..819464cc
 +}
 diff --git a/src/modules/wifi/chain_orchestrator.cpp b/src/modules/wifi/chain_orchestrator.cpp
 new file mode 100644
-index 00000000..57148a3e
+index 0000000..57148a3
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.cpp
 @@ -0,0 +1,1064 @@
@@ -31489,7 +31503,7 @@ index 00000000..57148a3e
 +#endif
 diff --git a/src/modules/wifi/chain_orchestrator.h b/src/modules/wifi/chain_orchestrator.h
 new file mode 100644
-index 00000000..e2e699e8
+index 0000000..e2e699e
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.h
 @@ -0,0 +1,40 @@
@@ -31534,7 +31548,7 @@ index 00000000..e2e699e8
 +
 +#endif
 diff --git a/src/modules/wifi/channel_analyzer.cpp b/src/modules/wifi/channel_analyzer.cpp
-index 353b8641..006bee36 100644
+index 353b864..006bee3 100644
 --- a/src/modules/wifi/channel_analyzer.cpp
 +++ b/src/modules/wifi/channel_analyzer.cpp
 @@ -1,5 +1,6 @@
@@ -32155,7 +32169,7 @@ index 353b8641..006bee36 100644
  
  #endif
 diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
-index 59ed80ed..38b15485 100644
+index 59ed80e..38b1548 100644
 --- a/src/modules/wifi/evil_portal.cpp
 +++ b/src/modules/wifi/evil_portal.cpp
 @@ -8,12 +8,34 @@
@@ -32716,7 +32730,7 @@ index 59ed80ed..38b15485 100644
  
  String EvilPortal::getHtmlTemplate(const String &body) {
 diff --git a/src/modules/wifi/evil_portal.h b/src/modules/wifi/evil_portal.h
-index 4a8b438e..3ed5bc89 100644
+index 4a8b438..3ed5bc8 100644
 --- a/src/modules/wifi/evil_portal.h
 +++ b/src/modules/wifi/evil_portal.h
 @@ -6,6 +6,10 @@
@@ -32827,7 +32841,7 @@ index 4a8b438e..3ed5bc89 100644
      void printDeauthStatus(void);
 diff --git a/src/modules/wifi/evil_twin_logic.h b/src/modules/wifi/evil_twin_logic.h
 new file mode 100644
-index 00000000..741a273a
+index 0000000..741a273
 --- /dev/null
 +++ b/src/modules/wifi/evil_twin_logic.h
 @@ -0,0 +1,343 @@
@@ -33176,7 +33190,7 @@ index 00000000..741a273a
 +}
 diff --git a/src/modules/wifi/lan_auditor.cpp b/src/modules/wifi/lan_auditor.cpp
 new file mode 100644
-index 00000000..482d7034
+index 0000000..482d703
 --- /dev/null
 +++ b/src/modules/wifi/lan_auditor.cpp
 @@ -0,0 +1,776 @@
@@ -33958,7 +33972,7 @@ index 00000000..482d7034
 +#endif
 diff --git a/src/modules/wifi/lan_auditor.h b/src/modules/wifi/lan_auditor.h
 new file mode 100644
-index 00000000..6c351d84
+index 0000000..6c351d8
 --- /dev/null
 +++ b/src/modules/wifi/lan_auditor.h
 @@ -0,0 +1,18 @@
@@ -33982,7 +33996,7 @@ index 00000000..6c351d84
 +#endif
 diff --git a/src/modules/wifi/lan_guard.cpp b/src/modules/wifi/lan_guard.cpp
 new file mode 100644
-index 00000000..04ec986b
+index 0000000..04ec986
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard.cpp
 @@ -0,0 +1,433 @@
@@ -34421,7 +34435,7 @@ index 00000000..04ec986b
 +#endif
 diff --git a/src/modules/wifi/lan_guard.h b/src/modules/wifi/lan_guard.h
 new file mode 100644
-index 00000000..38dfba00
+index 0000000..38dfba0
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard.h
 @@ -0,0 +1,19 @@
@@ -34446,7 +34460,7 @@ index 00000000..38dfba00
 +#endif
 diff --git a/src/modules/wifi/lan_guard_logic.h b/src/modules/wifi/lan_guard_logic.h
 new file mode 100644
-index 00000000..662670e5
+index 0000000..662670e
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard_logic.h
 @@ -0,0 +1,84 @@
@@ -34536,7 +34550,7 @@ index 00000000..662670e5
 +}
 diff --git a/src/modules/wifi/napt_http_inspector.cpp b/src/modules/wifi/napt_http_inspector.cpp
 new file mode 100644
-index 00000000..e21d023e
+index 0000000..e21d023
 --- /dev/null
 +++ b/src/modules/wifi/napt_http_inspector.cpp
 @@ -0,0 +1,585 @@
@@ -35127,7 +35141,7 @@ index 00000000..e21d023e
 +#endif
 diff --git a/src/modules/wifi/napt_http_inspector.h b/src/modules/wifi/napt_http_inspector.h
 new file mode 100644
-index 00000000..31ce051c
+index 0000000..31ce051
 --- /dev/null
 +++ b/src/modules/wifi/napt_http_inspector.h
 @@ -0,0 +1,20 @@
@@ -35153,7 +35167,7 @@ index 00000000..31ce051c
 +#endif
 diff --git a/src/modules/wifi/napt_router.cpp b/src/modules/wifi/napt_router.cpp
 new file mode 100644
-index 00000000..26eb74cc
+index 0000000..26eb74c
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.cpp
 @@ -0,0 +1,1096 @@
@@ -36255,7 +36269,7 @@ index 00000000..26eb74cc
 +#endif
 diff --git a/src/modules/wifi/napt_router.h b/src/modules/wifi/napt_router.h
 new file mode 100644
-index 00000000..0b4fbc17
+index 0000000..0b4fbc1
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.h
 @@ -0,0 +1,24 @@
@@ -36285,7 +36299,7 @@ index 00000000..0b4fbc17
 +#endif
 diff --git a/src/modules/wifi/pmf_csa_test.cpp b/src/modules/wifi/pmf_csa_test.cpp
 new file mode 100644
-index 00000000..569e71f3
+index 0000000..569e71f
 --- /dev/null
 +++ b/src/modules/wifi/pmf_csa_test.cpp
 @@ -0,0 +1,549 @@
@@ -36840,7 +36854,7 @@ index 00000000..569e71f3
 +#endif
 diff --git a/src/modules/wifi/pmf_csa_test.h b/src/modules/wifi/pmf_csa_test.h
 new file mode 100644
-index 00000000..4a8c9ae8
+index 0000000..4a8c9ae
 --- /dev/null
 +++ b/src/modules/wifi/pmf_csa_test.h
 @@ -0,0 +1,20 @@
@@ -36866,7 +36880,7 @@ index 00000000..4a8c9ae8
 +#endif
 diff --git a/src/modules/wifi/pmkid_capture.cpp b/src/modules/wifi/pmkid_capture.cpp
 new file mode 100644
-index 00000000..9ddd5502
+index 0000000..9ddd550
 --- /dev/null
 +++ b/src/modules/wifi/pmkid_capture.cpp
 @@ -0,0 +1,769 @@
@@ -37641,7 +37655,7 @@ index 00000000..9ddd5502
 +#endif
 diff --git a/src/modules/wifi/pmkid_capture.h b/src/modules/wifi/pmkid_capture.h
 new file mode 100644
-index 00000000..021ceb4c
+index 0000000..021ceb4
 --- /dev/null
 +++ b/src/modules/wifi/pmkid_capture.h
 @@ -0,0 +1,19 @@
@@ -37666,7 +37680,7 @@ index 00000000..021ceb4c
 +#endif
 diff --git a/src/modules/wifi/portal_napt.cpp b/src/modules/wifi/portal_napt.cpp
 new file mode 100644
-index 00000000..e6864c37
+index 0000000..e6864c3
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.cpp
 @@ -0,0 +1,690 @@
@@ -38362,7 +38376,7 @@ index 00000000..e6864c37
 +#endif
 diff --git a/src/modules/wifi/portal_napt.h b/src/modules/wifi/portal_napt.h
 new file mode 100644
-index 00000000..f8d75952
+index 0000000..f8d7595
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.h
 @@ -0,0 +1,34 @@
@@ -38402,7 +38416,7 @@ index 00000000..f8d75952
 +#endif
 diff --git a/src/modules/wifi/probe_radar.cpp b/src/modules/wifi/probe_radar.cpp
 new file mode 100644
-index 00000000..f6f0d502
+index 0000000..f6f0d50
 --- /dev/null
 +++ b/src/modules/wifi/probe_radar.cpp
 @@ -0,0 +1,732 @@
@@ -39140,7 +39154,7 @@ index 00000000..f6f0d502
 +#endif
 diff --git a/src/modules/wifi/probe_radar.h b/src/modules/wifi/probe_radar.h
 new file mode 100644
-index 00000000..0a6c76ab
+index 0000000..0a6c76a
 --- /dev/null
 +++ b/src/modules/wifi/probe_radar.h
 @@ -0,0 +1,6 @@
@@ -39152,7 +39166,7 @@ index 00000000..0a6c76ab
 +#endif
 diff --git a/src/modules/wifi/responder_plus.cpp b/src/modules/wifi/responder_plus.cpp
 new file mode 100644
-index 00000000..db9dba33
+index 0000000..db9dba3
 --- /dev/null
 +++ b/src/modules/wifi/responder_plus.cpp
 @@ -0,0 +1,467 @@
@@ -39625,7 +39639,7 @@ index 00000000..db9dba33
 +#endif
 diff --git a/src/modules/wifi/responder_plus.h b/src/modules/wifi/responder_plus.h
 new file mode 100644
-index 00000000..3264165b
+index 0000000..3264165
 --- /dev/null
 +++ b/src/modules/wifi/responder_plus.h
 @@ -0,0 +1,17 @@
@@ -39648,7 +39662,7 @@ index 00000000..3264165b
 +#endif
 diff --git a/src/modules/wifi/wids_csi_ftm.cpp b/src/modules/wifi/wids_csi_ftm.cpp
 new file mode 100644
-index 00000000..001fad76
+index 0000000..001fad7
 --- /dev/null
 +++ b/src/modules/wifi/wids_csi_ftm.cpp
 @@ -0,0 +1,936 @@
@@ -40590,7 +40604,7 @@ index 00000000..001fad76
 +#endif
 diff --git a/src/modules/wifi/wids_csi_ftm.h b/src/modules/wifi/wids_csi_ftm.h
 new file mode 100644
-index 00000000..8585d75f
+index 0000000..8585d75
 --- /dev/null
 +++ b/src/modules/wifi/wids_csi_ftm.h
 @@ -0,0 +1,10 @@
@@ -40605,7 +40619,7 @@ index 00000000..8585d75f
 +
 +#endif
 diff --git a/src/modules/wifi/wifi_atks.cpp b/src/modules/wifi/wifi_atks.cpp
-index 2e206e76..3ddb9da6 100644
+index 2e206e7..3ddb9da 100644
 --- a/src/modules/wifi/wifi_atks.cpp
 +++ b/src/modules/wifi/wifi_atks.cpp
 @@ -4,6 +4,8 @@
@@ -40638,7 +40652,7 @@ index 2e206e76..3ddb9da6 100644
      if (scanAtks) {
 diff --git a/src/modules/wifi/wifi_observation_logic.h b/src/modules/wifi/wifi_observation_logic.h
 new file mode 100644
-index 00000000..297064ff
+index 0000000..297064f
 --- /dev/null
 +++ b/src/modules/wifi/wifi_observation_logic.h
 @@ -0,0 +1,110 @@
@@ -40753,7 +40767,7 @@ index 00000000..297064ff
 +    return best;
 +}
 diff --git a/src/modules/wifi/wifite.cpp b/src/modules/wifi/wifite.cpp
-index 327074a1..8cf95db8 100644
+index 327074a..8cf95db 100644
 --- a/src/modules/wifi/wifite.cpp
 +++ b/src/modules/wifi/wifite.cpp
 @@ -129,9 +129,14 @@ class App {

@@ -12,10 +12,19 @@ ui=s[a:b]
 # The menu task must never sit inside the OTA screen for a whole transfer: the
 # slice has to be bounded, and the key globals must survive it (a wiped Esc is
 # what made every button look dead while an upload was stalled).
-assert 'kOtaUiSliceMs' in ui
-assert '(uint32_t)(millis() - sliceStart) < kOtaUiSliceMs' in ui
+# The checkpoint is reached from check(), which a menu calls 6-9 times per loop
+# iteration, and from the InputHandler task. It must be a pure non-blocking
+# state comparison: no loop, no sleep, no vTaskDelay, and it must not request a
+# full-screen repaint while a transfer is active (that was the on-device freeze).
+assert 'vTaskDelay' not in ui
+assert 'while (' not in ui
+assert 'kOtaUiSliceMs' not in ui
 assert 'NextPress = PrevPress' not in ui
 assert 'while (isOtaInProgress()) {' not in ui
+# The redraw request is allowed only on the active->idle transition.
+assert 's_otaUiNeedsRedraw = true;' in ui
+assert ui.count('s_otaUiNeedsRedraw = true;') == 1
+assert 's_webUiScreenDirty = true;' not in ui
 # Two-stage idle timeout: a session that never receives a byte must expire fast.
 assert 'kOtaIdleTimeoutNoDataMs' in s and 's_otaWritten == 0' in s
 # The UI task may only *request* an abort; the AsyncTCP task owns Update.abort().
