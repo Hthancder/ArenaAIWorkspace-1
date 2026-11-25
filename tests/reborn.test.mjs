@@ -612,12 +612,13 @@ test('aim explains wallcheck, unknown teams and FOV rejection without exposing p
 });
 
 function pickupFixture() {
-  const dom = env(), app = fixture();
+  const dom = env(), app = fixture(); let clock = 1000;
+  Object.defineProperty(dom.window.performance, 'now', { value: () => clock, configurable: true });
   const loot = { __id: 9, __type: 3, active: true, type: '9mm', count: 30, pos: { x: 10, y: 20 }, rad: 2, ownerId: 0, layer: 0 };
   app.game.lootBarn = { closestLoot: loot, getClosestLoot() { return this.closestLoot; } };
   const config = { ...DEFAULTS, autoLoot: true, lootMode: 'nearby' }, definitions = { ...defs, '9mm': { type: 'ammo' } };
   const engine = new Features(dom.window, app, config, () => {}, definitions);
-  return { dom, app, loot, config, engine };
+  return { dom, app, loot, config, engine, advance(ms) { clock += ms; } };
 }
 
 test('loot source discovery rejects ambiguity and does not execute candidate methods', () => {
@@ -655,18 +656,18 @@ test('nearby pickup skips weapons, gear, inactive/foreign/out-of-range loot and 
 });
 
 test('unchanged loot backs off, count/id changes reset retry and unknown Join never enables native pickup', () => {
-  const { dom, app, loot, engine } = pickupFixture();
+  const { dom, app, loot, engine, advance } = pickupFixture();
   app.game.transmit(1, new JoinMsg(9999)); engine.pre(); assert.equal(engine.pickupPulse, false);
   app.game.transmit(1, new JoinMsg()); engine.pre(); assert.equal(engine.pickupAttempt.attempts, 1);
-  engine.nextPickup = -Infinity; engine.pre(); assert.equal(engine.pickupAttempt.attempts, 2);
-  loot.count--; engine.pre(); assert.equal(engine.pickupAttempt.attempts, 1); assert.equal(engine.pickupPulse, true);
-  loot.__id++; engine.pre(); assert.equal(engine.pickupAttempt.attempts, 1);
+  advance(350); engine.pre(); assert.equal(engine.pickupAttempt.attempts, 2);
+  loot.count--; advance(120); engine.pre(); assert.equal(engine.pickupAttempt.attempts, 1); assert.equal(engine.pickupPulse, true);
+  loot.__id++; advance(120); engine.pre(); assert.equal(engine.pickupAttempt.attempts, 1);
   engine.dispose(); dom.window.close();
 });
 
 test('replacement bind instances get a fresh native pickup hook and old instance is restored', () => {
-  const { dom, app, engine } = pickupFixture(); app.game.transmit(1, new JoinMsg()); engine.pre();
-  const old = app.game.binds; app.game.binds = new Binds(app.input); engine.nextPickup = -Infinity;
+  const { dom, app, engine, advance } = pickupFixture(); app.game.transmit(1, new JoinMsg()); engine.pre();
+  const old = app.game.binds; app.game.binds = new Binds(app.input); advance(350);
   engine.reconcile(true); engine.pre();
   assert.equal(old.isBindPressed(10), false); assert.equal(app.game.binds.isBindPressed(10), true);
   engine.dispose(); dom.window.close();
@@ -1102,5 +1103,45 @@ test('snapshot hook captures RTT before native update processing', () => {
     clock = 1080;
     app.game.receive({ ack: 7, fullObjects: [], partObjects: [], delObjIds: [], activePlayerData: {} });
     assert.equal(engine.timing.rtt, 80);
+  } finally { engine.dispose(); dom.window.close(); }
+});
+
+test('nearby pickup revalidates changed closest loot without suppressing physical bind', () => {
+  const f = pickupFixture();
+  try {
+    f.app.game.transmit(1, new JoinMsg()); f.engine.pre();
+    assert.equal(f.app.game.binds.isBindPressed(10), true);
+    const gun = { ...f.loot, __id: 10, type: 'mp5' };
+    f.app.game.lootBarn.closestLoot = gun;
+    assert.equal(f.app.game.binds.isBindPressed(10), false, 'never synthesize stale pickup');
+    f.app.game.lootBarn.closestLoot = f.loot; f.loot.type = 'mp5';
+    assert.equal(f.app.game.binds.isBindPressed(10), false, 'pooled object changed type');
+    f.loot.type = '9mm'; f.loot.pos = { x: 50, y: 50 };
+    assert.equal(f.app.game.binds.isBindPressed(10), false, 'item moved outside radius');
+  } finally { f.engine.dispose(); f.dom.window.close(); }
+});
+
+test('nearby backoff persists across temporary loss of the closest item', () => {
+  const f = pickupFixture();
+  try {
+    f.app.game.transmit(1, new JoinMsg()); f.engine.pre();
+    f.app.game.lootBarn.closestLoot = null; f.advance(60); f.engine.pre();
+    f.app.game.lootBarn.closestLoot = f.loot; f.advance(60); f.engine.pre();
+    assert.equal(f.engine.pickupPulse, false);
+    f.advance(230); f.engine.pre(); assert.equal(f.engine.pickupAttempt.attempts, 2);
+  } finally { f.engine.dispose(); f.dom.window.close(); }
+});
+
+test('auto-loot never suppresses a native physical Loot bind', () => {
+  const dom = env(), app = fixture();
+  class ManualBinds extends Binds { isBindPressed(code) { return code === 10 || super.isBindPressed(code); } }
+  app.game.binds = new ManualBinds(app.input);
+  const loot = { __id: 9, __type: 3, active: true, type: '9mm', count: 30, pos: { x: 10, y: 20 }, rad: 2, ownerId: 0, layer: 0 };
+  app.game.lootBarn = { closestLoot: loot, getClosestLoot() { return this.closestLoot; } };
+  const engine = new Features(dom.window, app, { ...DEFAULTS, autoLoot: true }, () => {}, { ...defs, '9mm': { type: 'ammo' } });
+  try {
+    app.game.transmit(1, new JoinMsg()); engine.pre();
+    loot.type = 'mp5';
+    assert.equal(app.game.binds.isBindPressed(10), true);
   } finally { engine.dispose(); dom.window.close(); }
 });

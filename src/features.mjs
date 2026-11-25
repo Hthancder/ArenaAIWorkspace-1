@@ -15,6 +15,7 @@ import { clippedMuzzle, shotLayer, segmentCandidates } from './aim-geometry.mjs'
 import { AimEvidence } from './aim-evidence.mjs';
 import { MouseInputFrame } from './mouse-input.mjs';
 import { NativeNames } from './native-names.mjs';
+import { LootBackoff } from './loot-backoff.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
 export const isManualEquip = code => code >= 11 && code <= 20 || code === 27 || code === 28;
@@ -137,7 +138,7 @@ export class Features {
     this.stats = { frames: 0, mappingRuns: 0, featureMs: 0, lastError: null, aimState: 'disabled', aimRejections: {} };
     this.joinState = { observed: false, forwarded: false, mobile: null, requested: false };
     this.capabilities = {}; this.failed = new Set();
-    this.lootSource = null; this.pickupPulse = false; this.nextPickup = 0; this.pickupAttempt = null;
+    this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.lootBackoff = new LootBackoff();
     this.stats.lootState = 'disabled'; this.stats.pickupPulses = 0;
     this.espRenderer = new EspRenderer(); this.stats.esp = emptyEspStats();
     this.smokeSources = []; this.stats.xray = emptyXrayStats(); this.stats.semi = { state: 'disabled', pulses: 0 };
@@ -188,7 +189,7 @@ export class Features {
     this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset();
     this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.local = null; this.mapping = null; this.effects = [];
-    this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.nextPickup = 0;
+    this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.lootBackoff.reset();
     this.binds = null; this.bindsInstalled = false; this.stickyId = null; this.lastInput = -Infinity;
     this.repeatFire.reset(); this.movement.reset(); this.weaponSwitch.reset(); this.layerOverrides.clear(); this.layerHeld = false; this.mapHighlights.dispose(); this.smokeSources = []; this.stats.xray = emptyXrayStats('waiting-contract');
     this.espRenderer.reset(); this.stats.esp = emptyEspStats('waiting-mapping'); this.stats.semi = { state: 'waiting-contract', pulses: this.repeatFire.pulses }; this.stats.switchState = 'waiting-contract'; this.stats.layerState = 'disabled'; this.stats.previews = { cones: 0, bulletPaths: 0, throwPaths: 0, unsupportedColliders: 0 };
@@ -251,6 +252,7 @@ export class Features {
     if (key === 'layerKey' || key === 'layerSpoofer') { this.layerHeld = false; this.layerOverrides.clear(); }
     if (['aim', 'aimMode', 'aimActivation'].includes(key)) { this.aimController.reset(); this.stickyId = null; }
     if (['autoSwitch', 'useOneGun', 'autoMelee', 'melee'].includes(key)) { this.weaponSwitch.reset(); this.meleeEquip = null; }
+    if (key === 'autoLoot' || key === 'lootMode') this.pickupPulse = false;
     if (['mapHighlights', 'smallerTrees'].includes(key)) this.mapHighlights.sync(this.app.game, this.mapping?.map);
     // A slider changes policy, not source contracts: do not force AST discovery.
   }
@@ -314,7 +316,7 @@ export class Features {
       const actual = Reflect.apply(original, this, arguments);
       if (code === 10 && self.pickupPulse && !self.stopped && !self.failed.has('input-frame')
         && self.config.autoLoot && self.config.lootMode === 'nearby' && self.protocol === VERIFIED_PROTOCOL
-        && self.inputReady()) return true;
+        && self.inputReady() && self.pickupStillValid()) return true;
       if (code !== 4) return actual;
       const m = self.mapping, weapon = localWeapon(m), def = self.definitions?.[weapon];
       const pulse = self.repeatFire.sample({ frame: self.frameId, now: self.win.performance.now(), weapon, def,
@@ -718,30 +720,32 @@ export class Features {
       }
     }
   }
+  pickupEligible(loot) {
+    const m = this.mapping, pos = m?.active && this.sourcePos(m.active), lootPos = read(loot, 'pos');
+    return !!(m?.active && read(loot, '__type') === 3 && read(loot, 'active') === true && vec(lootPos) && vec(pos)
+      && sameLayer(read(loot, 'layer'), this.sourceLayer(m.active)) && finite(read(loot, 'rad')) && loot.rad > 0
+      && (loot.ownerId === 0 || loot.ownerId === m.active.__id)
+      && Math.hypot(lootPos.x - pos.x, lootPos.y - pos.y) < loot.rad
+      && ['ammo', 'heal', 'boost', 'throwable'].includes(this.definitions?.[read(loot, 'type')]?.type));
+  }
+  pickupStillValid() {
+    const attempt = this.pickupAttempt, loot = this.lootSource && read(this.lootSource.owner, this.lootSource.key);
+    return !!(attempt && loot === attempt.entity && loot.__id === attempt.id && loot.type === attempt.type
+      && loot.count === attempt.count && this.pickupEligible(loot));
+  }
   updateLoot() {
     this.pickupPulse = false;
     if (!this.config.autoLoot || this.config.lootMode === 'mobile') return;
-    const m = this.mapping, now = this.win.performance.now();
+    const now = this.win.performance.now();
     if (!this.capabilities.autoPickup || !this.bindsInstalled) { this.stats.lootState = 'missing-pickup-contract'; return; }
     if (!this.inputReady()) { this.stats.lootState = 'paused'; return; }
-    const loot = read(this.lootSource.owner, this.lootSource.key), pos = this.sourcePos(m.active);
-    if (read(loot, '__type') !== 3 || read(loot, 'active') !== true || !vec(read(loot, 'pos')) || !vec(pos)
-      || !sameLayer(read(loot, 'layer'), this.sourceLayer(m.active)) || !finite(read(loot, 'rad')) || loot.rad <= 0
-      || !(loot.ownerId === 0 || loot.ownerId === m.active.__id)
-      || Math.hypot(loot.pos.x - pos.x, loot.pos.y - pos.y) >= loot.rad) {
-      this.stats.lootState = 'no-nearby-loot'; this.pickupAttempt = null; this.nextPickup = 0; return;
-    }
-    const def = this.definitions?.[read(loot, 'type')];
-    if (!['ammo', 'heal', 'boost', 'throwable'].includes(def?.type)) { this.stats.lootState = 'skip-non-supply'; return; }
+    const loot = read(this.lootSource.owner, this.lootSource.key);
+    if (!this.pickupEligible(loot)) { this.stats.lootState = 'no-eligible-loot'; return; }
     // Never synthesize Interact/Use: they can open doors or revive. Native Loot
     // goes through normal InputMsg diff detection and the server's pickup checks.
-    const previous = this.pickupAttempt;
-    const unchanged = previous?.entity === loot && previous.id === loot.__id && previous.count === loot.count;
-    if (!unchanged) this.nextPickup = 0;
-    if (now < this.nextPickup) { this.stats.lootState = 'pickup-backoff'; return; }
-    const attempts = unchanged ? previous.attempts + 1 : 1;
-    this.pickupAttempt = { entity: loot, id: loot.__id, count: loot.count, attempts };
-    this.nextPickup = now + Math.min(2000, 350 * 2 ** Math.min(attempts - 1, 3));
+    const attempt = this.lootBackoff.attempt(loot, now);
+    if (!attempt) { this.stats.lootState = 'pickup-backoff'; return; }
+    this.pickupAttempt = { entity: loot, ...attempt };
     this.pickupPulse = true; this.stats.pickupPulses++; this.stats.lootState = 'loot-input-ready';
   }
   autoLootStatus() {
