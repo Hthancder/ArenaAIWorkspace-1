@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AimController, SnapshotTracker, angleDelta, predictShot, weaponProfile, smoothDamp } from '../src/aim.mjs';
 import { discoverInputTimeout, discoverSourceFields, discoverUpdateReceiver, NetworkTiming } from '../src/aim-adapters.mjs';
-import { clippedMuzzle, shotLayer } from '../src/aim-geometry.mjs';
+import { clippedMuzzle, shotLayer, pathToTarget } from '../src/aim-geometry.mjs';
 import { NativeNames } from '../src/native-names.mjs';
 import { DEFAULTS, normalizeConfig } from '../src/menu.mjs';
 
@@ -234,4 +234,9 @@ test('small-oscillation hypothesis rejects straight motion, gaps and insufficien
   const broken = samples.filter((_, i) => i < 10 || i > 15);
   assert.notEqual(predictShot({ ...opts, track: { ...track, motion: broken } }).state, 'bounded-oscillation');
   assert.notEqual(predictShot({ ...opts, track: { ...track, motion: samples.slice(-5) } }).state, 'bounded-oscillation');
+});
+
+test('bullet wallcheck ends at first hitbox edge or the exit if spawned inside', () => {
+  assert.deepEqual(pathToTarget({ x: 0, y: 0 }, { x: 10, y: 0 }, 1), { x: 9, y: 0 });
+  assert.deepEqual(pathToTarget({ x: 9.5, y: 0 }, { x: 10, y: 0 }, 1), { x: 11, y: 0 });
 });

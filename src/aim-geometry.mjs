@@ -48,6 +48,17 @@ export function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLaye
   return { x: gunPos.x + dir.x * length, y: gunPos.y + dir.y * length };
 }
 
+// Stop at the near edge of the target's circular hitbox: an obstacle beyond
+// the first player intersection does not block that hit on the server.
+export function pathToTarget(muzzle, target, radius = 0) {
+  const dx = target.x - muzzle.x, dy = target.y - muzzle.y, distance = Math.hypot(dx, dy);
+  const r = finite(radius) ? Math.max(0, radius) : 0;
+  // Source circle intersection uses the exit intersection if the segment starts
+  // inside a player. Conservatively check through that exit instead of length 0.
+  const length = distance < r ? distance + r : Math.max(0, distance - r);
+  return distance > 0 ? { x: muzzle.x + dx * length / distance, y: muzzle.y + dy * length / distance } : { ...muzzle };
+}
+
 // Broadphase only: far map objects must not consume the narrow-phase budget.
 // Unsupported/invalid shapes stay relevant so wallcheck still fails closed.
 export function segmentCandidates(obstacles, from, to, padding = 0) {
@@ -57,7 +68,7 @@ export function segmentCandidates(obstacles, from, to, padding = 0) {
     const c = read(o, 'collider'); let left, right, bottom, top;
     if (read(c, 'type') === 0 && vec(read(c, 'pos')) && finite(read(c, 'rad')) && c.rad >= 0) {
       left = c.pos.x - c.rad; right = c.pos.x + c.rad; bottom = c.pos.y - c.rad; top = c.pos.y + c.rad;
-    } else if (read(c, 'type') === 1 && vec(read(c, 'min')) && vec(read(c, 'max'))) {
+    } else if (read(c, 'type') === 1 && vec(read(c, 'min')) && vec(read(c, 'max')) && c.min.x <= c.max.x && c.min.y <= c.max.y) {
       left = c.min.x; right = c.max.x; bottom = c.min.y; top = c.max.y;
     } else return true;
     return right >= minX && left <= maxX && top >= minY && bottom <= maxY;

@@ -1175,3 +1175,95 @@ test('drop pause ignores malformed messages and other protocol versions', () => 
     assert.equal(f.engine.pickupPauseUntil, 0);
   } finally { f.engine.dispose(); f.dom.window.close(); }
 });
+
+test('Wallcheck relinquishes blocked selected target, resumes when clear and does not take another target', () => {
+  const f = coordinated({ wallcheck: true, showTarget: true });
+  try {
+    const other = new Player(3, { x: 12, y: 21 });
+    f.app.game.barn.playerPool.list.push(other);
+    f.app.game.barn.playerIds.push(3); f.app.game.barn.teamInfo[30] = { playerIds: [3] };
+    const wall = { __id: 999, __type: 2, active: true, collidable: true, dead: false, layer: 0, height: 1,
+      collider: { type: 0, pos: { x: 10.6, y: 20 }, rad: .12 } };
+    const table = { 999: wall };
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true);
+    const blocked = f.send();
+    assert.equal(f.engine.stats.aimState, 'wall-blocked');
+    assert.equal(f.engine.target, null); assert.equal(f.engine.dot, null);
+    assert.equal(blocked.wire.shootHold, true, 'does not block physical fire');
+    assert.equal(f.engine.stickyId, 2);
+    other.p = { x: 11.3, y: 20.2 }; f.advance(); f.send();
+    assert.equal(f.engine.stats.aimState, 'wall-blocked'); assert.equal(f.engine.stickyId, 2, 'keep waiting for blocked sticky target');
+    other.p = { x: 12, y: 21 };
+    wall.dead = true; f.advance(); f.send();
+    assert.equal(f.engine.stats.aimState, 'input-applied');
+    assert.equal(f.engine.target.__id, 2);
+    wall.dead = false; f.advance(); f.send();
+    assert.equal(f.engine.stats.aimState, 'wall-blocked'); assert.equal(f.engine.target, null);
+    f.cfg.wallcheck = false; f.advance(); f.send(); assert.equal(f.engine.target.__id, 2);
+  } finally { f.close(); }
+});
+
+test('Wallcheck treats another player as blocking, and fails closed on unknown obstacle collider', () => {
+  const f = coordinated({ wallcheck: true });
+  try {
+    const table = {};
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    const ally = new Player(3, { x: 10.7, y: 20 });
+    f.app.game.barn.playerPool.list.push(ally); f.app.game.barn.playerIds.push(3); f.app.game.barn.teamInfo[10].playerIds.push(3);
+    f.engine.reconcile(true); f.send(); assert.equal(f.engine.stats.aimState, 'wall-blocked');
+    ally.active = false; f.advance(); f.send(); assert.equal(f.engine.stats.aimState, 'input-applied');
+    table[123] = { __id: 123, __type: 2, active: true, collidable: true, dead: false, layer: 0, height: 1 };
+    f.advance(); f.send(); assert.equal(f.engine.stats.aimState, 'wall-blocked');
+    table[123].active = false; f.advance(); f.send(); assert.equal(f.engine.stats.aimState, 'input-applied');
+  } finally { f.close(); }
+});
+
+test('indicator follows selected rendered player only, not the predicted impact point', () => {
+  const f = coordinated({ showTarget: true, targetStyle: 'ring', showFov: false, showDot: false });
+  try {
+    f.send(); const enemy = f.engine.target; assert.ok(enemy);
+    const strokes = [], noop = () => {};
+    f.engine.canvas = { width: 0, height: 0, style: {} };
+    f.engine.ctx = { save: noop, restore: noop, setTransform: noop, setLineDash: noop, beginPath: noop, stroke: noop,
+      arc: (x, y, r) => strokes.push({ x, y, r }), clearRect: noop, moveTo: noop, lineTo: noop, closePath: noop };
+    f.engine.mapping.visualPosKey = 'visual'; enemy.visual = { x: 13, y: 20 };
+    f.engine.dot = { x: 12, y: 34 };
+    f.engine.draw([]);
+    assert.equal(strokes.length, 1); assert.equal(strokes[0].x, 496); assert.equal(strokes[0].y, 300);
+    f.cfg.showTarget = false; f.engine.draw([]); assert.equal(strokes.length, 1);
+    f.cfg.showTarget = true; enemy.__id = 999; f.engine.draw([]); assert.equal(strokes.length, 1);
+  } finally { f.close(); }
+});
+
+test('target indicator controls persist only validated styles and hide style when disabled', () => {
+  const dom = env(), config = { ...DEFAULTS }, menu = createMenu(dom.window, config, {});
+  try {
+    const root = menu.root, toggle = root.querySelector('[data-config=showTarget]'), style = root.querySelector('[data-config=targetStyle]');
+    assert.ok(toggle); assert.ok(style); assert.equal(style.closest('label').hidden, true);
+    toggle.click(); assert.equal(config.showTarget, true); assert.equal(style.closest('label').hidden, false);
+    style.value = 'diamond'; style.dispatchEvent(new dom.window.Event('change')); assert.equal(config.targetStyle, 'diamond');
+    assert.equal(normalizeConfig(JSON.parse(dom.window.localStorage.getItem(STORAGE_KEY))).targetStyle, 'diamond');
+    toggle.click(); assert.equal(style.closest('label').hidden, true);
+  } finally { menu.dispose(); dom.window.close(); }
+});
+
+test('wallcheck stops at target hitbox, but checks the actual smoothed direction too', () => {
+  const f = coordinated({ wallcheck: true, humanLikeAim: false });
+  try {
+    const obstacle = { __id: 900, __type: 2, active: true, collidable: true, layer: 0, height: 1,
+      collider: { type: 0, pos: { x: 11.5, y: 20 }, rad: .1 } };
+    const table = { 900: obstacle };
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true); f.send();
+    assert.equal(f.engine.stats.aimState, 'input-applied', 'wall after near hitbox edge does not block first collision');
+    obstacle.collider.pos = { x: 10, y: 20.5 };
+    f.engine.restoreInput(); f.engine.aimController.reset();
+    f.app.input.mousePos = { x: 400, y: 260 };
+    f.cfg.humanLikeAim = true;
+    f.advance(); f.send();
+    assert.equal(f.engine.stats.aimState, 'wall-blocked', 'smoothed trajectory faces a blocker');
+    f.cfg.humanLikeAim = false; f.advance(); f.send();
+    assert.equal(f.engine.stats.aimState, 'input-applied', 'direct path to target is clear');
+  } finally { f.close(); }
+});

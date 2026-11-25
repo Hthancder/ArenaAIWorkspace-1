@@ -11,10 +11,11 @@ import { WeaponSwitch } from './weapon-switch.mjs';
 import { MovementSmoother, throwPreview, traceShot } from './previews.mjs';
 import { AimController, SnapshotTracker, modeOf, predictShot, unit, weaponProfile, angleDelta } from './aim.mjs';
 import { discoverInputTimeout, discoverUpdateReceiver, discoverSourceFields, NetworkTiming } from './aim-adapters.mjs';
-import { clippedMuzzle, shotLayer, segmentCandidates } from './aim-geometry.mjs';
+import { clippedMuzzle, shotLayer, segmentCandidates, pathToTarget } from './aim-geometry.mjs';
 import { AimEvidence } from './aim-evidence.mjs';
 import { MouseInputFrame } from './mouse-input.mjs';
 import { NativeNames } from './native-names.mjs';
+import { drawTargetIndicator } from './target-indicator.mjs';
 import { LootBackoff } from './loot-backoff.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
@@ -129,7 +130,7 @@ export class Features {
     this.hooks = new Disposables(); this.matchHooks = new Disposables(); this.overrides = new Overrides();
     this.tracker = new SnapshotTracker(); this.aimController = new AimController(); this.timing = new NetworkTiming(); this.names = new NativeNames(); this.aimEvidence = new AimEvidence(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities = new Map(); this.focusBlocked = false; this.protocol = null; this.mapping = null; this.local = null;
     this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
-    this.target = null; this.dot = null; this.mouseInput = new MouseInputFrame(); this.aimFrame = 0; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.lastMap = -Infinity;
+    this.target = null; this.targetId = null; this.dot = null; this.mouseInput = new MouseInputFrame(); this.aimFrame = 0; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.lastMap = -Infinity;
     this.lastVisual = -Infinity; this.lastInput = -Infinity; this.lastScan = -Infinity;
     this.effects = []; this.lastGame = null; this.lastPool = null; this.lastActive = null; this.lastActiveId = null;
     this.stopped = false; this.keys = new Set(); this.holdAim = false;
@@ -187,7 +188,7 @@ export class Features {
   restoreInput() { this.mouseInput.restore(); }
   releaseMatch() {
     this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset();
-    this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
+    this.target = null; this.targetId = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.local = null; this.mapping = null; this.effects = [];
     this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.pickupPauseUntil = 0; this.lootBackoff.reset();
     this.binds = null; this.bindsInstalled = false; this.stickyId = null; this.lastInput = -Infinity;
@@ -340,12 +341,24 @@ export class Features {
   blocked(from, to, bulletPath = true, source = null) {
     if (!this.config.wallcheck) return false;
     if (!this.capabilities.wallcheck) return true;
-    const eligible = (source || this.mapping.obstacles()).filter(o => read(o, 'active') !== false && !read(o, 'dead') && read(o, 'collidable')
+    const eligible = (source || this.mapping.obstacles()).filter(o => read(o, 'active') !== false && !read(o, 'dead') && read(o, 'collidable') !== false
       && !(bulletPath && this.protocol === VERIFIED_PROTOCOL && finite(read(o, 'height')) && read(o, 'height') < BULLET_HEIGHT)
       && (!finite(read(o, 'layer')) || sameLayer(read(o, 'layer'), from.layer)));
     const relevant = segmentCandidates(eligible, from.pos, to.pos);
     if (relevant.length > 1024) return true;
     return relevant.some(o => segmentBlocked(from.pos, to.pos, read(o, 'collider')));
+  }
+  blockedByPlayer(from, to, target, players) {
+    if (!this.config.wallcheck) return false;
+    const m = this.mapping;
+    return players.some(p => {
+      if (p === target || p === m.active || read(p, 'active') !== true || at(p, [m.schema.netKey, m.schema.deadKey])) return false;
+      const layer = this.sourceLayer(p);
+      if (finite(layer) && !sameLayer(layer, from.layer) && !(layer & 2)) return false;
+      const pos = this.sourcePos(p), scale = at(p, [m.schema.netKey, this.sourceFields?.scale]);
+      if (!vec(pos)) return false; // Unknown remote player positions cannot be reconstructed.
+      return segmentBlocked(from.pos, to.pos, { type: 0, pos, rad: finite(scale) && scale > 0 ? scale : 1 });
+    });
   }
   pre() {
     this.frameId++;
@@ -422,11 +435,11 @@ export class Features {
   emoteOpen() { return entries(this.app.game).some(([, child]) => read(child, 'wheelDisplayed') === true); }
   processAim(native, advance, applyDirect = false) {
     const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
-    this.target = null; this.dot = null; this.meleeDirection = null; this.stats.aimRejections = {}; this.stats.predictionState = null; this.stats.aimApproximate = false;
+    this.target = null; this.targetId = null; this.dot = null; this.meleeDirection = null; this.stats.aimRejections = {}; this.stats.predictionState = null; this.stats.aimApproximate = false;
     const blockedInput = this.inputBlockReason();
     const note = state => this.aimEvidence.attempt(state, { mode, activation: cfg.aimActivation, wallcheckRequested: !!cfg.wallcheck,
       wallcheckAvailable: !!this.capabilities.wallcheck, predictionRequested: !!cfg.predict }, this.stats.aimRejections, now, !blockedInput);
-    const fail = state => { this.stats.aimState = state; this.aimController.reset(); this.stickyId = null; note(state); return null; };
+    const fail = state => { this.stats.aimState = state; this.aimController.reset(); if (state !== 'wall-blocked' || !cfg.sticky) this.stickyId = null; this.target = null; this.targetId = null; this.dot = null; note(state); return null; };
     if (blockedInput) return fail(blockedInput);
     const pos = this.sourcePos(m.active), mouse = this.mouseInput.physical(this.app.input), camera = m.camera;
     if (!vec(pos) || !vec(mouse) || !camera) return fail('invalid-input-position');
@@ -454,7 +467,8 @@ export class Features {
     const layerFor = dir => shotLayer(pos, dir, rawLayer, selfRadius,
       structures ||= entries(read(m.creator, m.registryKey)).map(([, o]) => o).filter(o => Array.isArray(read(o, 'stairs'))));
     const candidates = [], reject = key => { this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1; };
-    for (const p of m.players().slice(0, 256)) {
+    const players = m.players();
+    for (const p of players.slice(0, 256)) {
       if (p === m.active || at(p, [m.schema.netKey, m.schema.deadKey])) continue;
       if (!cfg.knocked && p.downed) { reject('downed'); continue; }
       const relation = relations.classify(p.__id).kind;
@@ -506,12 +520,27 @@ export class Features {
       }
       if (!shot.dir) { reject(shot.state); continue; }
       if (layerFor(shot.dir) === null || !sameLayer(layerFor(shot.dir), this.sourceLayer(candidate.p))) { reject('aimLayer'); continue; }
-      if (this.blocked({ pos: shot.muzzle, layer: layerFor(shot.dir) }, { pos: shot.world }, !melee, obstacles)) { reject('wall'); continue; }
-      this.target = candidate.p; this.stickyId = candidate.p.__id;
+      const hitRadius = melee ? 0 : at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1;
+      const rayFrom = { pos: shot.muzzle, layer: layerFor(shot.dir) };
+      const rayTo = { pos: pathToTarget(shot.muzzle, shot.world, hitRadius) };
+      if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
+        reject('wall'); if (cfg.sticky) this.stickyId = candidate.p.__id; return fail('wall-blocked');
+      }
+      this.target = candidate.p; this.targetId = candidate.p.__id; this.stickyId = candidate.p.__id;
       this.stats.predictionState = shot.state;
       this.stats.aimApproximate = !!shot.approximate;
       const dir = advance ? this.aimController.step(physical, shot.dir, { mode: melee ? 'lock' : mode, strength: cfg.assistStrength ?? 35,
         smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth, now, target: candidate.p, humanLike: !!cfg.humanLikeAim, profile: cfg.smoothProfile || 'responsive' }) : !melee && mode === 'assist' ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
+      if (cfg.wallcheck && !melee && dir && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) {
+        const actualLayer = layerFor(dir);
+        if (actualLayer === null) { reject('aimLayer'); return fail('wall-blocked'); }
+        const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1, selfRadius) : pos;
+        // The smoothed ray may miss the target circle entirely; don't truncate it
+        // at a hypothetical entry point calculated for a different direction.
+        const length = Math.hypot(shot.world.x - actualMuzzle.x, shot.world.y - actualMuzzle.y) + hitRadius;
+        const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: { x: actualMuzzle.x + dir.x * length, y: actualMuzzle.y + dir.y * length } };
+        if (this.blocked(actualFrom, actualTo, true, obstacles) || this.blockedByPlayer(actualFrom, actualTo, candidate.p, players)) { reject('wall'); return fail('wall-blocked'); }
+      }
       this.dot = project(camera, shot.world);
       if (melee) {
         this.meleeDirection = shot.dir; this.weaponSwitch.reset(); this.switchSlot = null;
@@ -653,6 +682,13 @@ export class Features {
       ctx.beginPath(); ctx.arc(mouse.x, mouse.y, cfg.fov, 0, Math.PI * 2); ctx.stroke();
     }
     if (cfg.showDot && this.dot) { ctx.fillStyle = '#f95353'; ctx.beginPath(); ctx.arc(this.dot.x, this.dot.y, 4, 0, Math.PI * 2); ctx.fill(); }
+    const target = this.target;
+    if (cfg.aim && cfg.showTarget && target && read(target, 'active') === true && read(target, '__id') === this.targetId && !at(target, [m.schema?.netKey, m.schema?.deadKey])) {
+      const screen = project(m.camera, overlayPosition(target, m));
+      const scale = read(m.camera?.camera, m.camera?.scaleKeys?.[0]) * read(m.camera?.camera, m.camera?.scaleKeys?.[1]);
+      const radius = at(target, [m.schema?.netKey, this.sourceFields?.scale]) || 1;
+      if (screen && finite(scale)) drawTargetIndicator(ctx, screen, scale * radius + 5, cfg.targetStyle);
+    }
     const selfPos = overlayPosition(m.active, m), origin = project(m.camera, selfPos);
     if (!origin) { if (cfg.esp) this.stats.esp = emptyEspStats('invalid-projection'); return; }
     if (cfg.esp || cfg.lines) {

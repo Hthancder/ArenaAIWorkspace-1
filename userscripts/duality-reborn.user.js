@@ -6036,7 +6036,7 @@ THE SOFTWARE.
     const ui = unique(objects.filter(([, v]) => typeof readMethod(v, "setSpectating") === "function" && typeof read(v, "spectating") === "boolean").map(([, v]) => v));
     const map = unique(objects.filter(([, v]) => entries(v).some(([k]) => k === "mapTexture") && typeof readMethod(v, "getGroundSurface") === "function").map(([, v]) => v));
     const { creator, registryKey, registryState, registryEvidence } = discoverObjectRegistry(game);
-    const obstacles = /* @__PURE__ */ __name(() => entries(read(creator, registryKey)).map(([, v]) => v).filter((v) => object(read(v, "collider")) && typeof read(v, "collidable") === "boolean"), "obstacles");
+    const obstacles = /* @__PURE__ */ __name(() => entries(read(creator, registryKey)).map(([, v]) => v).filter((v) => read(v, "__type") === 2 || object(read(v, "collider")) && typeof read(v, "collidable") === "boolean"), "obstacles");
     const activeKey = unique(objects.filter(([, value]) => value === active).map(([key]) => key));
     const camera = discoverCamera(game);
     const visualPosKey = active && camera ? discoverVisualPosition(active, camera.method) : null;
@@ -6115,13 +6115,14 @@ THE SOFTWARE.
   function segmentBlocked(start2, end, collider) {
     const dx = end.x - start2.x, dy = end.y - start2.y;
     const type = read(collider, "type");
-    if (type === 0 && vec(read(collider, "pos")) && finite(read(collider, "rad"))) {
+    if (type === 0 && vec(read(collider, "pos")) && finite(read(collider, "rad")) && read(collider, "rad") >= 0) {
       const c = read(collider, "pos"), rad = read(collider, "rad");
       const d2 = dx * dx + dy * dy;
       const t = d2 > 0 ? clamp(((c.x - start2.x) * dx + (c.y - start2.y) * dy) / d2, 0, 1) : 0;
       return (start2.x + dx * t - c.x) ** 2 + (start2.y + dy * t - c.y) ** 2 <= rad * rad;
     }
     if (type === 1 && vec(read(collider, "min")) && vec(read(collider, "max"))) {
+      if (collider.min.x > collider.max.x || collider.min.y > collider.max.y) return true;
       let lo = 0, hi = 1;
       for (const [axis, delta] of [["x", dx], ["y", dy]]) {
         const min = collider.min[axis], max = collider.max[axis];
@@ -7262,6 +7263,13 @@ THE SOFTWARE.
     return { x: gunPos.x + dir.x * length, y: gunPos.y + dir.y * length };
   }
   __name(clippedMuzzle, "clippedMuzzle");
+  function pathToTarget(muzzle, target, radius = 0) {
+    const dx = target.x - muzzle.x, dy = target.y - muzzle.y, distance = Math.hypot(dx, dy);
+    const r = finite(radius) ? Math.max(0, radius) : 0;
+    const length = distance < r ? distance + r : Math.max(0, distance - r);
+    return distance > 0 ? { x: muzzle.x + dx * length / distance, y: muzzle.y + dy * length / distance } : { ...muzzle };
+  }
+  __name(pathToTarget, "pathToTarget");
   function segmentCandidates(obstacles, from, to, padding = 0) {
     const minX = Math.min(from.x, to.x) - padding, maxX = Math.max(from.x, to.x) + padding;
     const minY = Math.min(from.y, to.y) - padding, maxY = Math.max(from.y, to.y) + padding;
@@ -7273,7 +7281,7 @@ THE SOFTWARE.
         right = c.pos.x + c.rad;
         bottom = c.pos.y - c.rad;
         top = c.pos.y + c.rad;
-      } else if (read(c, "type") === 1 && vec(read(c, "min")) && vec(read(c, "max"))) {
+      } else if (read(c, "type") === 1 && vec(read(c, "min")) && vec(read(c, "max")) && c.min.x <= c.max.x && c.min.y <= c.max.y) {
         left = c.min.x;
         right = c.max.x;
         bottom = c.min.y;
@@ -7490,6 +7498,49 @@ THE SOFTWARE.
     }
   };
 
+  // src/target-indicator.mjs
+  function drawTargetIndicator(ctx, center, size, style = "ring") {
+    if (!ctx || !vec(center) || !finite(size)) return false;
+    const r = clamp(size, 12, 56), x = center.x, y = center.y;
+    ctx.save();
+    try {
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "#ffcf40";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      if (style === "cross") {
+        const a = r * 0.65, b = r * 1.1;
+        ctx.moveTo(x - b, y);
+        ctx.lineTo(x - a, y);
+        ctx.moveTo(x + a, y);
+        ctx.lineTo(x + b, y);
+        ctx.moveTo(x, y - b);
+        ctx.lineTo(x, y - a);
+        ctx.moveTo(x, y + a);
+        ctx.lineTo(x, y + b);
+      } else if (style === "brackets") {
+        const a = r * 0.5;
+        for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          ctx.moveTo(x + sx * a, y + sy * r);
+          ctx.lineTo(x + sx * r, y + sy * r);
+          ctx.lineTo(x + sx * r, y + sy * a);
+        }
+      } else if (style === "diamond") {
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x + r, y);
+        ctx.lineTo(x, y + r);
+        ctx.lineTo(x - r, y);
+        ctx.closePath();
+      } else ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+    } finally {
+      ctx.restore();
+    }
+    return true;
+  }
+  __name(drawTargetIndicator, "drawTargetIndicator");
+
   // src/loot-backoff.mjs
   var LootBackoff = class {
     static {
@@ -7685,6 +7736,7 @@ THE SOFTWARE.
       this.manualEquipHeld = false;
       this.actualWeapon = null;
       this.target = null;
+      this.targetId = null;
       this.dot = null;
       this.mouseInput = new MouseInputFrame();
       this.aimFrame = 0;
@@ -7817,6 +7869,7 @@ THE SOFTWARE.
       this.observedEntities.clear();
       this.timing.reset();
       this.target = null;
+      this.targetId = null;
       this.dot = null;
       this.meleeDirection = null;
       this.switchSlot = null;
@@ -8050,10 +8103,22 @@ THE SOFTWARE.
     blocked(from, to, bulletPath = true, source = null) {
       if (!this.config.wallcheck) return false;
       if (!this.capabilities.wallcheck) return true;
-      const eligible = (source || this.mapping.obstacles()).filter((o) => read(o, "active") !== false && !read(o, "dead") && read(o, "collidable") && !(bulletPath && this.protocol === VERIFIED_PROTOCOL && finite(read(o, "height")) && read(o, "height") < BULLET_HEIGHT) && (!finite(read(o, "layer")) || sameLayer(read(o, "layer"), from.layer)));
+      const eligible = (source || this.mapping.obstacles()).filter((o) => read(o, "active") !== false && !read(o, "dead") && read(o, "collidable") !== false && !(bulletPath && this.protocol === VERIFIED_PROTOCOL && finite(read(o, "height")) && read(o, "height") < BULLET_HEIGHT) && (!finite(read(o, "layer")) || sameLayer(read(o, "layer"), from.layer)));
       const relevant = segmentCandidates(eligible, from.pos, to.pos);
       if (relevant.length > 1024) return true;
       return relevant.some((o) => segmentBlocked(from.pos, to.pos, read(o, "collider")));
+    }
+    blockedByPlayer(from, to, target, players) {
+      if (!this.config.wallcheck) return false;
+      const m = this.mapping;
+      return players.some((p) => {
+        if (p === target || p === m.active || read(p, "active") !== true || at2(p, [m.schema.netKey, m.schema.deadKey])) return false;
+        const layer = this.sourceLayer(p);
+        if (finite(layer) && !sameLayer(layer, from.layer) && !(layer & 2)) return false;
+        const pos = this.sourcePos(p), scale = at2(p, [m.schema.netKey, this.sourceFields?.scale]);
+        if (!vec(pos)) return false;
+        return segmentBlocked(from.pos, to.pos, { type: 0, pos, rad: finite(scale) && scale > 0 ? scale : 1 });
+      });
     }
     pre() {
       this.frameId++;
@@ -8148,6 +8213,7 @@ THE SOFTWARE.
     processAim(native, advance2, applyDirect = false) {
       const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
       this.target = null;
+      this.targetId = null;
       this.dot = null;
       this.meleeDirection = null;
       this.stats.aimRejections = {};
@@ -8164,7 +8230,10 @@ THE SOFTWARE.
       const fail = /* @__PURE__ */ __name((state) => {
         this.stats.aimState = state;
         this.aimController.reset();
-        this.stickyId = null;
+        if (state !== "wall-blocked" || !cfg.sticky) this.stickyId = null;
+        this.target = null;
+        this.targetId = null;
+        this.dot = null;
         note(state);
         return null;
       }, "fail");
@@ -8209,7 +8278,8 @@ THE SOFTWARE.
       const candidates = [], reject = /* @__PURE__ */ __name((key) => {
         this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1;
       }, "reject");
-      for (const p of m.players().slice(0, 256)) {
+      const players = m.players();
+      for (const p of players.slice(0, 256)) {
         if (p === m.active || at2(p, [m.schema.netKey, m.schema.deadKey])) continue;
         if (!cfg.knocked && p.downed) {
           reject("downed");
@@ -8295,11 +8365,16 @@ THE SOFTWARE.
           reject("aimLayer");
           continue;
         }
-        if (this.blocked({ pos: shot.muzzle, layer: layerFor(shot.dir) }, { pos: shot.world }, !melee, obstacles)) {
+        const hitRadius = melee ? 0 : at2(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1;
+        const rayFrom = { pos: shot.muzzle, layer: layerFor(shot.dir) };
+        const rayTo = { pos: pathToTarget(shot.muzzle, shot.world, hitRadius) };
+        if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
           reject("wall");
-          continue;
+          if (cfg.sticky) this.stickyId = candidate.p.__id;
+          return fail("wall-blocked");
         }
         this.target = candidate.p;
+        this.targetId = candidate.p.__id;
         this.stickyId = candidate.p.__id;
         this.stats.predictionState = shot.state;
         this.stats.aimApproximate = !!shot.approximate;
@@ -8312,6 +8387,20 @@ THE SOFTWARE.
           humanLike: !!cfg.humanLikeAim,
           profile: cfg.smoothProfile || "responsive"
         }) : !melee && mode === "assist" ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
+        if (cfg.wallcheck && !melee && dir && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) {
+          const actualLayer = layerFor(dir);
+          if (actualLayer === null) {
+            reject("aimLayer");
+            return fail("wall-blocked");
+          }
+          const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1, selfRadius) : pos;
+          const length = Math.hypot(shot.world.x - actualMuzzle.x, shot.world.y - actualMuzzle.y) + hitRadius;
+          const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: { x: actualMuzzle.x + dir.x * length, y: actualMuzzle.y + dir.y * length } };
+          if (this.blocked(actualFrom, actualTo, true, obstacles) || this.blockedByPlayer(actualFrom, actualTo, candidate.p, players)) {
+            reject("wall");
+            return fail("wall-blocked");
+          }
+        }
         this.dot = project(camera, shot.world);
         if (melee) {
           this.meleeDirection = shot.dir;
@@ -8512,6 +8601,13 @@ THE SOFTWARE.
         ctx.beginPath();
         ctx.arc(this.dot.x, this.dot.y, 4, 0, Math.PI * 2);
         ctx.fill();
+      }
+      const target = this.target;
+      if (cfg.aim && cfg.showTarget && target && read(target, "active") === true && read(target, "__id") === this.targetId && !at2(target, [m.schema?.netKey, m.schema?.deadKey])) {
+        const screen = project(m.camera, overlayPosition(target, m));
+        const scale = read(m.camera?.camera, m.camera?.scaleKeys?.[0]) * read(m.camera?.camera, m.camera?.scaleKeys?.[1]);
+        const radius = at2(target, [m.schema?.netKey, this.sourceFields?.scale]) || 1;
+        if (screen && finite(scale)) drawTargetIndicator(ctx, screen, scale * radius + 5, cfg.targetStyle);
       }
       const selfPos = overlayPosition(m.active, m), origin = project(m.camera, selfPos);
       if (!origin) {
@@ -8739,6 +8835,8 @@ THE SOFTWARE.
     knocked: false,
     sticky: true,
     showDot: false,
+    showTarget: false,
+    targetStyle: "ring",
     fov: 100,
     showFov: true,
     wallcheck: true,
@@ -8810,6 +8908,7 @@ THE SOFTWARE.
       if (["menuKey", "aimKey", "stickyKey", "layerKey"].includes(key) && typeof value === "string" && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
     }
     if (["nearby", "mobile"].includes(saved.lootMode)) result.lootMode = saved.lootMode;
+    if (["ring", "cross", "brackets", "diamond"].includes(saved.targetStyle)) result.targetStyle = saved.targetStyle;
     for (const [key, values] of Object.entries({ aimMode: ["off", "assist", "lock"], aimActivation: ["fire", "key", "both"], smoothProfile: ["responsive", "natural", "precise"] })) if (values.includes(saved[key])) result[key] = saved[key];
     for (const key of ["espLegend", "espLabels", "espDistance", "espWeapons", "espHighlightTarget", "espMarkers", "espOffscreen"]) result[key] = false;
     if (saved.version !== 2) {
@@ -8840,8 +8939,8 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
   var GROUPS = {
     Main: [
       ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
-      ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["wallcheck", "Wallcheck", "wallcheck"]]],
-      ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"]]],
+      ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["wallcheck", "Wallcheck", "wallcheck"], [null, "Khi vật cản hoặc người chơi chắn đường bắn, aim sẽ nhả; Sticky giữ ưu tiên mục tiêu còn trong FOV. Chỉ ước lượng theo dữ liệu client."]]],
+      ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
       ["Aim — Prediction", [["predict", "Auto prediction", "prediction"]]],
       ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
@@ -8927,7 +9026,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       flushPersistence();
     }, "persist");
     const refreshRows = /* @__PURE__ */ __name(() => {
-      const parents = { smooth: "humanLikeAim", smoothProfile: "humanLikeAim", useOneGun: "autoSwitch", autoMelee: "melee", smokeOpacity: "xray", treeOpacity: "xray", ceilings: "xray", darkerSmokes: "xray", zoomFactor: "zoom", movementSmooth: "mobileMovement", lootMode: "autoLoot", espOpacity: "lines", espLineWidth: "lines", espShowEnemies: "esp", espShowAllies: "esp", smallerTrees: "mapHighlights", latencyCompensation: "predict", leadAdjustment: "predict", predictionStrict: "predict" };
+      const parents = { targetStyle: "showTarget", smooth: "humanLikeAim", smoothProfile: "humanLikeAim", useOneGun: "autoSwitch", autoMelee: "melee", smokeOpacity: "xray", treeOpacity: "xray", ceilings: "xray", darkerSmokes: "xray", zoomFactor: "zoom", movementSmooth: "mobileMovement", lootMode: "autoLoot", espOpacity: "lines", espLineWidth: "lines", espShowEnemies: "esp", espShowAllies: "esp", smallerTrees: "mapHighlights", latencyCompensation: "predict", leadAdjustment: "predict", predictionStrict: "predict" };
       for (const input of panel.querySelectorAll("[data-config]")) {
         const parent = parents[input.dataset.config];
         if (parent) input.closest("label").hidden = !config[parent];
@@ -8946,7 +9045,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     const row = /* @__PURE__ */ __name(([key, label, capability]) => {
       if (key === null) return el("div", { class: "hint", text: label });
       const title = el("span", { text: label }), labelEl = el("label", { class: "row" }, title);
-      const choices = { lootMode: [["nearby", "Nearby supplies (now)"], ["mobile", "Mobile loot / doors (next join)"]], aimMode: [["off", "Off"], ["assist", "Aim Assist"], ["lock", "Aim Lock"]], aimActivation: [["fire", "Hold Fire"], ["key", "Hold aim key"], ["both", "Aim key + Fire"]], smoothProfile: [["responsive", "Responsive / pro"], ["natural", "Natural"], ["precise", "Precise / cinematic"]] };
+      const choices = { targetStyle: [["ring", "Vòng tròn"], ["cross", "Tâm ngắm"], ["brackets", "Góc khung"], ["diamond", "Hình thoi"]], lootMode: [["nearby", "Nearby supplies (now)"], ["mobile", "Mobile loot / doors (next join)"]], aimMode: [["off", "Off"], ["assist", "Aim Assist"], ["lock", "Aim Lock"]], aimActivation: [["fire", "Hold Fire"], ["key", "Hold aim key"], ["both", "Aim key + Fire"]], smoothProfile: [["responsive", "Responsive / pro"], ["natural", "Natural"], ["precise", "Precise / cinematic"]] };
       const input = choices[key] ? el("select") : el("input", { type: colors.has(key) ? "color" : ranges[key] ? "range" : "checkbox" });
       input.dataset.config = key;
       if (choices[key]) {
@@ -9012,8 +9111,8 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
           panel.append(details);
         }
         refreshRows();
-        if (tab === "Main") panel.append(el("p", { class: "hint", text: "Assist: Assist strength là lực kéo; 100% gần như Lock. Lock: Human-like aim mặc định tắt nên không làm trễ. Prediction giữ aim ở vị trí tương lai theo snapshot/vận tốc đạn, không chỉ “dính” vào mục tiêu hiện tại. FOV theo input chưa hiệu chỉnh; shotgun vẫn chịu random spread." }));
-        if (tab === "Misc") panel.append(el("p", { class: "hint", text: "Nearby supplies hoạt động trong trận sau khi đủ contract; không tự đổi súng/gear và không giả nhặt thành công. Mobile mode dùng isMobile trong Join mới, có thể ảnh hưởng scope và tự mở cửa." }));
+        if (tab === "Main") panel.append(el("p", { class: "hint", text: "Assist: Assist strength là lực kéo; 100% gần như Lock. Lock: Human-like aim mặc định bật và có thể tắt để ngắm tức thời. Prediction giữ aim ở vị trí tương lai theo snapshot/vận tốc đạn, không chỉ “dính” vào mục tiêu hiện tại. FOV theo input chưa hiệu chỉnh; shotgun vẫn chịu random spread." }));
+        if (tab === "Misc") panel.append(el("p", { class: "hint", text: "Nearby chỉ gửi yêu cầu khi client thấy supply; server tự chọn loot nên có thể nhặt khác. Không giả xác nhận nhặt thành công. Mobile mode dùng isMobile trong Join mới, có thể ảnh hưởng scope và tự mở cửa." }));
         return;
       }
       if (tab === "Keybinds") {

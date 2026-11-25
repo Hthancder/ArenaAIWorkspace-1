@@ -3,7 +3,7 @@ import { colorValue, ESP_PALETTE } from './esp.mjs';
 
 export const DEFAULTS = Object.freeze({
   version: 3, aim: false, aimMode: 'lock', aimActivation: 'fire', directMouseInput: true, assistStrength: 35, latencyCompensation: true, leadAdjustment: 100, humanLikeAim: true, smooth: 50, smoothProfile: 'responsive', predictionStrict: false, knocked: false, sticky: true,
-  showDot: false, fov: 100, showFov: true, wallcheck: true, predict: true,
+  showDot: false, showTarget: false, targetStyle: 'ring', fov: 100, showFov: true, wallcheck: true, predict: true,
   melee: false, autoMelee: false, autoSwitch: false, useOneGun: false, layerSpoofer: false, layerKey: 'KeyT', semi: false, xray: false, darkerSmokes: true, ceilings: true, mapHighlights: false, smallerTrees: true,
   smokeOpacity: 50, treeOpacity: 50, esp: false, nametags: true, lines: false,
   espShowAllies: true, espShowEnemies: true, espShowUnknown: true, espShowDowned: true,
@@ -30,6 +30,7 @@ export function normalizeConfig(saved) {
       && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
   }
   if (['nearby', 'mobile'].includes(saved.lootMode)) result.lootMode = saved.lootMode;
+  if (['ring', 'cross', 'brackets', 'diamond'].includes(saved.targetStyle)) result.targetStyle = saved.targetStyle;
   for (const [key, values] of Object.entries({ aimMode: ['off', 'assist', 'lock'], aimActivation: ['fire', 'key', 'both'], smoothProfile: ['responsive', 'natural', 'precise'] })) if (values.includes(saved[key])) result[key] = saved[key];
   // Removed HUD/tag fields never reappear, including old saved configurations.
   for (const key of ['espLegend', 'espLabels', 'espDistance', 'espWeapons', 'espHighlightTarget', 'espMarkers', 'espOffscreen']) result[key] = false;
@@ -57,8 +58,8 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 const GROUPS = {
   Main: [
     ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['directMouseInput', 'Direct native mouse input', 'aim'], ['assistStrength', 'Assist strength (%)', 'aim'], ['humanLikeAim', 'Human-like aim (Lock)', 'aim'], ['smoothProfile', 'Aim profile', 'aim'], ['smooth', 'Human-like amount (0–100)', 'aim']]],
-    ['Aim — Target selection', [['fov', 'FOV radius (input pixels)'], ['sticky', 'Keep target', 'aim'], ['knocked', 'Include downed', 'aim'], ['wallcheck', 'Wallcheck', 'wallcheck']]],
-    ['Aim — Hỗ trợ ngắm', [['showFov', 'FOV circle'], ['showDot', 'Predicted point (optional)']]],
+    ['Aim — Target selection', [['fov', 'FOV radius (input pixels)'], ['sticky', 'Keep target', 'aim'], ['knocked', 'Include downed', 'aim'], ['wallcheck', 'Wallcheck', 'wallcheck'], [null, 'Khi vật cản hoặc người chơi chắn đường bắn, aim sẽ nhả; Sticky giữ ưu tiên mục tiêu còn trong FOV. Chỉ ước lượng theo dữ liệu client.']]],
+    ['Aim — Hỗ trợ ngắm', [['showFov', 'FOV circle'], ['showDot', 'Predicted point (optional)'], ['showTarget', 'Hiển thị mục tiêu đang ngắm'], ['targetStyle', 'Kiểu mục tiêu'], [null, 'Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ.']]],
     ['Aim — Prediction', [['predict', 'Auto prediction', 'prediction']]],
     ['Aim — Advanced prediction', [['latencyCompensation', 'Estimated latency compensation', 'prediction'], ['leadAdjustment', 'Lead adjustment (%)', 'prediction'], ['predictionStrict', 'Strict prediction (skip uncertain shots)', 'prediction'], [null, 'Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread.']]],
     ['Melee Lock', [['melee', 'Enabled', 'mobile'], ['autoMelee', 'Auto Melee (from gun, while firing)', 'switch']]],
@@ -124,7 +125,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
     flushPersistence();
   };
   const refreshRows = () => {
-    const parents = { smooth: 'humanLikeAim', smoothProfile: 'humanLikeAim', useOneGun: 'autoSwitch', autoMelee: 'melee', smokeOpacity: 'xray', treeOpacity: 'xray', ceilings: 'xray', darkerSmokes: 'xray', zoomFactor: 'zoom', movementSmooth: 'mobileMovement', lootMode: 'autoLoot', espOpacity: 'lines', espLineWidth: 'lines', espShowEnemies: 'esp', espShowAllies: 'esp', smallerTrees: 'mapHighlights', latencyCompensation: 'predict', leadAdjustment: 'predict', predictionStrict: 'predict' };
+    const parents = { targetStyle: 'showTarget', smooth: 'humanLikeAim', smoothProfile: 'humanLikeAim', useOneGun: 'autoSwitch', autoMelee: 'melee', smokeOpacity: 'xray', treeOpacity: 'xray', ceilings: 'xray', darkerSmokes: 'xray', zoomFactor: 'zoom', movementSmooth: 'mobileMovement', lootMode: 'autoLoot', espOpacity: 'lines', espLineWidth: 'lines', espShowEnemies: 'esp', espShowAllies: 'esp', smallerTrees: 'mapHighlights', latencyCompensation: 'predict', leadAdjustment: 'predict', predictionStrict: 'predict' };
     for (const input of panel.querySelectorAll('[data-config]')) {
       const parent = parents[input.dataset.config];
       if (parent) input.closest('label').hidden = !config[parent];
@@ -135,7 +136,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
   const row = ([key, label, capability]) => {
     if (key === null) return el('div', { class: 'hint', text: label });
     const title = el('span', { text: label }), labelEl = el('label', { class: 'row' }, title);
-    const choices = { lootMode: [['nearby', 'Nearby supplies (now)'], ['mobile', 'Mobile loot / doors (next join)']], aimMode: [['off', 'Off'], ['assist', 'Aim Assist'], ['lock', 'Aim Lock']], aimActivation: [['fire', 'Hold Fire'], ['key', 'Hold aim key'], ['both', 'Aim key + Fire']], smoothProfile: [['responsive', 'Responsive / pro'], ['natural', 'Natural'], ['precise', 'Precise / cinematic']] };
+    const choices = { targetStyle: [['ring', 'Vòng tròn'], ['cross', 'Tâm ngắm'], ['brackets', 'Góc khung'], ['diamond', 'Hình thoi']], lootMode: [['nearby', 'Nearby supplies (now)'], ['mobile', 'Mobile loot / doors (next join)']], aimMode: [['off', 'Off'], ['assist', 'Aim Assist'], ['lock', 'Aim Lock']], aimActivation: [['fire', 'Hold Fire'], ['key', 'Hold aim key'], ['both', 'Aim key + Fire']], smoothProfile: [['responsive', 'Responsive / pro'], ['natural', 'Natural'], ['precise', 'Precise / cinematic']] };
     const input = choices[key] ? el('select') : el('input', { type: colors.has(key) ? 'color' : ranges[key] ? 'range' : 'checkbox' });
     input.dataset.config = key;
     if (choices[key]) {
@@ -171,8 +172,8 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
         details.append(el('summary', { text: name }), ...visible.map(row)); panel.append(details);
       }
       refreshRows();
-      if (tab === 'Main') panel.append(el('p', { class: 'hint', text: 'Assist: Assist strength là lực kéo; 100% gần như Lock. Lock: Human-like aim mặc định tắt nên không làm trễ. Prediction giữ aim ở vị trí tương lai theo snapshot/vận tốc đạn, không chỉ “dính” vào mục tiêu hiện tại. FOV theo input chưa hiệu chỉnh; shotgun vẫn chịu random spread.' }));
-      if (tab === 'Misc') panel.append(el('p', { class: 'hint', text: 'Nearby supplies hoạt động trong trận sau khi đủ contract; không tự đổi súng/gear và không giả nhặt thành công. Mobile mode dùng isMobile trong Join mới, có thể ảnh hưởng scope và tự mở cửa.' }));
+      if (tab === 'Main') panel.append(el('p', { class: 'hint', text: 'Assist: Assist strength là lực kéo; 100% gần như Lock. Lock: Human-like aim mặc định bật và có thể tắt để ngắm tức thời. Prediction giữ aim ở vị trí tương lai theo snapshot/vận tốc đạn, không chỉ “dính” vào mục tiêu hiện tại. FOV theo input chưa hiệu chỉnh; shotgun vẫn chịu random spread.' }));
+      if (tab === 'Misc') panel.append(el('p', { class: 'hint', text: 'Nearby chỉ gửi yêu cầu khi client thấy supply; server tự chọn loot nên có thể nhặt khác. Không giả xác nhận nhặt thành công. Mobile mode dùng isMobile trong Join mới, có thể ảnh hưởng scope và tự mở cửa.' }));
       return;
     }
     if (tab === 'Keybinds') {

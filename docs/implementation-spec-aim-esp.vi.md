@@ -194,9 +194,9 @@ Baseline solve: `|targetPos + targetVelocity*t - muzzlePos| = bulletSpeed*t` v�
 
 - FOV/intent lấy physical/native input chưa sửa, không dùng corrected aim làm tâm chọn mới.
 - Lọc active/dead/downed option, known enemy, gameplay layer/aim-layer hợp lệ.
-- Gần cursor là ưu tiên mặc định; hysteresis nội bộ để không đổi target liên tục. Sticky không bám bất chấp invalid/wall/outside exit region.
+- Gần cursor là ưu tiên mặc định; hysteresis nội bộ để không đổi target liên tục. Sticky không tiếp tục ngắm qua tường: nếu bị chặn thì nhả aim nhưng giữ ưu tiên ID trong FOV để thử lại; invalid/outside exit region vẫn bị loại.
 - Chỉ solve/raycast tập ứng viên nhỏ cần thiết, không mọi entity mỗi frame.
-- Kiểm tra muzzle→predicted point, không chỉ center→current target; kiểm tra range.
+- Kiểm tra đường từ muzzle đến giao điểm dự đoán với hitbox mục tiêu (nếu muzzle nằm trong hitbox, kiểm tra tới điểm ra), không chỉ center→current target; kiểm tra range. Kiểm tra thêm hướng sau smoothing/Assist nếu khác. Tham khảo [giới hạn Wallcheck và chỉ báo](wallcheck-va-chi-bao-muc-tieu.vi.md).
 - Xét obstruction liên quan tới first hit; không coi đường đẹp trên overlay là chắc damage.
 - Pan/other blockers phải được phân biệt với hit circle; không claim auto-bypass pan.
 - Không tìm đường ricochet tự động trong scope này.

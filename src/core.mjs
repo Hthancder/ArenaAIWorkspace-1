@@ -312,7 +312,9 @@ export function discover(game) {
   const ui = unique(objects.filter(([, v]) => typeof readMethod(v, 'setSpectating') === 'function' && typeof read(v, 'spectating') === 'boolean').map(([, v]) => v));
   const map = unique(objects.filter(([, v]) => entries(v).some(([k]) => k === 'mapTexture') && typeof readMethod(v, 'getGroundSurface') === 'function').map(([, v]) => v));
   const { creator, registryKey, registryState, registryEvidence } = discoverObjectRegistry(game);
-  const obstacles = () => entries(read(creator, registryKey)).map(([, v]) => v).filter(v => object(read(v, 'collider')) && typeof read(v, 'collidable') === 'boolean');
+  // Include known obstacle entities even when a collider/flag is missing, so
+  // wallcheck can fail closed rather than silently treat an unknown wall as air.
+  const obstacles = () => entries(read(creator, registryKey)).map(([, v]) => v).filter(v => read(v, '__type') === 2 || object(read(v, 'collider')) && typeof read(v, 'collidable') === 'boolean');
   const activeKey = unique(objects.filter(([, value]) => value === active).map(([key]) => key));
   const camera = discoverCamera(game);
   const visualPosKey = active && camera ? discoverVisualPosition(active, camera.method) : null;
@@ -417,13 +419,14 @@ export class Tracker {
 export function segmentBlocked(start, end, collider) {
   const dx = end.x - start.x, dy = end.y - start.y;
   const type = read(collider, 'type');
-  if (type === 0 && vec(read(collider, 'pos')) && finite(read(collider, 'rad'))) {
+  if (type === 0 && vec(read(collider, 'pos')) && finite(read(collider, 'rad')) && read(collider, 'rad') >= 0) {
     const c = read(collider, 'pos'), rad = read(collider, 'rad');
     const d2 = dx * dx + dy * dy;
     const t = d2 > 0 ? clamp(((c.x - start.x) * dx + (c.y - start.y) * dy) / d2, 0, 1) : 0;
     return (start.x + dx * t - c.x) ** 2 + (start.y + dy * t - c.y) ** 2 <= rad * rad;
   }
   if (type === 1 && vec(read(collider, 'min')) && vec(read(collider, 'max'))) {
+    if (collider.min.x > collider.max.x || collider.min.y > collider.max.y) return true;
     let lo = 0, hi = 1;
     for (const [axis, delta] of [['x', dx], ['y', dy]]) {
       const min = collider.min[axis], max = collider.max[axis];
