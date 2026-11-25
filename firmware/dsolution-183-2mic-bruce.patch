@@ -4659,7 +4659,7 @@ index 5290300b..b27bf10a 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..4a0ac22b 100644
+index fd616029..33d5a6bd 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -5942,7 +5942,7 @@ index fd616029..4a0ac22b 100644
        }
      }
      return r;
-@@ -690,279 +961,582 @@ async function renderTFT(data) {
+@@ -690,279 +961,619 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6373,8 +6373,7 @@ index fd616029..4a0ac22b 100644
 +document.querySelectorAll(".chip-cmd").forEach((ch) => {
 +  ch.addEventListener("click", () => execConsoleCmd(ch.getAttribute("data-cmd")));
 +});
- 
--window.ondragenter = () => $(".upload-area").classList.remove("hidden");
++
 +// All clock controls use the same device endpoint and local-time convention.
 +async function syncBrowserTime() {
 +  const localEpoch = Math.floor(Date.now() / 1000) - new Date().getTimezoneOffset() * 60;
@@ -6436,7 +6435,8 @@ index fd616029..4a0ac22b 100644
 +  drawCanvasLoading();
 +  await reloadScreen(true);
 +});
-+
+ 
+-window.ondragenter = () => $(".upload-area").classList.remove("hidden");
 +$("#ota-file-input").addEventListener("change", (e) => validateOtaFile(e.target.files[0]));
 +const otaDrop = $("#ota-drop-zone");
 +otaDrop.addEventListener("dragover", (e) => { e.preventDefault(); otaDrop.classList.add("drag"); });
@@ -6471,12 +6471,49 @@ index fd616029..4a0ac22b 100644
 +  try {
 +    const beginFd = new FormData();
 +    beginFd.append("size", String(selectedOtaFile.size));
-+    const br = await fetch(base + "/ota/begin", { method: "POST", body: beginFd });
++    // Every request here is bounded: the page must always end up either
++    // uploading with a percentage or showing a concrete error.
++    const OTA_HTTP_TIMEOUT_MS = 15000;
++    const timed = async (url, opts = {}, ms = OTA_HTTP_TIMEOUT_MS) => {
++      const ctl = new AbortController();
++      const id = setTimeout(() => ctl.abort(), ms);
++      try {
++        return await fetch(url, { ...opts, signal: ctl.signal });
++      } finally {
++        clearTimeout(id);
++      }
++    };
++    let br;
++    try {
++      br = await timed(base + "/ota/begin", { method: "POST", body: beginFd }, OTA_HTTP_TIMEOUT_MS);
++    } catch (e) {
++      throw new Error("Device did not answer /ota/begin within 15s. Check the Wi-Fi link and try again.");
++    }
 +    const bd = await br.json().catch(() => ({}));
-+    if (!br.ok || !bd.ok) throw new Error(bd.msg || "Failed to initialize OTA");
++    if (!br.ok || !bd.ok) throw new Error(bd.msg || `Device refused the OTA start (HTTP ${br.status})`);
 +    if (typeof bd.session !== "string" || !bd.session) throw new Error("OTA session missing. Refresh the page and try again.");
 +    session = bd.session;
 +    if (otaCancelled) throw new Error("OTA cancelled by user.");
++
++    // The device prepares the target slot on its own task, so /ota/begin now
++    // answers instantly and this polls /ota/ready. Older firmware replies 404
++    // here; that means begin already did the work, so carry on.
++    if (bd.pending) {
++      const readyBy = Date.now() + 180000;
++      for (;;) {
++        if (otaCancelled) throw new Error("OTA cancelled by user.");
++        await new Promise((r) => setTimeout(r, 500));
++        const rr = await timed(base + "/ota/ready", { cache: "no-store" }, OTA_HTTP_TIMEOUT_MS).catch(() => null);
++        const rd = rr ? await rr.json().catch(() => ({})) : {};
++        if (rd.state === "failed") throw new Error(rd.msg || "Device could not prepare the OTA slot");
++        if (rd.state === "ready") break;
++        if (rd.state === "idle") throw new Error("Device dropped the OTA session while preparing the slot. Try again.");
++        const waited = Math.round((Date.now() - t0) / 1000);
++        $("#ota-prog-msg").textContent = `Preparing OTA slot... ${waited}s`;
++        if (Date.now() > readyBy) throw new Error("Device still preparing the OTA slot after 180s. Reboot the device and retry.");
++      }
++      $("#ota-prog-msg").textContent = "Slot ready, uploading...";
++    }
 +
 +    const chunkSize = bd.chunkSize || 32768;
 +    let offset = 0;
@@ -6694,7 +6731,7 @@ index fd616029..4a0ac22b 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1544,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1581,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6733,7 +6770,7 @@ index fd616029..4a0ac22b 100644
      return;
    }
  
-@@ -1009,24 +1554,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1591,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6763,7 +6800,7 @@ index fd616029..4a0ac22b 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1572,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1609,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6800,7 +6837,7 @@ index fd616029..4a0ac22b 100644
      return;
    }
  
-@@ -1062,662 +1589,1683 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1626,1683 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7091,6 +7128,20 @@ index fd616029..4a0ac22b 100644
 -    } else {
 -      textarea.setSelectionRange(newStart, newStart);
 -    }
+-  };
+-
+-  const getCurrentLine = (pos) => {
+-    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
+-    const lineEnd = textarea.value.indexOf("\n", pos);
+-    const line = textarea.value.slice(
+-      lineStart,
+-      lineEnd === -1 ? undefined : lineEnd,
+-    );
+-    return {
+-      line,
+-      lineStart,
+-      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
+-    };
 +    textarea.setSelectionRange(newStart, newEnd);
    };
 +  if (e.key === "Tab") {
@@ -7113,20 +7164,6 @@ index fd616029..4a0ac22b 100644
 +  }
 +});
  
--  const getCurrentLine = (pos) => {
--    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
--    const lineEnd = textarea.value.indexOf("\n", pos);
--    const line = textarea.value.slice(
--      lineStart,
--      lineEnd === -1 ? undefined : lineEnd,
--    );
--    return {
--      line,
--      lineStart,
--      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
--    };
--  };
--
 -  const handleTab = (shift) => {
 -    if (start === end) {
 -      const { line, lineStart, lineEnd } = getCurrentLine(start);
@@ -8182,7 +8219,7 @@ index fd616029..4a0ac22b 100644
 +    slShowMsg($("#sl-plus-msg"), `${label} must be ${min}-${max}`, false, 0);
 +    if (el) el.focus();
 +    return null;
-+  }
+   }
 +  return Math.round(n);
 +}
 +function slMacOk(v) {
@@ -8193,7 +8230,7 @@ index fd616029..4a0ac22b 100644
 +  const key = btn.dataset.slToggle;
 +  if (key && Object.prototype.hasOwnProperty.call(secLabPlusState, key)) {
 +    p.enable = secLabPlusState[key] ? "0" : "1";
-   }
++  }
 +  if (action === "os_profile") {
 +    p.profile = $("#sl-plus-os")?.value || "windows";
 +  } else if (action === "lan_start") {
@@ -19196,7 +19233,7 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..d7ee4678 100644
+index a8679bd6..ea3a41d3 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,49 @@
@@ -19249,7 +19286,7 @@ index a8679bd6..d7ee4678 100644
  #include <globals.h>
  
  File uploadFile;
-@@ -22,12 +52,616 @@ FS _webFS = LittleFS;
+@@ -22,12 +52,707 @@ FS _webFS = LittleFS;
  const int default_webserverporthttp = 80;
  
  // WiFi as an Access Point
@@ -19355,13 +19392,31 @@ index a8679bd6..d7ee4678 100644
 +// mid-write into the 32 KiB chunk buffer, and freeing it there would corrupt the
 +// heap. The network task owns the teardown and honours this flag.
 +static volatile bool s_otaAbortRequested = false;
++// Starting a transfer is not instant. On cores where Update.begin() prepares the
++// target slot it can block for many seconds, and it used to run *inside* the
++// /ota/begin request handler: the browser sat on "Initializing OTA slot..."
++// until the reply could finally leave, which on a 6 MB slot looks like a hang.
++// The start now runs on its own task, /ota/begin answers immediately and
++// /ota/ready reports the outcome, so the page can show real progress.
++enum OtaBeginState : uint8_t {
++    OTA_BEGIN_IDLE = 0,
++    OTA_BEGIN_PREPARING,
++    OTA_BEGIN_READY,
++    OTA_BEGIN_FAILED
++};
++static volatile uint8_t s_otaBeginState = OTA_BEGIN_IDLE;
++static char s_otaBeginErr[80] = {0};
++static volatile uint32_t s_otaBeginStartMs = 0;
++static volatile bool s_otaBeginCancel = false;
++static constexpr uint32_t kOtaBeginTimeoutMs = 180000UL;
 +#if defined(DSOLUTION_183_2MIC)
-+struct OtaUiSnapshot { bool active; bool done; uint8_t pct; size_t written; size_t total; };
++struct OtaUiSnapshot { bool active; bool done; uint8_t pct; size_t written; size_t total; bool preparing; };
 +static portMUX_TYPE s_otaUiMux = portMUX_INITIALIZER_UNLOCKED;
 +static OtaUiSnapshot s_otaUiSnapshot = {};
 +static bool s_otaUiNeedsRedraw = false; // only the UI task reads/writes this
 +static void otaUiPublish() {
-+    OtaUiSnapshot next = {s_otaInProgress, s_otaScreenDone, s_otaScreenPct, s_otaWritten, s_otaTotal};
++    OtaUiSnapshot next = {s_otaInProgress, s_otaScreenDone, s_otaScreenPct,
++                          s_otaWritten, s_otaTotal, s_otaBeginState == OTA_BEGIN_PREPARING};
 +    portENTER_CRITICAL(&s_otaUiMux);
 +    s_otaUiSnapshot = next;
 +    portEXIT_CRITICAL(&s_otaUiMux);
@@ -19413,6 +19468,12 @@ index a8679bd6..d7ee4678 100644
 +
 +bool isOtaInProgress() {
 +    if (!s_otaInProgress) return false;
++    // Preparing the slot is real work, not a stalled upload: it must not hit the
++    // "no bytes yet" timeout while the flash is being prepared. It has its own,
++    // longer bound so a wedged start still releases the screen.
++    if (s_otaBeginState == OTA_BEGIN_PREPARING) {
++        return (uint32_t)(millis() - s_otaBeginStartMs) <= kOtaBeginTimeoutMs;
++    }
 +    const uint32_t idle = (uint32_t)(millis() - s_otaLastActivityMs);
 +    // Written bytes prove a live transfer; before that a stalled session must not
 +    // hold the UI hostage for the full write timeout.
@@ -19453,7 +19514,16 @@ index a8679bd6..d7ee4678 100644
 +    s_otaLastActivityMs = millis();
 +    s_otaAbortRequested = false;
 +    s_otaInProgress = true;
++    s_otaBeginState = OTA_BEGIN_IDLE;
++    s_otaBeginErr[0] = 0;
++    s_otaBeginCancel = false;
 +    otaUiPublish();
++}
++
++// CPU/Wi-Fi power changes are kept out of the HTTP task: re-clocking the CPU
++// while an AsyncTCP request is still being answered can lose the reply, which is
++// the other half of "the page hangs on Initializing OTA slot".
++static void otaApplyTransferPower() {
 +    setCpuFrequencyMhz(CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
 +    WiFi.setSleep(WIFI_PS_NONE);
 +}
@@ -19461,6 +19531,7 @@ index a8679bd6..d7ee4678 100644
 +static void otaReleaseLock(bool restorePower) {
 +    s_otaInProgress = false;
 +    s_otaValid = false;
++    if (s_otaBeginState == OTA_BEGIN_READY) s_otaBeginState = OTA_BEGIN_IDLE;
 +    ++s_otaEpoch;
 +    s_otaSession[0] = '\0';
 +    s_otaChunkOwner = nullptr;
@@ -19470,6 +19541,43 @@ index a8679bd6..d7ee4678 100644
 +    otaUiPublish();
 +    otaFreeBuf();
 +    if (restorePower) { applyPowerProfile(false); }
++}
++
++// Spawned by /ota/begin. Owns the slow part of starting a transfer.
++static void otaBeginTask(void *pv) {
++    const size_t totalSize = (size_t)(uintptr_t)pv;
++    s_otaBeginStartMs = millis();
++    s_otaBeginState = OTA_BEGIN_PREPARING;
++    otaApplyTransferPower();
++    vTaskDelay(pdMS_TO_TICKS(20)); // let the HTTP reply leave before touching flash
++
++    String err;
++    bool ok = false;
++    if (s_otaBeginCancel) {
++        err = "Cancelled before the slot was prepared";
++    } else if (!Update.begin(totalSize, U_FLASH)) {
++        err = Update.errorString();
++    } else {
++        ok = true;
++    }
++    if (ok) {
++        s_otaValid = true;
++        s_otaBeginState = OTA_BEGIN_READY;
++        s_otaLastActivityMs = millis();
++    } else {
++        s_otaBeginState = OTA_BEGIN_FAILED;
++        err.replace("\"", "'");
++        snprintf(s_otaBeginErr, sizeof(s_otaBeginErr), "%s", err.c_str());
++        Update.abort();
++        otaReleaseLock(false);
++        // Restore the power profile only after the failure reply had its chance
++        // to leave: re-clocking the CPU under an in-flight socket loses replies.
++        vTaskDelay(pdMS_TO_TICKS(150));
++        applyPowerProfile(false);
++        s_otaBeginState = OTA_BEGIN_FAILED; // otaReleaseLock may have reset it
++    }
++    otaUiPublish();
++    vTaskDelete(NULL);
 +}
 +
 +static void delayedRestartTask(void *pv) {
@@ -19793,12 +19901,32 @@ index a8679bd6..d7ee4678 100644
 +  const t0=Date.now();
 +  try{
 +    const beginFd=new FormData();beginFd.append('size',String(validFile.size));
-+    const br=await fetch('/ota/begin',{method:'POST',body:beginFd});
-+    const bd=await br.json();
-+    if(!br.ok||!bd.ok)throw new Error(bd.msg||'Failed to initialize OTA');
++    const OTA_HTTP_TIMEOUT_MS=15000;
++    const timed=async(url,opts={},ms=OTA_HTTP_TIMEOUT_MS)=>{const ctl=new AbortController();const id=setTimeout(()=>ctl.abort(),ms);
++      try{return await fetch(url,{...opts,signal:ctl.signal});}finally{clearTimeout(id);}};
++    let br;
++    try{br=await timed('/ota/begin',{method:'POST',body:beginFd},OTA_HTTP_TIMEOUT_MS);}
++    catch(e){throw new Error('Device did not answer /ota/begin within 15s. Check the Wi-Fi link and try again.');}
++    const bd=await br.json().catch(()=>({}));
++    if(!br.ok||!bd.ok)throw new Error(bd.msg||`Device refused the OTA start (HTTP ${br.status})`);
 +    if(typeof bd.session!=='string'||!bd.session)throw new Error('OTA session missing. Refresh the page and try again.');
 +    session=bd.session;
 +    if(otaCancelled)throw new Error('Cancelled by user.');
++    if(bd.pending){
++      const readyBy=Date.now()+180000;
++      for(;;){
++        if(otaCancelled)throw new Error('Cancelled by user.');
++        await new Promise(r=>setTimeout(r,500));
++        const rr=await timed('/ota/ready',{cache:'no-store'},OTA_HTTP_TIMEOUT_MS).catch(()=>null);
++        const rd=rr?await rr.json().catch(()=>({})):{};
++        if(rd.state==='failed')throw new Error(rd.msg||'Device could not prepare the OTA slot');
++        if(rd.state==='ready')break;
++        if(rd.state==='idle')throw new Error('Device dropped the OTA session while preparing the slot. Try again.');
++        $('p-msg').textContent=`Preparing OTA slot... ${Math.round((Date.now()-t0)/1000)}s`;
++        if(Date.now()>readyBy)throw new Error('Device still preparing the OTA slot after 180s. Reboot the device and retry.');
++      }
++      $('p-msg').textContent='Slot ready, uploading...';
++    }
 +    const chunkSize=bd.chunkSize||32768;
 +    let offset=0,retries=0;
 +    while(offset<validFile.size){
@@ -19868,7 +19996,7 @@ index a8679bd6..d7ee4678 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +676,73 @@ String generateToken(int length = 24) {
+@@ -42,36 +767,73 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -19957,7 +20085,7 @@ index a8679bd6..d7ee4678 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,30 +753,41 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,30 +844,41 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -20016,7 +20144,7 @@ index a8679bd6..d7ee4678 100644
  }
  
  /**********************************************************************
-@@ -127,6 +809,7 @@ String humanReadableSize(uint64_t bytes) {
+@@ -127,6 +900,7 @@ String humanReadableSize(uint64_t bytes) {
  String listFiles(FS &fs, const String &folder) {
      // log_i("Listfiles Start");
      String returnText = "pa:" + folder + ":0\n";
@@ -20024,7 +20152,7 @@ index a8679bd6..d7ee4678 100644
      // Serial.println("Listing files stored on SD");
  
      _webFS = fs;
-@@ -168,19 +851,26 @@ String listFiles(FS &fs, const String &folder) {
+@@ -168,19 +942,26 @@ String listFiles(FS &fs, const String &folder) {
  ** used by server->on functions to discern whether a user has the correct
  ** httpapitoken OR is authenticated by username and password
  **********************************************************************/
@@ -20063,7 +20191,7 @@ index a8679bd6..d7ee4678 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -220,49 +910,68 @@ void createDirRecursive(const String &path, FS fs) {
+@@ -220,49 +1001,68 @@ void createDirRecursive(const String &path, FS fs) {
  **  Function: handleUpload
  ** handles uploads to the filserver
  **********************************************************************/
@@ -20171,7 +20299,7 @@ index a8679bd6..d7ee4678 100644
      }
  }
  
-@@ -272,43 +981,171 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +1072,180 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -20221,8 +20349,19 @@ index a8679bd6..d7ee4678 100644
 -    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
      tft.setTextSize(FP);
 +    tft.setTextColor(bruceConfig.priColor, cardBg);
-+    tft.drawCentreString(done ? "OTA Complete!" : "WebOTA Flashing", tftWidth / 2, boxY + 12, 1);
-+
++#if defined(DSOLUTION_183_2MIC)
++    const bool preparing = snapshot.preparing;
++#else
++    const bool preparing = false;
++#endif
++    tft.drawCentreString(
++        done ? "OTA Complete!" : (preparing ? "Preparing OTA slot" : "WebOTA Flashing"), tftWidth / 2, boxY + 12, 1
++    );
+ 
+-    if (mode_ap) {
+-        tft.setCursor(padX, currentY);
+-        tft.print("Net: BruceNet/brucenet");
+-        currentY += LH * FP + 6;
 +    const int barX = boxX + 14;
 +    const int barY = boxY + 42;
 +    const int barW = boxW - 28;
@@ -20231,34 +20370,29 @@ index a8679bd6..d7ee4678 100644
 +    int fillW = ((barW - 4) * (int)pct) / 100;
 +    if (fillW > 0) {
 +        tft.fillRoundRect(barX + 2, barY + 2, fillW, barH - 4, 2, bruceConfig.priColor);
-+    }
- 
--    if (mode_ap) {
--        tft.setCursor(padX, currentY);
--        tft.print("Net: BruceNet/brucenet");
--        currentY += LH * FP + 6;
-+    char progLine[44];
-+    unsigned long kbDone = (unsigned long)(written / 1024);
-+    unsigned long kbTotal = (unsigned long)(total / 1024);
-+    if (kbTotal > 0) {
-+        snprintf(progLine, sizeof(progLine), "%u%%  (%lu / %lu KB)", pct, kbDone, kbTotal);
-+    } else {
-+        snprintf(progLine, sizeof(progLine), "%lu KB written", kbDone);
      }
-+    tft.setTextSize(1);
-+    tft.setTextColor(TFT_WHITE, cardBg);
-+    tft.drawCentreString(progLine, tftWidth / 2, boxY + 68, 1);
  
 -    tft.setCursor(padX, currentY);
 -    if (mdnsRunning) tft.print("Url: http://bruce.local");
 -    currentY += LH * FP + 6;
++    char progLine[44];
++    unsigned long kbDone = (unsigned long)(written / 1024);
++    unsigned long kbTotal = (unsigned long)(total / 1024);
++    if (preparing) {
++        snprintf(progLine, sizeof(progLine), "Erasing %lu KB", kbTotal);
++    } else if (kbTotal > 0) {
++        snprintf(progLine, sizeof(progLine), "%u%%  (%lu / %lu KB)", pct, kbDone, kbTotal);
++    } else {
++        snprintf(progLine, sizeof(progLine), "%lu KB written", kbDone);
++    }
++    tft.setTextSize(1);
++    tft.setTextColor(TFT_WHITE, cardBg);
++    tft.drawCentreString(progLine, tftWidth / 2, boxY + 68, 1);
++
 +    tft.setTextColor(bruceConfig.secColor, cardBg);
 +    tft.drawCentreString("Do not power off device", tftWidth / 2, boxY + 84, 1);
 +}
- 
--    tft.setCursor(padX, currentY);
--    tft.print("IP:  " + txt);
--    currentY += LH * FP + 6;
++
 +#if defined(DSOLUTION_183_2MIC)
 +bool otaUiConsumeRedraw() {
 +    if (!uxIsMenuTask()) return false;
@@ -20266,10 +20400,7 @@ index a8679bd6..d7ee4678 100644
 +    s_otaUiNeedsRedraw = false;
 +    return redraw;
 +}
- 
--    tft.setCursor(padX, currentY);
--    tft.print("Usr: " + String(bruceConfig.webUI.user));
--    currentY += LH * FP + 6;
++
 +// The OTA screen is drawn by the UI owner task, but that task must never be
 +// parked inside this function for the whole transfer: it also owns every menu,
 +// the backlight and the watchdog. The old code looped while the transfer was
@@ -20307,18 +20438,21 @@ index a8679bd6..d7ee4678 100644
 +#endif
  
 -    tft.setCursor(padX, currentY);
--    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
+-    tft.print("IP:  " + txt);
+-    currentY += LH * FP + 6;
 +void drawWebUiScreen(bool mode_ap) {
 +    drawMainBorderWithTitle(mode_ap ? "WebUI (AP)" : "WebUI (LAN)", true);
  
--    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
--    tft.setTextSize(FP);
--    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
+-    tft.setCursor(padX, currentY);
+-    tft.print("Usr: " + String(bruceConfig.webUI.user));
+-    currentY += LH * FP + 6;
 +    String ip = activeWifiIpString();
 +    wifiIP = ip;
 +    int padX = 14;
 +    int y = tftHeight <= 240 ? 44 : 52;
-+
+ 
+-    tft.setCursor(padX, currentY);
+-    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
 +    if (mode_ap) {
 +        drawWebUiFittedText(
 +            padX, y, "AP: " + bruceConfig.wifiAp.ssid + " / " + bruceConfig.wifiAp.pwd,
@@ -20362,14 +20496,17 @@ index a8679bd6..d7ee4678 100644
 +        padX, y, "Auth: " + String(bruceConfig.webUI.user) + " / " + String(bruceConfig.webUI.pwd),
 +        TFT_LIGHTGREY, 1
 +    );
-+
+ 
+-    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+-    tft.setTextSize(FP);
+-    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
 +    tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
 +    tft.setTextSize(1);
 +    tft.drawCentreString("[Esc / Boot Hold] Options & Background", tftWidth / 2, tftHeight - 20, 1);
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -348,11 +1185,16 @@ void serveWebUIFile(
+@@ -348,11 +1285,16 @@ void serveWebUIFile(
  ) {
      AsyncWebServerResponse *response = nullptr;
      FS *fs = NULL;
@@ -20390,7 +20527,7 @@ index a8679bd6..d7ee4678 100644
      if (fs) {
          response = request->beginResponse(*fs, "/BruceWebUI/" + filename, contentType);
      } else {
-@@ -379,11 +1221,12 @@ void serveWebUIFile(
+@@ -379,11 +1321,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -20405,7 +20542,7 @@ index a8679bd6..d7ee4678 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -456,63 +1299,1028 @@ void configureWebServer() {
+@@ -456,155 +1399,1223 @@ void configureWebServer() {
      server->on("/index.js", HTTP_GET, [](AsyncWebServerRequest *request) {
          serveWebUIFile(request, "index.js", "text/javascript", true, index_js, index_js_size);
      });
@@ -20440,6 +20577,8 @@ index a8679bd6..d7ee4678 100644
 -                humanReadableSize(LittleFSUsedBytes).c_str(),
 -                "total",
 -                humanReadableSize(LittleFSTotalBytes).c_str()
+-            );
+-            request->send(200, "application/json", response_body);
 +            const esp_partition_t *runPart = esp_ota_get_running_partition();
 +            const esp_partition_t *nextPart = esp_ota_get_next_update_partition(NULL);
 +            const bool dualBoot = isDualBootActive();
@@ -20546,9 +20685,24 @@ index a8679bd6..d7ee4678 100644
 +            resp += jsonEscape(bruceConfig.wifiAp.ssid);
 +            resp += "\"}";
 +            request->send(200, "application/json", resp);
-+        }
-+    });
-+
+         }
+     });
+ 
+-    // Get Screen
+-    server->on("/getscreen", HTTP_GET, [](AsyncWebServerRequest *request) {
+-        if (checkUserWebAuth(request)) {
+-            static uint8_t *screenBinBuffer = nullptr;
+-            static size_t screenBinBufferSize = 0;
+-
+-            if (!screenBinBuffer) {
+-                size_t desiredSize = MAX_LOG_ENTRIES * MAX_LOG_SIZE;
+-                if (psramFound()) screenBinBuffer = static_cast<uint8_t *>(ps_malloc(desiredSize));
+-                if (!screenBinBuffer) screenBinBuffer = static_cast<uint8_t *>(malloc(desiredSize));
+-                if (!screenBinBuffer) {
+-                    request->send(503, "text/plain", "Insufficient memory for screen buffer");
+-                    return;
+-                }
+-                screenBinBufferSize = desiredSize;
 +    // Studio — QR Codes & Mic/Sonar status (non-pentest group)
 +    server->on("/studio/qrcodes", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
@@ -20572,7 +20726,7 @@ index a8679bd6..d7ee4678 100644
 +            if (name.isEmpty() || content.isEmpty()) {
 +                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Name and content required\"}");
 +                return;
-+            }
+             }
 +            bool updated=false;
 +            for (auto &e : bruceConfig.qrCodes) {
 +                if (e.menuName.equalsIgnoreCase(name)) { e.content = content; updated=true; break; }
@@ -20591,7 +20745,11 @@ index a8679bd6..d7ee4678 100644
 +            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid action\"}");
 +        }
 +    });
-+
+ 
+-            size_t binSize = 0;
+-            tft.getBinLog(screenBinBuffer, binSize);
+-            if (binSize > screenBinBufferSize) {
+-                request->send(500, "text/plain", "Screen buffer overflow");
 +    // BadUSB Auto-Run — config + status for WebUI & Studio
 +#if !defined(LITE_VERSION)
 +    server->on("/badusb/autorun", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -20655,8 +20813,9 @@ index a8679bd6..d7ee4678 100644
 +#if defined(USB_as_HID)
 +            if (xTaskCreate(badUsbAutoRunTestTask, "badUsbAutoTest", 6144, nullptr, 1, nullptr) != pdPASS) {
 +                request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Unable to schedule test\"}");
-+                return;
-+            }
+                 return;
+             }
+-            request->send(200, "application/octet-stream", (const uint8_t *)screenBinBuffer, binSize);
 +            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Test run triggered — watch device screen\"}");
 +#else
 +            request->send(501, "application/json", "{\"ok\":false,\"msg\":\"USB HID unavailable\"}");
@@ -20666,10 +20825,28 @@ index a8679bd6..d7ee4678 100644
 +            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Payload cleared\"}");
 +        } else {
 +            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid action\"}");
-+        }
-+    });
+         }
+     });
 +#endif
-+
+ 
+-    // Rename file or folder
+-    server->on("/rename", HTTP_POST, [](AsyncWebServerRequest *request) {
+-        if (checkUserWebAuth(request)) {
+-            if (request->hasArg("fileName") && request->hasArg("filePath")) {
+-                String fs = request->arg("fs").c_str();
+-                String fileName = request->arg("fileName").c_str();
+-                String filePath = request->arg("filePath").c_str();
+-                String filePath2 = filePath.substring(0, filePath.lastIndexOf('/') + 1) + fileName;
+-                // Rename the file of folder
+-                if (fs == "SD") {
+-                    if (SD.rename(filePath, filePath2))
+-                        request->send(200, "text/plain", filePath + " renamed to " + filePath2);
+-                    else request->send(200, "text/plain", "Fail renaming file.");
+-                } else {
+-                    if (LittleFS.rename(filePath, filePath2))
+-                        request->send(200, "text/plain", filePath + " renamed to " + filePath2);
+-                    else request->send(200, "text/plain", "Fail renaming file.");
+-                }
 +    // Personalization & Theme API
 +    server->on("/personalize", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
@@ -20711,11 +20888,44 @@ index a8679bd6..d7ee4678 100644
 +            if (atoll(request->arg("epoch").c_str()) <= 1700000000LL) {
 +                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid clock value\"}");
 +                return;
-+            }
+             }
 +#endif
-+        }
+         }
+-    });
 +        String prevMdns = bruceConfig.mdnsHost;
-+
+ 
+-    // Route to send a generic command (Tasmota compatible API)
+-    // https://tasmota.github.io/docs/Commands/#with-web-requests
+-    server->on("/cm", HTTP_POST, [](AsyncWebServerRequest *request) {
+-        if (!checkUserWebAuth(request)) { return; }
+-        if (request->hasArg("cmnd")) {
+-            String cmnd = request->arg("cmnd");
+-            if (cmnd.startsWith("nav")) {
+-                volatile bool *var = &SelPress;
+-                if (cmnd.startsWith("nav sel")) var = &SelPress;
+-                if (cmnd.startsWith("nav esc")) var = &EscPress;
+-                if (cmnd.startsWith("nav up")) var = &UpPress;
+-                if (cmnd.startsWith("nav down")) var = &DownPress;
+-                if (cmnd.startsWith("nav next")) var = &NextPress;
+-                if (cmnd.startsWith("nav prev")) var = &PrevPress;
+-                request->send(200, "text/plain", "command " + cmnd + " success");
+-                int time;
+-                if (cmnd.endsWith("0")) time = cmnd.substring(cmnd.lastIndexOf(' ')).toInt();
+-                else time = 10;
+-                auto tmp = millis() + time;
+-                while (tmp > millis()) {
+-                    AnyKeyPress = true;
+-                    SerialCmdPress = true;
+-                    *var = true;
+-                    if (!LongPress) vTaskDelay(pdMS_TO_TICKS(190));
+-                    else vTaskDelay(pdMS_TO_TICKS(50));
+-                }
+-            } else {
+-                if (parseSerialCommand(cmnd, false)) {
+-                    request->send(200, "text/plain", "command " + cmnd + " queued");
+-                } else {
+-                    request->send(400, "text/plain", "command failed, check the serial log for details");
+-                }
 +        if (request->hasArg("ownerName")) {
 +            String v = request->arg("ownerName");
 +            v.trim();
@@ -20737,8 +20947,10 @@ index a8679bd6..d7ee4678 100644
 +            s.trim();
 +            if (s.length() >= 1 && (p.length() == 0 || p.length() >= 8)) {
 +                bruceConfig.setWifiApCreds(s, p);
-+            }
-+        }
+             }
+-        } else {
+-            request->send(400, "text/plain", "http request missing required arg: cmnd");
+         }
 +        uint16_t pri = bruceConfig.priColor;
 +        uint16_t sec = bruceConfig.secColor;
 +        uint16_t bg = bruceConfig.bgColor;
@@ -20795,8 +21007,11 @@ index a8679bd6..d7ee4678 100644
 +        json += String(bruceConfig.bright);
 +        json += ",\"msg\":\"Saved! Theme & identity updated.\"}";
 +        request->send(200, "application/json", json);
-+    });
-+
+     });
+ 
+-    // Reboot device
+-    server->on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request) {
+-        if (checkUserWebAuth(request)) { ESP.restart(); }
 +    // Wi-Fi Status & LAN Wi-Fi Setup (allows switching from AP to 192.168.x.x LAN from browser)
 +    server->on("/wifistatus", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
@@ -20810,8 +21025,17 @@ index a8679bd6..d7ee4678 100644
 +                      jsonEscape(activeWifiSsidString()) + "\",\"ip\":\"" + ip +
 +                      "\",\"rssi\":" + String(rssi) + ",\"ota_url\":\"http://" + ip + "/ota\"}";
 +        request->send(200, "application/json", json);
-+    });
-+
+     });
+ 
+-    // List files
+-    server->on("/listfiles", HTTP_GET, [](AsyncWebServerRequest *request) {
+-        if (checkUserWebAuth(request)) {
+-            String folder = "/";
+-            if (request->hasArg("folder")) { folder = request->arg("folder"); }
+-            if (strcmp(request->arg("fs").c_str(), "SD") == 0) {
+-                request->send(200, "text/plain", listFiles(SD, folder));
+-            } else {
+-                request->send(200, "text/plain", listFiles(LittleFS, folder));
 +    server->on("/wifiscan", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
 +        if (isOtaInProgress() || s_wifiSwitchBusy) {
@@ -20841,9 +21065,9 @@ index a8679bd6..d7ee4678 100644
 +                    found = true;
 +                    break;
 +                }
-+            }
+             }
 +            if (!found) { netsList.push_back({ssid, rssi, enc, bruceConfig.hasWifiCredential(ssid)}); }
-+        }
+         }
 +        WiFi.scanDelete();
 +        std::sort(netsList.begin(), netsList.end(), [](const NetEntry &a, const NetEntry &b) {
 +            return a.rssi > b.rssi;
@@ -20859,8 +21083,19 @@ index a8679bd6..d7ee4678 100644
 +        }
 +        json += "]}";
 +        request->send(200, "application/json", json);
-+    });
-+
+     });
+ 
+-    // Download, create folder and delete
+-    server->on("/file", HTTP_GET, [](AsyncWebServerRequest *request) {
+-        if (checkUserWebAuth(request)) {
+-            if (request->hasArg("name") && request->hasArg("action")) {
+-                String fileName = request->arg("name").c_str();
+-                String fileAction = request->arg("action").c_str();
+-                String fileSys = request->arg("fs").c_str();
+-                bool useSD = false;
+-                if (fileSys == "SD") useSD = true;
+-
+-                FS *fs;
 +    server->on("/wificonnect", HTTP_POST, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
 +        if (isOtaInProgress() || s_wifiSwitchBusy) {
@@ -20944,8 +21179,7 @@ index a8679bd6..d7ee4678 100644
 +                400, "application/json",
 +                "{\"ok\":false,\"msg\":\"Invalid firmware size for OTA slot (max " +
 +                    humanReadableSize(nextPart->size) + ")\"}"
-             );
--            request->send(200, "application/json", response_body);
++            );
 +            return;
 +        }
 +        if (s_otaRestartPending || s_wifiSwitchBusy) {
@@ -20965,34 +21199,46 @@ index a8679bd6..d7ee4678 100644
 +        if (!otaAllocChunkBuf()) {
 +            request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Insufficient RAM for OTA\"}");
 +            return;
-         }
++        }
 +        otaAcquireLock(totalSize);
-+        if (!Update.begin(totalSize, U_FLASH)) {
-+            String err = Update.errorString();
-+            err.replace("\"", "'");
++        // Answer right away, prepare the slot on a worker task: see otaBeginTask().
++        s_otaBeginStartMs = millis();
++        s_otaBeginState = OTA_BEGIN_PREPARING;
++        if (xTaskCreate(otaBeginTask, "otaBegin", 4096, (void *)(uintptr_t)totalSize, 1, NULL) != pdPASS) {
++            s_otaBeginState = OTA_BEGIN_FAILED;
++            snprintf(s_otaBeginErr, sizeof(s_otaBeginErr), "Unable to schedule OTA start");
++            Update.abort();
 +            otaReleaseLock(true);
-+            request->send(500, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
++            s_otaBeginState = OTA_BEGIN_FAILED;
++            request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Unable to schedule OTA start\"}");
 +            return;
 +        }
-+        s_otaValid = true;
-+        String ok = "{\"ok\":true,\"chunkSize\":" + String((unsigned long)kOtaChunkCap) +
-+                    ",\"maxSize\":" + String((unsigned long)nextPart->size) +
-+                    ",\"session\":\"" + String(s_otaSession) + "\"}";
++        String ok = "{\"ok\":true,\"pending\":true,\"chunkSize\":" + String((unsigned long)kOtaChunkCap) +
++                    ",\"maxSize\":" + String((unsigned long)nextPart->size) + ",\"session\":\"" +
++                    String(s_otaSession) + "\"}";
 +        request->send(200, "application/json", ok);
-     });
- 
--    // Get Screen
--    server->on("/getscreen", HTTP_GET, [](AsyncWebServerRequest *request) {
--        if (checkUserWebAuth(request)) {
--            static uint8_t *screenBinBuffer = nullptr;
--            static size_t screenBinBufferSize = 0;
--
--            if (!screenBinBuffer) {
--                size_t desiredSize = MAX_LOG_ENTRIES * MAX_LOG_SIZE;
--                if (psramFound()) screenBinBuffer = static_cast<uint8_t *>(ps_malloc(desiredSize));
--                if (!screenBinBuffer) screenBinBuffer = static_cast<uint8_t *>(malloc(desiredSize));
--                if (!screenBinBuffer) {
--                    request->send(503, "text/plain", "Insufficient memory for screen buffer");
++    });
++
++    // Progress/result of the slot preparation started by /ota/begin.
++    server->on("/ota/ready", HTTP_GET, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        const uint8_t state = s_otaBeginState;
++        if (state == OTA_BEGIN_READY && (!s_otaInProgress || !s_otaValid)) s_otaBeginState = OTA_BEGIN_IDLE;
++        String js = "{\"ok\":true,\"state\":\"";
++        switch (s_otaBeginState) {
++            case OTA_BEGIN_PREPARING: js += "preparing"; break;
++            case OTA_BEGIN_READY: js += "ready"; break;
++            case OTA_BEGIN_FAILED: js += "failed"; break;
++            default: js += s_otaValid ? "ready" : "idle"; break;
++        }
++        js += "\",\"elapsedMs\":" + String((unsigned long)(millis() - s_otaBeginStartMs));
++        if (s_otaBeginState == OTA_BEGIN_FAILED && s_otaBeginErr[0]) {
++            js += ",\"msg\":\"" + jsonEscape(String(s_otaBeginErr)) + "\"";
++        }
++        js += "}";
++        request->send(200, "application/json", js);
++    });
++
 +    server->on(
 +        "/ota/chunk",
 +        HTTP_POST,
@@ -21008,6 +21254,14 @@ index a8679bd6..d7ee4678 100644
 +            if (!st->authOk) {
 +                free(st);
 +                request->send(401, "text/plain", "Unauthorized");
++                return;
++            }
++            if (s_otaBeginState == OTA_BEGIN_PREPARING) {
++                free(st);
++                request->send(
++                    409, "application/json",
++                    "{\"ok\":false,\"msg\":\"OTA slot still being prepared; retry in a moment\"}"
++                );
 +                return;
 +            }
 +            if (s_otaAbortRequested) {
@@ -21209,6 +21463,13 @@ index a8679bd6..d7ee4678 100644
 +            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Invalid or expired OTA session\"}");
 +            return;
 +        }
++        // A start that is still preparing owns Update: only ask it to stop, the
++        // worker task is the one that may touch Update there.
++        if (s_otaBeginState == OTA_BEGIN_PREPARING) {
++            s_otaBeginCancel = true;
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Cancelling OTA start\"}");
++            return;
++        }
 +        Update.abort();
 +        otaReleaseLock(true);
 +        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"OTA aborted\"}");
@@ -21334,14 +21595,13 @@ index a8679bd6..d7ee4678 100644
 +                    snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
 +                    s_otaLegacyOwner = nullptr;
 +                    Update.abort(); otaReleaseLock(true);
-                     return;
-                 }
--                screenBinBufferSize = desiredSize;
++                    return;
++                }
 +                st->finalized = true;
-             }
++            }
 +        }
 +    );
- 
++
 +    // Software USB ROM Bootloader trigger
 +    auto handleBootloaderReq = [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
@@ -21440,10 +21700,7 @@ index a8679bd6..d7ee4678 100644
 +                request->send(503, "text/plain", "Insufficient memory for screen buffer");
 +                return;
 +            }
-             size_t binSize = 0;
--            tft.getBinLog(screenBinBuffer, binSize);
--            if (binSize > screenBinBufferSize) {
--                request->send(500, "text/plain", "Screen buffer overflow");
++            size_t binSize = 0;
 +            bool logging = false, truncated = false, base = false, unmapped = false;
 +            tft.getBinLog(buffer, binSize, &logging, &truncated, &base, &unmapped);
 +            // Stream directly from PSRAM; AsyncResponseStream duplicates the whole frame.
@@ -21459,9 +21716,8 @@ index a8679bd6..d7ee4678 100644
 +            );
 +            if (!response) {
 +                request->send(503, "text/plain", "Insufficient memory for screen response");
-                 return;
-             }
--            request->send(200, "application/octet-stream", (const uint8_t *)screenBinBuffer, binSize);
++                return;
++            }
 +            response->addHeader("Cache-Control", "no-store");
 +            response->addHeader("X-Screen-Logging", logging ? "active" : "inactive");
 +            response->addHeader("X-Screen-Truncated", truncated ? "1" : "0");
@@ -21469,32 +21725,37 @@ index a8679bd6..d7ee4678 100644
 +            response->addHeader("X-Screen-Unmapped", unmapped ? "1" : "0");
 +            response->addHeader("X-Screen-Off", isScreenOff ? "1" : "0");
 +            request->send(response);
-         }
-     });
- 
-@@ -544,25 +2352,70 @@ void configureWebServer() {
-         if (!checkUserWebAuth(request)) { return; }
-         if (request->hasArg("cmnd")) {
-             String cmnd = request->arg("cmnd");
--            if (cmnd.startsWith("nav")) {
--                volatile bool *var = &SelPress;
--                if (cmnd.startsWith("nav sel")) var = &SelPress;
--                if (cmnd.startsWith("nav esc")) var = &EscPress;
--                if (cmnd.startsWith("nav up")) var = &UpPress;
--                if (cmnd.startsWith("nav down")) var = &DownPress;
--                if (cmnd.startsWith("nav next")) var = &NextPress;
--                if (cmnd.startsWith("nav prev")) var = &PrevPress;
--                request->send(200, "text/plain", "command " + cmnd + " success");
--                int time;
--                if (cmnd.endsWith("0")) time = cmnd.substring(cmnd.lastIndexOf(' ')).toInt();
--                else time = 10;
--                auto tmp = millis() + time;
--                while (tmp > millis()) {
--                    AnyKeyPress = true;
--                    SerialCmdPress = true;
--                    *var = true;
--                    if (!LongPress) vTaskDelay(pdMS_TO_TICKS(190));
--                    else vTaskDelay(pdMS_TO_TICKS(50));
++        }
++    });
++
++    // Rename file or folder
++    server->on("/rename", HTTP_POST, [](AsyncWebServerRequest *request) {
++        if (checkUserWebAuth(request)) {
++            if (request->hasArg("fileName") && request->hasArg("filePath")) {
++                String fs = request->arg("fs").c_str();
++                String fileName = request->arg("fileName").c_str();
++                String filePath = request->arg("filePath").c_str();
++                String filePath2 = filePath.substring(0, filePath.lastIndexOf('/') + 1) + fileName;
++                // Rename the file of folder
++                if (fs == "SD") {
++                    if (SD.rename(filePath, filePath2))
++                        request->send(200, "text/plain", filePath + " renamed to " + filePath2);
++                    else request->send(200, "text/plain", "Fail renaming file.");
++                } else {
++                    if (LittleFS.rename(filePath, filePath2))
++                        request->send(200, "text/plain", filePath + " renamed to " + filePath2);
++                    else request->send(200, "text/plain", "Fail renaming file.");
++                }
++            }
++        }
++    });
++
++    // Route to send a generic command (Tasmota compatible API)
++    // https://tasmota.github.io/docs/Commands/#with-web-requests
++    server->on("/cm", HTTP_POST, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) { return; }
++        if (request->hasArg("cmnd")) {
++            String cmnd = request->arg("cmnd");
 +            if (cmnd == "nav" || cmnd.startsWith("nav ")) {
 +                WebNavCommand nav;
 +                if (!parseWebNav(cmnd.c_str(), nav)) {
@@ -21559,17 +21820,21 @@ index a8679bd6..d7ee4678 100644
 +                    request->send(200, "text/plain", out);
 +                } else {
 +                    request->send(504, "text/plain", "command timeout or queue busy");
-                 }
-             } else {
-                 if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2429,28 @@ void configureWebServer() {
-         }
-     });
- 
--    // Reboot device
++                }
++            } else {
++                if (parseSerialCommand(cmnd, false)) {
++                    request->send(200, "text/plain", "command " + cmnd + " queued");
++                } else {
++                    request->send(400, "text/plain", "command failed, check the serial log for details");
++                }
++            }
++        } else {
++            request->send(400, "text/plain", "http request missing required arg: cmnd");
++        }
++    });
++
 +    // Reboot device (supports ?target=xiaozhi | ?target=menu for Dual-Boot)
-     server->on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request) {
--        if (checkUserWebAuth(request)) { ESP.restart(); }
++    server->on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
 +        if (isOtaInProgress() || s_otaRestartPending) {
 +            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"OTA in progress; wait or cancel first\"}");
@@ -21590,10 +21855,36 @@ index a8679bd6..d7ee4678 100644
 +            return;
 +        }
 +        request->send(200, "application/json", String("{\"ok\":true,\"msg\":\"") + message + "\"}");
-     });
- 
-     // List files
-@@ -632,6 +2504,11 @@ void configureWebServer() {
++    });
++
++    // List files
++    server->on("/listfiles", HTTP_GET, [](AsyncWebServerRequest *request) {
++        if (checkUserWebAuth(request)) {
++            String folder = "/";
++            if (request->hasArg("folder")) { folder = request->arg("folder"); }
++            if (strcmp(request->arg("fs").c_str(), "SD") == 0) {
++                request->send(200, "text/plain", listFiles(SD, folder));
++            } else {
++                request->send(200, "text/plain", listFiles(LittleFS, folder));
++            }
++        }
++    });
++
++    // Download, create folder and delete
++    server->on("/file", HTTP_GET, [](AsyncWebServerRequest *request) {
++        if (checkUserWebAuth(request)) {
++            if (request->hasArg("name") && request->hasArg("action")) {
++                String fileName = request->arg("name").c_str();
++                String fileAction = request->arg("action").c_str();
++                String fileSys = request->arg("fs").c_str();
++                bool useSD = false;
++                if (fileSys == "SD") useSD = true;
++
++                FS *fs;
+                 if (useSD) {
+                     fs = &SD;
+                 } else fs = &LittleFS;
+@@ -632,6 +2643,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -21605,7 +21896,7 @@ index a8679bd6..d7ee4678 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2577,7 @@ void configureWebServer() {
+@@ -700,7 +2716,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -21614,7 +21905,7 @@ index a8679bd6..d7ee4678 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2597,13 @@ void configureWebServer() {
+@@ -720,7 +2736,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -21629,7 +21920,7 @@ index a8679bd6..d7ee4678 100644
          handleUpload
      );
  
-@@ -737,6 +2620,427 @@ void configureWebServer() {
+@@ -737,6 +2759,427 @@ void configureWebServer() {
              }
          }
      });
@@ -22057,7 +22348,7 @@ index a8679bd6..d7ee4678 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +3049,78 @@ void configureWebServer() {
+@@ -745,25 +3188,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -22145,7 +22436,7 @@ index a8679bd6..d7ee4678 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +3128,213 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +3267,213 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -22244,10 +22535,9 @@ index a8679bd6..d7ee4678 100644
 +        } else if (choice == 2 || choice == 3) {
 +            if (stopWebUiFromMenu(choice == 3)) exitWebUiLoop = true;
 +        }
-     }
++    }
 +}
- 
--    bool closeServer = false;
++
 +/**********************************************************************
 +**  Function: startWebUiHeadless
 +**  Silently connects to saved Wi-Fi (or falls back to AP) and starts the
@@ -22297,17 +22587,13 @@ index a8679bd6..d7ee4678 100644
 +                }
 +                WiFi.scanDelete();
 +            }
- 
--    options.clear();
--    options.emplace_back("Run in background", []() {});
--    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
++
 +            if (s_webUiCancelRequested) {
 +                wifiDisconnect();
 +                s_webUiStarting = false;
 +                return false;
 +            }
- 
--    loopOptions(options);
++
 +            if (WiFi.isConnected()) {
 +                hasNetwork = true;
 +            } else if (allowApFallback && !s_webUiCancelRequested) {
@@ -22316,17 +22602,14 @@ index a8679bd6..d7ee4678 100644
 +            }
 +        }
 +    }
- 
--    if (closeServer) {
--        stopWebUi();
--        vTaskDelay(pdMS_TO_TICKS(100));
--        if (!keepWifiConnected) { wifiDisconnect(); }
++
 +    if (s_webUiCancelRequested) {
 +        if (!isWebUIActive) wifiDisconnect();
 +        s_webUiStarting = false;
 +        return false;
-+    }
-+
+     }
+ 
+-    bool closeServer = false;
 +    if (hasNetwork && !server) {
 +        Serial.println("[WebUI] Starting headless background server...");
 +        if (psramFound()) server = (AsyncWebServer *)ps_malloc(sizeof(AsyncWebServer));
@@ -22342,14 +22625,18 @@ index a8679bd6..d7ee4678 100644
 +            Serial.println("[WebUI] Ready at http://" + bruceConfig.mdnsHost + ".local (" + wifiIP + ")");
 +        }
 +    }
-+
+ 
+-    options.clear();
+-    options.emplace_back("Run in background", []() {});
+-    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
 +    // Cancellation can arrive while configureWebServer is running. Do not leave
 +    // a late-started server behind after the user asked to stop it.
 +    if (s_webUiCancelRequested && isWebUIActive) stopWebUi();
 +    s_webUiStarting = false;
 +    return isWebUIActive;
 +}
-+
+ 
+-    loopOptions(options);
 +static void webUiAutoStartTask(void *pvParameters) {
 +    (void)pvParameters;
 +    for (int i = 0; i < 9 && !s_webUiCancelRequested; i++) {
@@ -22362,7 +22649,11 @@ index a8679bd6..d7ee4678 100644
 +    }
 +    vTaskDelete(NULL);
 +}
-+
+ 
+-    if (closeServer) {
+-        stopWebUi();
+-        vTaskDelay(pdMS_TO_TICKS(100));
+-        if (!keepWifiConnected) { wifiDisconnect(); }
 +void startWebUiBackgroundTask() {
 +    if (server || isWebUIActive || s_webUiStarting || s_webUiQueued) return;
 +    s_webUiCancelRequested = false;

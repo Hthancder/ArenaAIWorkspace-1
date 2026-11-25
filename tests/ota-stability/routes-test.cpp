@@ -21,6 +21,8 @@ public:
     bool operator==(const char *s) const {return x==s;} std::string str() const {return x;}
     friend String operator+(const String&a,const String&b) {return a.x+b.x;}
     friend String operator+(const char*a,const String&b) {return String(a)+b;}
+    String &operator+=(const String &o) { x += o.x; return *this; }
+    String &operator+=(const char *s) { x += (s?s:""); return *this; }
     friend String operator+(const String&a,const char*b) {return a+String(b);}
 };
 struct AsyncWebHeader { String val; String value() const{return val;} };
@@ -49,6 +51,7 @@ struct Server {std::map<std::string,Route> routes; void on(const char *url,int m
 #define WIFI_PS_NONE 0
 #define NULL_TASK nullptr
 #define pdPASS 1
+#define pdMS_TO_TICKS(x) (x)
 #define PROGMEM
 struct Partition {size_t size=0x400000;}; using esp_partition_t=Partition;
 Partition partition;
@@ -58,8 +61,8 @@ String humanReadableSize(size_t){return "4 MB";}
 String jsonEscape(const String &s){return s;}
 bool checkUserWebAuth(AsyncWebServerRequest *r,bool=false){if(!r->auth){r->send(401,"text/plain","Unauthorized");return false;}return true;}
 bool isWebSessionValid(AsyncWebServerRequest*r){return r->auth;}
-struct UpdateStub {bool active=false; int aborts=0,writes=0; std::vector<uint8_t> contents;
- bool begin(size_t,int){active=true; contents.clear();return true;}
+struct UpdateStub {bool active=false; int aborts=0,writes=0; bool beginFails=false; std::vector<uint8_t> contents;
+ bool begin(size_t,int){if(beginFails) return false; active=true; contents.clear();return true;}
  void abort(){active=false;aborts++;}
  size_t write(uint8_t *p,size_t n){assert(active);contents.insert(contents.end(),p,p+n);writes++;return n;}
  bool end(bool){active=false;return true;} bool hasError(){return false;} const char* errorString(){return "error";}
@@ -67,7 +70,23 @@ struct UpdateStub {bool active=false; int aborts=0,writes=0; std::vector<uint8_t
 uint32_t nowMs=100; uint32_t millis(){return nowMs;} uint32_t esp_random(){static uint32_t i;return ++i;}
 void setCpuFrequencyMhz(int){} struct WifiStub {void setSleep(int){}} WiFi;
 static bool restartFails=false;
-void applyPowerProfile(bool){} int xTaskCreate(void(*)(void*),const char*,int,void*,int,void*) {return restartFails ? 0 : pdPASS;} void delayedRestartTask(void*){}
+void applyPowerProfile(bool){}
+// The OTA start now runs on its own task, which is what keeps /ota/begin from
+// blocking the page. The stub can either run it inline (the usual case) or leave
+// it pending so the test can look at both states.
+static void(*s_beginTask)(void*)=nullptr;
+static bool beginSpawnFails=false, beginDeferred=false;
+static void *s_pendingBeginArg=nullptr;
+static void runPendingBegin(){ if(s_beginTask&&s_pendingBeginArg){ void *a=s_pendingBeginArg; s_pendingBeginArg=nullptr; s_beginTask(a);} }
+int xTaskCreate(void(*fn)(void*),const char*,int,void*pv,int,void*) {
+  if(fn!=s_beginTask) return restartFails ? 0 : pdPASS;   // restart / other tasks
+  if(beginSpawnFails) return 0;
+  if(beginDeferred){ s_pendingBeginArg=pv; return pdPASS; }
+  fn(pv);
+  return pdPASS;
+}
+int vTaskDelete(void*){return 0;}
+void vTaskDelay(int){} void delayedRestartTask(void*){}
 const char *kOtaPageHtml="";
 static constexpr size_t kOtaChunkCap=32*1024; static constexpr uint32_t kOtaIdleTimeoutMs=90000;
 static std::atomic<bool> s_otaInProgress{false};
@@ -77,10 +96,17 @@ static uint8_t s_otaScreenPct=0,s_otaLegacyBuf[4096]; static uint8_t *s_otaChunk
 static char s_otaSession[33]={}; static AsyncWebServerRequest *s_otaChunkOwner=nullptr,*s_otaLegacyOwner=nullptr;
 static volatile bool s_otaAbortRequested=false;
 static constexpr uint32_t kOtaIdleTimeoutNoDataMs=30000;
+enum OtaBeginState : uint8_t { OTA_BEGIN_IDLE=0, OTA_BEGIN_PREPARING, OTA_BEGIN_READY, OTA_BEGIN_FAILED };
+static volatile uint8_t s_otaBeginState=OTA_BEGIN_IDLE;
+static char s_otaBeginErr[80]={0};
+static volatile uint32_t s_otaBeginStartMs=0;
+static volatile bool s_otaBeginCancel=false;
+static constexpr uint32_t kOtaBeginTimeoutMs=180000UL;
 // Mirrors webInterface.cpp: a session with no bytes yet expires quickly, a live
 // transfer keeps the longer write timeout.
 bool isOtaInProgress(){
   if(!s_otaInProgress) return false;
+  if(s_otaBeginState==OTA_BEGIN_PREPARING) return (uint32_t)(millis()-s_otaBeginStartMs)<=kOtaBeginTimeoutMs;
   const uint32_t idle=(uint32_t)(millis()-s_otaLastActivityMs);
   if(s_otaWritten==0) return idle<=kOtaIdleTimeoutNoDataMs;
   return idle<=kOtaIdleTimeoutMs;
@@ -90,6 +116,7 @@ bool otaAllocChunkBuf(){s_otaChunkBuf=(uint8_t*)malloc(kOtaChunkCap);return s_ot
 #include "lifecycle.inc"
 #include "match.inc"
 void installRoutes() {
+s_beginTask = otaBeginTask;
 #include "routes.inc"
 }
 void token(AsyncWebServerRequest &r,const std::string &t){r.headers["X-OTA-Session"]={String(t)};}
@@ -149,5 +176,59 @@ int main(){
  AsyncWebServerRequest resurrection;token(resurrection,cancelSession);resurrection.args["offset"]="0";
  chunk.body(&resurrection,big.data(),big.size(),0,big.size());chunk.req(&resurrection);
  assert(resurrection.code==400 && !s_otaInProgress && s_otaWritten==0);
+ // --- Starting a transfer must never block the HTTP reply -------------------
+ // The browser used to sit on "Initializing OTA slot..." because Update.begin()
+ // ran inside the /ota/begin request. It now answers immediately with
+ // pending:true and the outcome is polled from /ota/ready.
+ auto &ready=server->routes["/ota/ready0"];
+ beginDeferred=true;
+ {AsyncWebServerRequest slow; slow.args["size"]="65536"; nowMs+=1000;
+  begin.req(&slow);
+  assert(slow.code==200 && slow.text.str().find("\"pending\":true")!=std::string::npos);
+  assert(slow.text.str().find("\"chunkSize\":32768")!=std::string::npos);
+  assert(slow.text.str().find("\"session\":\"")!=std::string::npos);
+  // The request is answered while the slot is still being prepared, and the
+  // "in progress" state must not lapse into the fast "no bytes yet" timeout.
+  assert(s_otaBeginState==OTA_BEGIN_PREPARING && s_otaInProgress);
+  nowMs+=kOtaIdleTimeoutNoDataMs+5000; assert(isOtaInProgress());
+  AsyncWebServerRequest whilePreparing; whilePreparing.args["size"]="65536"; begin.req(&whilePreparing);
+  assert(whilePreparing.code==409); // one transfer at a time, even mid-start
+  AsyncWebServerRequest poll; ready.req(&poll);
+  assert(poll.code==200 && poll.text.str().find("\"state\":\"preparing\"")!=std::string::npos);
+  // A chunk may never be written before the slot exists.
+  const int writesBefore=Update.writes;
+  AsyncWebServerRequest early; token(early,std::string(s_otaSession)); early.args["offset"]="0";
+  chunk.body(&early,big.data(),big.size(),0,big.size()); chunk.req(&early);
+  assert(early.code==409 && s_otaValid==false && Update.writes==writesBefore);
+  runPendingBegin();
+  assert(s_otaBeginState==OTA_BEGIN_READY && s_otaValid && Update.active);
+  ready.req(&poll);
+  assert(poll.code==200 && poll.text.str().find("\"state\":\"ready\"")!=std::string::npos);
+  AsyncWebServerRequest afterReady; token(afterReady,std::string(s_otaSession)); afterReady.args["offset"]="0";
+  chunk.body(&afterReady,big.data(),big.size(),0,big.size()); chunk.req(&afterReady);
+  assert(afterReady.code==200);
+  AsyncWebServerRequest stop; token(stop,std::string(s_otaSession)); abort.req(&stop);
+  assert(stop.code==200 && !s_otaInProgress);
+ }
+ // A start that fails must report the reason to /ota/ready and free everything,
+ // instead of leaving the page (and the device screen) waiting forever.
+ beginDeferred=false;
+ {Update.beginFails=true;
+  AsyncWebServerRequest bad; bad.args["size"]="65536"; begin.req(&bad);
+  assert(bad.code==200); // answered immediately, failure arrives via /ota/ready
+  assert(s_otaBeginState==OTA_BEGIN_FAILED && !s_otaInProgress && !s_otaChunkBuf);
+  AsyncWebServerRequest poll; ready.req(&poll);
+  assert(poll.code==200 && poll.text.str().find("\"state\":\"failed\"")!=std::string::npos);
+  assert(poll.text.str().find("\"msg\":\"error\"")!=std::string::npos);
+  Update.beginFails=false;
+ }
+ // If the worker task cannot even be created, /ota/begin must say so at once.
+ {beginSpawnFails=true;
+  AsyncWebServerRequest noTask; noTask.args["size"]="65536"; begin.req(&noTask);
+  assert(noTask.code==503 && !s_otaInProgress && !s_otaChunkBuf);
+  AsyncWebServerRequest poll; ready.req(&poll);
+  assert(poll.text.str().find("\"state\":\"failed\"")!=std::string::npos);
+  beginSpawnFails=false;
+ }
  std::cout<<"OTA route ownership, stale-session, retry, timeout, cancel and restart tests passed\n";
 }
