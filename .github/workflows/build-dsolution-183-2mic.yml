@@ -259,7 +259,10 @@ jobs:
   publish-session-release:
     # Direct .bin download for the active session branch. Kept separate from the shared
     # dualboot-latest release so a session build never overwrites stable firmware.
-    if: github.ref == 'refs/heads/arena/8d69f494-arenaaiworkspace-1'
+    # This used to be pinned to one literal branch name, so every new Arena session
+    # built fine but produced no download link at all -- the .bin stayed locked
+    # inside a run artifact. It now follows whatever arena/* branch triggered it.
+    if: startsWith(github.ref, 'refs/heads/arena/')
     needs: [build]
     runs-on: ubuntu-latest
     permissions:
