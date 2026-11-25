@@ -102,6 +102,28 @@ for m in re.finditer(r'fetch\(([^;]{0,400}?)\)', js):
     if "signal" not in call:
         fails.append(f"OTA fetch without timeout: {call[:80]}")
 
+
+# 8) A POST with a body is not dispatched until the whole body has been parsed,
+#    so if that never completes the handler runs never -- the browser waits on
+#    "Initializing OTA slot..." and the device screen does not change at all.
+#    Keep every OTA control request body-free (query string / headers only).
+for m in re.finditer(r"fetch\(([^;]{0,300}?)\)", js):
+    call = m.group(1)
+    if "/ota/begin" not in call:
+        continue
+    if "method: \"POST\"" in call and ("body:" in call or "FormData" in call):
+        fails.append("POST /ota/begin must not carry a body (handler would wait for it): " + call[:70])
+
+# 9) Device-hosted assets must forbid caching: their URLs are stable across
+#    firmware images, so a cached /index.js silently keeps the old WebUI alive
+#    and makes every WebUI fix appear to have done nothing.
+web_cpp = read("src/core/wifi/webInterface.cpp")
+check(
+    "WebUI assets sent with no-store",
+    '"no-store"' in web_cpp and "embeddedAsset" in web_cpp,
+    "embedded assets must not be cacheable",
+)
+
 if fails:
     print("UI/UX consistency checks FAILED:")
     for f in fails:

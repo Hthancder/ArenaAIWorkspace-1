@@ -1341,8 +1341,9 @@ $("#ota-start-btn").addEventListener("click", async () => {
   const base = IS_DEV ? "/bruce" : "";
   const t0 = Date.now();
   try {
-    const beginFd = new FormData();
-    beginFd.append("size", String(selectedOtaFile.size));
+    // The size goes in the query string on purpose: a POST body would make the
+    // server parse bytes before the handler runs, so a body that stalls leaves
+    // the page on "Initializing OTA slot..." with the device doing nothing.
     // Every request here is bounded: the page must always end up either
     // uploading with a percentage or showing a concrete error.
     const OTA_HTTP_TIMEOUT_MS = 15000;
@@ -1357,7 +1358,9 @@ $("#ota-start-btn").addEventListener("click", async () => {
     };
     let br;
     try {
-      br = await timed(base + "/ota/begin", { method: "POST", body: beginFd }, OTA_HTTP_TIMEOUT_MS);
+      br = await timed(base + "/ota/begin?size=" + encodeURIComponent(selectedOtaFile.size), {
+        method: "POST",
+      }, OTA_HTTP_TIMEOUT_MS);
     } catch (e) {
       throw new Error("Device did not answer /ota/begin within 15s. Check the Wi-Fi link and try again.");
     }

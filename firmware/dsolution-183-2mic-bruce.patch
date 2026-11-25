@@ -4659,7 +4659,7 @@ index 5290300..b27bf10 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..0bd82f8 100644
+index fd61602..dd67315 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -5942,7 +5942,7 @@ index fd61602..0bd82f8 100644
        }
      }
      return r;
-@@ -690,279 +961,629 @@ async function renderTFT(data) {
+@@ -690,279 +961,632 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6469,8 +6469,9 @@ index fd61602..0bd82f8 100644
 +  const base = IS_DEV ? "/bruce" : "";
 +  const t0 = Date.now();
 +  try {
-+    const beginFd = new FormData();
-+    beginFd.append("size", String(selectedOtaFile.size));
++    // The size goes in the query string on purpose: a POST body would make the
++    // server parse bytes before the handler runs, so a body that stalls leaves
++    // the page on "Initializing OTA slot..." with the device doing nothing.
 +    // Every request here is bounded: the page must always end up either
 +    // uploading with a percentage or showing a concrete error.
 +    const OTA_HTTP_TIMEOUT_MS = 15000;
@@ -6485,7 +6486,9 @@ index fd61602..0bd82f8 100644
 +    };
 +    let br;
 +    try {
-+      br = await timed(base + "/ota/begin", { method: "POST", body: beginFd }, OTA_HTTP_TIMEOUT_MS);
++      br = await timed(base + "/ota/begin?size=" + encodeURIComponent(selectedOtaFile.size), {
++        method: "POST",
++      }, OTA_HTTP_TIMEOUT_MS);
 +    } catch (e) {
 +      throw new Error("Device did not answer /ota/begin within 15s. Check the Wi-Fi link and try again.");
 +    }
@@ -6741,7 +6744,7 @@ index fd61602..0bd82f8 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1591,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1594,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6780,7 +6783,7 @@ index fd61602..0bd82f8 100644
      return;
    }
  
-@@ -1009,24 +1601,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1604,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6810,7 +6813,7 @@ index fd61602..0bd82f8 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1619,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1622,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6847,7 +6850,7 @@ index fd61602..0bd82f8 100644
      return;
    }
  
-@@ -1062,662 +1636,1683 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1639,1683 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -19353,7 +19356,7 @@ index 0000000..a28c8b5
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..169f5d5 100644
+index a8679bd..4d1574f 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,49 @@
@@ -20642,7 +20645,7 @@ index a8679bd..169f5d5 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -348,11 +1301,16 @@ void serveWebUIFile(
+@@ -348,11 +1301,29 @@ void serveWebUIFile(
  ) {
      AsyncWebServerResponse *response = nullptr;
      FS *fs = NULL;
@@ -20650,6 +20653,19 @@ index a8679bd..169f5d5 100644
 -        if (SD.exists("/BruceWebUI/" + filename)) fs = &SD;
 -    } else if (LittleFS.exists("/BruceWebUI/" + filename)) {
 -        fs = &LittleFS;
++    // The WebUI is rebuilt with every firmware image, but its asset URLs never
++    // change (/index.js, /index.css). Browsers therefore keep running the copy
++    // they cached for the OLD firmware, and a fix in this file looks like it did
++    // nothing at all after an update. Reported symptom: the OTA page still sat
++    // on "Initializing OTA slot..." with no 15 s timeout, because it was
++    // yesterday's JavaScript, not the new one.
++    //
++    // no-store rather than no-cache: the device sends no ETag and its clock is
++    // not trustworthy, so "revalidate" can still be answered from the local
++    // copy. These assets are ~30 KiB gzip on a local link -- far cheaper than
++    // shipping firmware whose WebUI fixes cannot be observed.
++    const bool embeddedAsset = (originaFile != nullptr);
++    const char *cacheControl = embeddedAsset ? "no-store" : "no-cache";
 +    // Static WebUI assets are requested in parallel by the browser. If an SD
 +    // card is absent, repeatedly trying SD.begin() for index.html, CSS and JS
 +    // can stall the async server (and concurrent mount attempts race on SPI).
@@ -20663,7 +20679,23 @@ index a8679bd..169f5d5 100644
      if (fs) {
          response = request->beginResponse(*fs, "/BruceWebUI/" + filename, contentType);
      } else {
-@@ -379,11 +1337,12 @@ void serveWebUIFile(
+@@ -361,6 +1332,7 @@ void serveWebUIFile(
+                          ";--sec-color:" + color565ToWebHex(bruceConfig.secColor) +
+                          ";--background:" + color565ToWebHex(bruceConfig.bgColor) + ";}";
+             AsyncWebServerResponse *themeResponse = request->beginResponse(200, "text/css", css);
++            themeResponse->addHeader("Cache-Control", "no-store");
+             request->send(themeResponse);
+             return;
+         }
+@@ -369,6 +1341,7 @@ void serveWebUIFile(
+             if (!response->addHeader("Content-Encoding", "gzip")) log_e("Failed to add gzip header");
+         }
+     }
++    if (response) response->addHeader("Cache-Control", cacheControl);
+     request->send(response);
+ }
+ 
+@@ -379,11 +1352,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -20678,7 +20710,7 @@ index a8679bd..169f5d5 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -456,154 +1415,1228 @@ void configureWebServer() {
+@@ -456,154 +1430,1233 @@ void configureWebServer() {
      server->on("/index.js", HTTP_GET, [](AsyncWebServerRequest *request) {
          serveWebUIFile(request, "index.js", "text/javascript", true, index_js, index_js_size);
      });
@@ -21281,6 +21313,11 @@ index a8679bd..169f5d5 100644
 +
 +    server->on("/ota/begin", HTTP_POST, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
++        // The size travels in the query string, not in a request body. A body
++        // forces AsyncWebServer to buffer and parse bytes before the handler is
++        // invoked, and a POST whose body never completes leaves the browser
++        // waiting on "Initializing OTA slot..." forever while the device shows
++        // nothing at all -- the handler has simply not run yet.
 +        if (!request->hasArg("size")) {
 +            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Missing firmware size\"}");
 +            return;
@@ -22024,7 +22061,7 @@ index a8679bd..169f5d5 100644
                  FS *fs;
                  if (useSD) {
                      fs = &SD;
-@@ -632,6 +2665,11 @@ void configureWebServer() {
+@@ -632,6 +2685,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -22036,7 +22073,7 @@ index a8679bd..169f5d5 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2738,7 @@ void configureWebServer() {
+@@ -700,7 +2758,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -22045,7 +22082,7 @@ index a8679bd..169f5d5 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2758,13 @@ void configureWebServer() {
+@@ -720,7 +2778,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -22060,7 +22097,7 @@ index a8679bd..169f5d5 100644
          handleUpload
      );
  
-@@ -737,6 +2781,427 @@ void configureWebServer() {
+@@ -737,6 +2801,427 @@ void configureWebServer() {
              }
          }
      });
@@ -22488,7 +22525,7 @@ index a8679bd..169f5d5 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +3210,78 @@ void configureWebServer() {
+@@ -745,25 +3230,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -22576,7 +22613,7 @@ index a8679bd..169f5d5 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +3289,213 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +3309,213 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();

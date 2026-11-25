@@ -17,7 +17,7 @@ async function scenario(code, standalone, mode) {
     $:s=>element(s),setTimeout:(f,ms)=>{if(ms<=1500)f();else if(ms>=15000)setImmediate(f);return 1;},clearTimeout(){},
     fetch:async(url,opts={})=>{
       calls.push({url,opts});
-      if(url.endsWith('/ota/begin')){
+      if(url.includes('/ota/begin')){
         if(mode==='conflict')return {ok:false,status:409,json:async()=>({msg:'Another OTA transfer is active'})};
         // A request that never answers must be cut by the page's own 15s timeout.
         if(mode==='begin-hang')return new Promise((_,rej)=>{ if(opts.signal) opts.signal.addEventListener('abort',()=>rej(Object.assign(new Error('The operation was aborted.'),{name:'AbortError'}))); });
