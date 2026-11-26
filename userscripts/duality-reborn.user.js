@@ -8285,7 +8285,7 @@ THE SOFTWARE.
         }
       }, { signal: controller.signal });
       win.addEventListener("mouseup", (event) => {
-        if (event.button === 0 && this.config.aimActivation !== "key") this.restoreInput();
+        if (event.button === 0 && (this.config.aimActivation !== "key" || this.meleeDirection)) this.restoreInput();
       }, { signal: controller.signal });
       win.addEventListener("blur", () => {
         releaseLayer();
@@ -8479,10 +8479,10 @@ THE SOFTWARE.
             } else {
               const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
               const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
-              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.timedProcessAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && (!self.aimPlan || modeOf(self.config) !== "lock" || self.local?.data?.[self.local.slotKey] === 3 || self.mouseInput.owns(self.app.input)) && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.timedProcessAim(
+              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.timedProcessAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && (!self.aimPlan || modeOf(self.config) !== "lock" && !self.meleeDirection || self.local?.data?.[self.local.slotKey] === 3 || self.mouseInput.owns(self.app.input)) && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.timedProcessAim(
                 intent,
                 true,
-                !!self.mouseInput.record?.captured || modeOf(self.config) === "lock" && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady
+                !!self.mouseInput.record?.captured || (modeOf(self.config) === "lock" || self.config.melee) && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady
               );
             }
             if (manualEquip) {
@@ -9014,7 +9014,7 @@ THE SOFTWARE.
       const meleeDef = gun?.type === "melee" ? gun : cfg.autoMelee && [0, 1].includes(slot) ? this.definitions?.[this.local?.data[this.local.weaponsKey]?.[2]?.type] : null;
       const reach = meleeReach(meleeDef), melee = !!(cfg.melee && !this.manualEquipHeld && this.capabilities.mobile && firing && reach);
       if ((mode === "off" || !this.capabilities.aim) && !melee) return fail(mode === "off" ? "disabled" : "missing-input-scheduler");
-      if (!melee && mode === "lock" && (cfg.directMouseInput === false || !this.flushReady)) return fail("lock-mouse-unavailable");
+      if ((melee || mode === "lock") && (cfg.directMouseInput === false || !this.flushReady)) return fail("lock-mouse-unavailable");
       if (!trigger && !melee) return fail("waiting-activation");
       if (mode === "assist" && cfg.assistStrength === 0 && !melee) return fail("assist-zero");
       const relations = teamRelations(m.barn, m.active.__id);
@@ -9201,9 +9201,13 @@ THE SOFTWARE.
         } else this.meleeEquip = null;
         const outputDistance = profile?.toMouseHit && !melee ? shot.mouseLen : shot.distance;
         const directInput = applyDirect && this.config.directMouseInput !== false && !!this.flushReady;
-        const lockOwnership = mode === "lock" && !melee;
+        const lockOwnership = mode === "lock" || melee;
         const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }, lockOwnership, lockOwnership) : false;
-        if (lockOwnership && applyDirect && !directApplied) return fail("lock-mouse-unavailable");
+        if (lockOwnership && applyDirect && !directApplied) {
+          this.meleeDirection = null;
+          this.switchSlot = null;
+          return fail("lock-mouse-unavailable");
+        }
         this.stats.aimState = directInput && !directApplied ? "ready-to-send" : advance2 ? "input-applied" : "ready-to-send";
         if (advance2) this.lastAimDistance = outputDistance;
         note(this.stats.aimState);
@@ -9281,16 +9285,15 @@ THE SOFTWARE.
       visit(m.map, 4);
       this.effects = out;
     }
-    // Upstream defaults localRotation to false: native render then overwrites the
-    // local body with interpolated server direction even while our mouse and wire
-    // agree. Like Duality, correct only the active body's visual rotation after
-    // native update, and only while gun Lock actually owns the mouse.
+    // Native localRotation may be off; Duality also updates the active body's
+    // visual rotation after native update for both gun aim and melee lock.
     syncLockRotation() {
       const m = this.mapping, record = this.mouseInput.record;
-      if (!this.config.aim || modeOf(this.config) !== "lock" || !this.inputReady() || this.local?.data?.[this.local.slotKey] === 3 || !this.mouseInput.owns(this.app.input)) return;
+      if (!this.inputReady() || this.local?.data?.[this.local.slotKey] === 3 || !this.mouseInput.owns(this.app.input)) return;
       const firing = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+      const meleeActive = !!this.config.melee && !!this.meleeDirection && firing;
       const active = this.config.aimActivation === "key" ? this.holdAim : this.config.aimActivation === "both" ? this.holdAim && firing : firing;
-      if (!active || !m?.camera) return;
+      if (!m?.camera || !meleeActive && !(this.config.aim && modeOf(this.config) === "lock" && active)) return;
       const body = read(m.active, "bodyContainer"), width = read(m.camera.camera, m.camera.widthKey), height = read(m.camera.camera, m.camera.heightKey);
       if (!body || !finite(width) || !finite(height) || !vec(record?.applied)) return;
       const dx = record.applied.x - width / 2, dy = record.applied.y - height / 2;

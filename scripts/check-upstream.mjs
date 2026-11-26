@@ -423,6 +423,19 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.ok(swings >= 5 && swings <= 9, `Repeated fists accepted under native cooldown: ${swings}`);
     engine.config.semi = false;
     for (let frame = 0; frame < 30; frame++) { clock += 1000 / 60; engine.pre(); assert.equal(context.result.serverTick(frameInput(), 1 / 60), swings); }
+    // Duality's body rotation ownership applies to melee as well as gun aim.
+    engine.config.melee = true; engine.config.aim = false; engine.config.aimMode = 'off'; engine.config.wallcheck = false;
+    context.result.receive({x:12,y:20.5}); context.result.setLocalRotation(false); clock += 17; engine.pre();
+    assert.ok(engine.meleeDirection && engine.mouseInput.owns(app.input), 'melee owns the same native vector');
+    const meleeAim = context.result.readInputAim().toMouseDir;
+    assert.ok(Math.abs(context.result.localRotation()) < 1e-8, 'native render uses server direction');
+    app.game[discoverSender(app.game)](3, frameInput(), 128); app.input.flush(); engine.post();
+    const meleeWire = context.sent.at(-1).decoded;
+    assert.ok(meleeWire.touchMoveActive && meleeWire.shootHold, 'melee preserves Fire and requests movement');
+    assert.ok(Math.abs(context.result.bodyRotation()+Math.atan2(meleeAim.y,meleeAim.x)) < 1e-8, 'melee visual follows native direction');
+    assert.ok(Math.abs(Math.atan2(meleeWire.toMouseDir.y,meleeWire.toMouseDir.x)-Math.atan2(meleeAim.y,meleeAim.x)) < .005);
+    app.input.mouseButtons[0] = false; clock += 17; engine.pre(); context.result.localRotation(); engine.post();
+    assert.ok(Math.abs(context.result.bodyRotation()) < 1e-8, 'melee yields on release');
     assert.ok(mapHighlightCompatible(context.result.nativeMap), 'Actual map render AST consumes getMinimapRender and sort');
     const rawMap = context.result.minimap(), marked = highlightMinimap(rawMap, { mapHighlights: true });
     assert.equal(marked.shapes[0].color, 1646367); assert.equal(marked.shapes[0].scale, 6);

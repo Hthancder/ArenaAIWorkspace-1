@@ -177,7 +177,7 @@ export class Features {
     }, { signal: controller.signal });
     win.addEventListener('keyup', event => { if (event.code === this.config.layerKey) releaseLayer(); if (event.code === this.config.aimKey) { this.holdAim = false; if (this.config.aimActivation !== 'fire') this.restoreInput(); } }, { signal: controller.signal });
     // Yield immediately on the ordinary mouse release; never consume or synthesize it.
-    win.addEventListener('mouseup', event => { if (event.button === 0 && this.config.aimActivation !== 'key') this.restoreInput(); }, { signal: controller.signal });
+    win.addEventListener('mouseup', event => { if (event.button === 0 && (this.config.aimActivation !== 'key' || this.meleeDirection)) this.restoreInput(); }, { signal: controller.signal });
     win.addEventListener('blur', () => { releaseLayer(); this.restoreInput(); this.focusBlocked = true; this.holdAim = false; this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; }, { signal: controller.signal });
     win.addEventListener('focus', () => { this.focusBlocked = false; }, { signal: controller.signal });
     win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) { releaseLayer(); this.restoreInput(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; } }, { signal: controller.signal });
@@ -280,10 +280,11 @@ export class Features {
             self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3
             ? self.timedProcessAim(intent, true) // Revalidate at the actual sender, not a cached render plan.
             : !data.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
-                && (!self.aimPlan || modeOf(self.config) !== 'lock' || self.local?.data?.[self.local.slotKey] === 3 || self.mouseInput.owns(self.app.input))
+                && (!self.aimPlan || modeOf(self.config) !== 'lock' && !self.meleeDirection || self.local?.data?.[self.local.slotKey] === 3 || self.mouseInput.owns(self.app.input))
                 && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0])
                 && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.timedProcessAim(intent, true,
-                  !!self.mouseInput.record?.captured || modeOf(self.config) === 'lock' && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady);
+                  !!self.mouseInput.record?.captured || (modeOf(self.config) === 'lock' || self.config.melee)
+                    && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady);
           }
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
@@ -692,7 +693,7 @@ export class Features {
     const meleeDef = gun?.type === 'melee' ? gun : cfg.autoMelee && [0, 1].includes(slot) ? this.definitions?.[this.local?.data[this.local.weaponsKey]?.[2]?.type] : null;
     const reach = meleeReach(meleeDef), melee = !!(cfg.melee && !this.manualEquipHeld && this.capabilities.mobile && firing && reach);
     if ((mode === 'off' || !this.capabilities.aim) && !melee) return fail(mode === 'off' ? 'disabled' : 'missing-input-scheduler');
-    if (!melee && mode === 'lock' && (cfg.directMouseInput === false || !this.flushReady)) return fail('lock-mouse-unavailable');
+    if ((melee || mode === 'lock') && (cfg.directMouseInput === false || !this.flushReady)) return fail('lock-mouse-unavailable');
     // Do not preselect or solve within FOV until explicitly activated.
     if (!trigger && !melee) return fail('waiting-activation');
     if (mode === 'assist' && cfg.assistStrength === 0 && !melee) return fail('assist-zero');
@@ -831,11 +832,14 @@ export class Features {
       } else this.meleeEquip = null;
       const outputDistance = profile?.toMouseHit && !melee ? shot.mouseLen : shot.distance;
       const directInput = applyDirect && this.config.directMouseInput !== false && !!this.flushReady;
-      const lockOwnership = mode === 'lock' && !melee;
+      const lockOwnership = mode === 'lock' || melee;
       const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }, lockOwnership, lockOwnership) : false;
       // Never send a forced gun Lock direction while local rotation is reading
       // an unowned native mouse vector. Yield both paths instead of fighting.
-      if (lockOwnership && applyDirect && !directApplied) return fail('lock-mouse-unavailable');
+      if (lockOwnership && applyDirect && !directApplied) {
+        this.meleeDirection = null; this.switchSlot = null;
+        return fail('lock-mouse-unavailable');
+      }
       this.stats.aimState = directInput && !directApplied ? 'ready-to-send' : advance ? 'input-applied' : 'ready-to-send';
       if (advance) this.lastAimDistance = outputDistance;
       note(this.stats.aimState);
@@ -903,17 +907,15 @@ export class Features {
     visit(m.map, 4);
     this.effects = out;
   }
-  // Upstream defaults localRotation to false: native render then overwrites the
-  // local body with interpolated server direction even while our mouse and wire
-  // agree. Like Duality, correct only the active body's visual rotation after
-  // native update, and only while gun Lock actually owns the mouse.
+  // Native localRotation may be off; Duality also updates the active body's
+  // visual rotation after native update for both gun aim and melee lock.
   syncLockRotation() {
     const m = this.mapping, record = this.mouseInput.record;
-    if (!this.config.aim || modeOf(this.config) !== 'lock' || !this.inputReady()
-        || this.local?.data?.[this.local.slotKey] === 3 || !this.mouseInput.owns(this.app.input)) return;
+    if (!this.inputReady() || this.local?.data?.[this.local.slotKey] === 3 || !this.mouseInput.owns(this.app.input)) return;
     const firing = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+    const meleeActive = !!this.config.melee && !!this.meleeDirection && firing;
     const active = this.config.aimActivation === 'key' ? this.holdAim : this.config.aimActivation === 'both' ? this.holdAim && firing : firing;
-    if (!active || !m?.camera) return;
+    if (!m?.camera || !meleeActive && !(this.config.aim && modeOf(this.config) === 'lock' && active)) return;
     const body = read(m.active, 'bodyContainer'), width = read(m.camera.camera, m.camera.widthKey), height = read(m.camera.camera, m.camera.heightKey);
     if (!body || !finite(width) || !finite(height) || !vec(record?.applied)) return;
     const dx = record.applied.x - width / 2, dy = record.applied.y - height / 2;

@@ -885,6 +885,33 @@ test('Aim+Semi+Switch preserve physical Fire/movement and consume one equip; man
   } finally { f.close(); }
 });
 
+test('Melee Lock owns visual and wire direction even with gun aim off and yields when Fire is released', () => {
+  const f = coordinated({ aim: false, aimMode: 'off', melee: true, aimActivation: 'key' });
+  try {
+    const hero = f.app.game.hero, target = f.app.game.barn.playerPool.list[1];
+    hero.l.index = 2; hero.n.weapon = 'fists'; hero.bodyContainer = { rotation: 0 }; target.p = { x: 12, y: 20.5 };
+    const { wire } = f.send();
+    assert.ok(f.engine.mouseInput.owns(f.app.input)); assert.ok(wire.touchMoveActive); assert.ok(wire.toMouseDir.y > .2);
+    hero.bodyContainer.rotation = 0; f.app.input.flush(); f.engine.post();
+    assert.ok(Math.abs(hero.bodyContainer.rotation + Math.atan2(wire.toMouseDir.y, wire.toMouseDir.x)) < 1e-8);
+    f.app.input.mouseButtons[0] = false; f.dom.window.dispatchEvent(new f.dom.window.MouseEvent('mouseup', { button: 0 }));
+    assert.equal(f.engine.mouseInput.record, null, 'melee yields immediately even with key activation configured');
+    f.advance(); f.engine.pre(); hero.bodyContainer.rotation = .3; f.engine.post();
+    assert.equal(hero.bodyContainer.rotation, .3); assert.equal(f.engine.mouseInput.record, null);
+  } finally { f.close(); }
+});
+
+test('Melee Lock does not inject movement or aim if native mouse ownership fails', () => {
+  const f = coordinated({ aim: false, aimMode: 'off', melee: true });
+  try {
+    const hero = f.app.game.hero; hero.l.index = 2; hero.n.weapon = 'fists';
+    Object.defineProperty(f.app.input.mousePos, 'x', { value: 440, writable: true, configurable: false, enumerable: true });
+    const { native, wire } = f.send();
+    assert.equal(f.engine.stats.aimState, 'lock-mouse-unavailable'); assert.equal(f.engine.meleeDirection, null);
+    assert.equal(wire.touchMoveActive, native.touchMoveActive); assert.deepEqual(wire.toMouseDir, native.toMouseDir);
+  } finally { f.close(); }
+});
+
 test('Melee wins equip/movement over Switch+Mobile, no repeated equip while awaiting confirmation, manual equip holds authority', () => {
   const f = coordinated({ melee: true, autoMelee: true, autoSwitch: true, mobileMovement: true });
   try {
