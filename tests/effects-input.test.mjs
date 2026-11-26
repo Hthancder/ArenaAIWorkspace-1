@@ -135,6 +135,17 @@ test('throw preview uses bounded source-strength/physics and is explicitly nomin
   assert.deepEqual(throwPreview(def, { x: 0, y: 0 }, { x: 1, y: 0 }, 999), far);
   assert.equal(throwPreview(single, { x: 0, y: 0 }, { x: 1, y: 0 }, 18), null);
 });
+test('impact throwable aims from the hand toward the source aimDistance and stops on ground contact', () => {
+  const def = { type: 'throwable', aimDistance: 32, forceMaxThrowDistance: true, explodeOnImpact: true, throwPhysics: { speed: 52, velZ: 3.35 } };
+  const origin = { x: 10, y: 20 }, direction = { x: 1, y: 0 };
+  const short = throwPreview(def, origin, direction, 0), long = throwPreview(def, origin, direction, 18);
+  assert.deepEqual(short, long, 'source forces maximum throw distance');
+  const first = short.points[0], second = short.points[1];
+  assert.ok(second.y > first.y, 'hand offset steers toward the forward aim point');
+  assert.deepEqual(short.points.at(-1), short.end, 'ground impact is the drawn endpoint');
+  assert.ok(short.points.length < 15, 'no false sliding path after impact');
+});
+
 test('movement smoothing interpolates turns, never coasts and accepts reversal', () => {
   const smooth = new MovementSmoother();
   assert.deepEqual(smooth.sample({ moveRight: true }, 100, 0), { x: 1, y: 0 });

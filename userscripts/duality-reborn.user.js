@@ -6837,18 +6837,26 @@ THE SOFTWARE.
   function throwPreview(def, start2, direction, mouseDistance) {
     const physics = def?.throwPhysics, len = Math.hypot(direction?.x, direction?.y);
     if (def?.type !== "throwable" || !vec(start2) || !finite(len) || len < 1e-3 || !finite(mouseDistance) || !finite(physics?.speed) || !finite(physics?.velZ) || physics.speed < 0) return null;
-    const dir = { x: direction.x / len, y: direction.y / len };
+    const facing = { x: direction.x / len, y: direction.y / len };
     let speed = physics.speed * (def.forceMaxThrowDistance ? 1 : clamp(mouseDistance / 18, 0, 1));
-    let height = 0.5, vz = physics.velZ, pos = { x: start2.x + 0.5 * dir.x + dir.y, y: start2.y + 0.5 * dir.y - dir.x };
+    let height = 0.5, vz = physics.velZ, pos = { x: start2.x + 0.5 * facing.x + facing.y, y: start2.y + 0.5 * facing.y - facing.x };
+    const aimDistance = finite(def.aimDistance) ? def.aimDistance : 0;
+    let dir = facing;
+    if (aimDistance > 0) {
+      const dx = start2.x + facing.x * aimDistance - pos.x, dy = start2.y + facing.y * aimDistance - pos.y;
+      const n = Math.hypot(dx, dy);
+      dir = n > 1e-6 ? { x: dx / n, y: dy / n } : { x: 1, y: 0 };
+    }
     const points = [pos], dt = 1 / 60;
     for (let i = 0; i < 180; i++) {
       if (height <= 0) speed /= 1 + dt * 2.3;
       pos = { x: pos.x + dir.x * speed * dt, y: pos.y + dir.y * speed * dt };
       vz -= 10.5 * dt;
-      height = Math.max(0, height + vz * dt);
+      height = clamp(height + vz * dt, 0, 5);
       if (i % 6 === 5) points.push(pos);
-      if (height === 0 && speed < 0.25) break;
+      if (height === 0 && (def.explodeOnImpact || speed < 0.25)) break;
     }
+    if (points.at(-1) !== pos) points.push(pos);
     return { points, end: pos, nominal: true };
   }
   __name(throwPreview, "throwPreview");
