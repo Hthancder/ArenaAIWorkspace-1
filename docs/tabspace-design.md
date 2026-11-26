@@ -477,3 +477,8 @@ Tham khảo các nguyên tắc từ [taste-skill](https://github.com/Leonxlnx/ta
 
 ### Sửa nền popup khi cuộn (0.118.1)
 Đồng bộ nền của trang popup, vùng nội dung và danh sách tab trong cả chế độ sáng và tối; chỉnh màu thanh cuộn theo nền. Đã kiểm tra màu thực tế khi cuộn bằng Chromium headless với Chrome API giả lập; vẫn cần kiểm tra bản extension trong Chrome.
+
+### Thao tác nhanh gọn hơn (0.119)
+Trong popup → **Thao tác nhanh nhiều tab**, chọn **Lưu bản sao** hoặc **Cho nghỉ** để chỉ hiện các trường cần cho việc đó; phạm vi và các lựa chọn của từng hành động vẫn độc lập. Chế độ không hỏi vẫn tách riêng và mặc định xem trước. Khi đích lưu được chọn bị đổi tên, thay đổi hoặc biến mất lúc làm mới danh sách, cần chọn lại thay vì tự chuyển sang đích khác.
+
+Dưới danh sách tab, **Chọn thêm…** có thể chọn nhanh toàn bộ tab web trong cửa sổ hiện tại hoặc mọi cửa sổ thường, kể cả tab không nằm trong phần đang hiển thị. Giữ các lựa chọn trước đó và báo tổng số; nếu vượt 100 lựa chọn hoặc gặp tab đã chọn thay đổi, không thay đổi lựa chọn. Phần thao tác nhanh vẫn xử lý tối đa 500 tab web/lượt nếu chọn nguồn toàn bộ/trừ tab, không cần đánh dấu từng tab. Không tự lưu, đóng hay cho nghỉ khi dùng lệnh chọn. Tab ẩn danh, trang không phải web và tab đang chuyển URL bị bỏ qua.
