@@ -8388,7 +8388,11 @@ THE SOFTWARE.
               self.aimOutput = null;
               self.grenadePlan = null;
               self.grenadeState = "manual-equip";
-            } else self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true);
+            } else {
+              const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
+              const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
+              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true);
+            }
             if (manualEquip) {
               self.weaponSwitch.reset();
               self.switchSlot = null;
@@ -8641,6 +8645,7 @@ THE SOFTWARE.
       this.aimPlan = plan;
       this.aimPlanFrame = aimFrame;
       this.aimPlanDirect = directMouse;
+      this.aimPlanCursor = this.mouseInput.physical(this.app.input);
       this.aimPlanFiring = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
       this.aimPlanHoldAim = this.holdAim;
       const needsRestore = !plan && this.lastAimSent;
@@ -8794,7 +8799,8 @@ THE SOFTWARE.
       const cursor = native ? { x: read(camera.camera, camera.widthKey) / 2 + physical.x * native.toMouseLen * scale, y: read(camera.camera, camera.heightKey) / 2 - physical.y * native.toMouseLen * scale } : mouse;
       const candidates = [];
       for (const p of m.players().slice(0, 256)) {
-        if (p === m.active || !p.active || at2(p, [m.schema.netKey, m.schema.deadKey]) || !cfg.knocked && p.downed || relations.classify(p.__id).kind !== "enemy" || !sameLayer(layer, this.sourceLayer(p))) continue;
+        const relation = relations.classify(p.__id).kind;
+        if (p === m.active || !p.active || at2(p, [m.schema.netKey, m.schema.deadKey]) || !cfg.knocked && p.downed || !(relation === "enemy" || cfg.grenadeAimAllies && relation === "ally") || !sameLayer(layer, this.sourceLayer(p))) continue;
         const target = this.sourcePos(p), screen = aimPoint(camera, target, pos), track = this.grenadeTracker.estimate(p, now);
         if (!screen || !track || track.age > 0.15 || track.samples?.length < 2 || !finite(track.vx) || !finite(track.vy)) continue;
         const distance = Math.hypot(screen.x - cursor.x, screen.y - cursor.y);
@@ -8950,7 +8956,7 @@ THE SOFTWARE.
           continue;
         }
         const relation = relations.classify(p.__id).kind;
-        if (relation !== "enemy") {
+        if (!(relation === "enemy" || cfg.aimAllies && relation === "ally")) {
           reject(relation === "unknown" ? "unknownTeam" : "teammate");
           continue;
         }
@@ -9526,6 +9532,7 @@ THE SOFTWARE.
         grenadeTimer: { enabled: !!this.config.grenadeTimer, state: this.grenadeTimer.active ? "forwarded-edge-unconfirmed" : this.config.grenadeTimer ? "waiting-for-edge" : "disabled" },
         grenadeAim: {
           mode: this.config.grenadeAimMode || "off",
+          targetAllies: !!this.config.grenadeAimAllies,
           state: this.grenadeState,
           autoThrow: {
             enabled: !!this.config.grenadeAutoThrow,
@@ -9539,7 +9546,7 @@ THE SOFTWARE.
         inputBlockReason: this.inputBlockReason(),
         mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
-        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || "responsive" },
+        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || "responsive" },
         aimPreparation: this.aimPreparation,
         runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: "Script-local hook durations only; not game FPS, GPU time, network delay or hit rate." },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
@@ -9581,6 +9588,8 @@ THE SOFTWARE.
     predictionStrict: false,
     knocked: false,
     sticky: true,
+    aimAllies: false,
+    grenadeAimAllies: false,
     showDot: false,
     showTarget: false,
     targetStyle: "ring",
@@ -9695,11 +9704,11 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
   var GROUPS = {
     Main: [
       ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
-      ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["wallcheck", "Wallcheck", "wallcheck"], [null, "Khi vật cản hoặc người chơi chắn đường bắn, aim sẽ nhả; Sticky giữ ưu tiên mục tiêu còn trong FOV. Chỉ ước lượng theo dữ liệu client."]]],
+      ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["aimAllies", "Nhắm đồng đội (debug; cả địch)", "aim"], ["wallcheck", "Wallcheck", "wallcheck"], [null, "Khi vật cản hoặc người chơi chắn đường bắn, aim sẽ nhả; Sticky giữ ưu tiên mục tiêu còn trong FOV. Chỉ ước lượng theo dữ liệu client."]]],
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
       ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
       ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread."]]],
-      ["Grenade Aim (thử nghiệm)", [["grenadeAimMode", "Chế độ"], ["grenadeAimActivation", "Kích hoạt Assist / Lock"], ["grenadeAssistStrength", "Lực Assist bom (%)"], ["grenadeFov", "FOV bom (pixel)"], ["grenadeAutoThrow", "Tự thả (thử nghiệm, chỉ Lock)"], [null, "Không tự bắt đầu giữ. Mạng và fuse chưa xác nhận; không bảo đảm an toàn hoặc trúng."]]],
+      ["Grenade Aim (thử nghiệm)", [["grenadeAimMode", "Chế độ"], ["grenadeAimActivation", "Kích hoạt Assist / Lock"], ["grenadeAssistStrength", "Lực Assist bom (%)"], ["grenadeFov", "FOV bom (pixel)"], ["grenadeAimAllies", "Nhắm bom vào đồng đội (debug; cả địch)"], ["grenadeAutoThrow", "Tự thả (thử nghiệm, chỉ Lock)"], [null, "Debug đồng đội có thể chọn cả địch và đồng đội; Auto Throw có thể tự thả vào mục tiêu đã chọn. Không tự bắt đầu giữ. Mạng và fuse chưa xác nhận; không bảo đảm an toàn hoặc trúng."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
       ["Auto Switch", [["autoSwitch", "Enabled", "switch"], ["useOneGun", "Use One Gun (switch away then return)", "switch"], [null, "Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server."]]],
       ["Semi Auto", [["semi", "Held Fire: single guns + fists / melee", "semi"], [null, "Giữ nút Fire để lặp; auto/burst dùng shootHold gốc; không lặp lựu đạn. Server vẫn quyết định cooldown."]]]

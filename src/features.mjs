@@ -268,11 +268,17 @@ export class Features {
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           if (!self.inputReady()) { self.stats.aimState = self.inputBlockReason(); self.aimOutput = null; self.aimController.reset(); self.weaponSwitch.reset(); self.movement.reset(); self.switchSlot = null; self.meleeDirection = null; }
           else if (manualEquip && self.local?.data?.[self.local.slotKey] === 3 && ['preview', 'assist', 'lock'].includes(self.config.grenadeAimMode)) { self.aimOutput = null; self.grenadePlan = null; self.grenadeState = 'manual-equip'; }
-          else self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3
+          else {
+            // A physical mouse update can arrive after the frame plan but before
+            // native serialization. Revalidate instead of sending stale intent.
+            const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
+            const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
+            self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3
             ? self.processAim(intent, true) // Revalidate at the actual sender, not a cached render plan.
-            : self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
+            : !data.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
                 && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0])
                 && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true);
+          }
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
           if (!self.config.mobileMovement) self.movement.reset();
@@ -463,6 +469,7 @@ export class Features {
     const aimFrame = ++this.aimFrame, directMouse = this.config.directMouseInput !== false && !!this.flushReady;
     const plan = this.processAim(null, directMouse, directMouse);
     this.aimPlan = plan; this.aimPlanFrame = aimFrame; this.aimPlanDirect = directMouse;
+    this.aimPlanCursor = this.mouseInput.physical(this.app.input);
     this.aimPlanFiring = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0]; this.aimPlanHoldAim = this.holdAim;
     const needsRestore = !plan && this.lastAimSent;
     const needsAim = plan && (!this.lastAimSent || Math.abs(angleDelta(Math.atan2(this.lastAimSent.y, this.lastAimSent.x), Math.atan2(plan.dir.y, plan.dir.x))) > Math.PI / 1800 || plan.toMouseHit && Math.abs((this.lastAimDistance || 0) - plan.distance) > .5);
@@ -594,7 +601,9 @@ export class Features {
     const cursor = native ? { x: read(camera.camera, camera.widthKey) / 2 + physical.x * native.toMouseLen * scale, y: read(camera.camera, camera.heightKey) / 2 - physical.y * native.toMouseLen * scale } : mouse;
     const candidates = [];
     for (const p of m.players().slice(0, 256)) {
-      if (p === m.active || !p.active || at(p, [m.schema.netKey, m.schema.deadKey]) || (!cfg.knocked && p.downed) || relations.classify(p.__id).kind !== 'enemy' || !sameLayer(layer, this.sourceLayer(p))) continue;
+      const relation = relations.classify(p.__id).kind;
+      if (p === m.active || !p.active || at(p, [m.schema.netKey, m.schema.deadKey]) || (!cfg.knocked && p.downed)
+          || !(relation === 'enemy' || cfg.grenadeAimAllies && relation === 'ally') || !sameLayer(layer, this.sourceLayer(p))) continue;
       const target = this.sourcePos(p), screen = aimPoint(camera, target, pos), track = this.grenadeTracker.estimate(p, now);
       if (!screen || !track || track.age > .15 || track.samples?.length < 2 || !finite(track.vx) || !finite(track.vy)) continue;
       const distance = Math.hypot(screen.x - cursor.x, screen.y - cursor.y);
@@ -694,7 +703,7 @@ export class Features {
       if (p === m.active || at(p, [m.schema.netKey, m.schema.deadKey])) continue;
       if (!cfg.knocked && p.downed) { reject('downed'); continue; }
       const relation = relations.classify(p.__id).kind;
-      if (relation !== 'enemy') { reject(relation === 'unknown' ? 'unknownTeam' : 'teammate'); continue; }
+      if (!(relation === 'enemy' || cfg.aimAllies && relation === 'ally')) { reject(relation === 'unknown' ? 'unknownTeam' : 'teammate'); continue; }
       const target = this.sourcePos(p), screen = aimPoint(camera, target, pos); if (!screen) continue;
       const distance = melee ? Math.hypot(target.x - pos.x, target.y - pos.y) : Math.hypot(screen.x - inputCursor.x, screen.y - inputCursor.y);
       const stickyCurrent = !!cfg.sticky && p.__id === this.stickyId;
@@ -1091,7 +1100,7 @@ export class Features {
       initialized: checks.initialized, checks,
       autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
       grenadeTimer: { enabled: !!this.config.grenadeTimer, state: this.grenadeTimer.active ? 'forwarded-edge-unconfirmed' : this.config.grenadeTimer ? 'waiting-for-edge' : 'disabled' },
-      grenadeAim: { mode: this.config.grenadeAimMode || 'off', state: this.grenadeState,
+      grenadeAim: { mode: this.config.grenadeAimMode || 'off', targetAllies: !!this.config.grenadeAimAllies, state: this.grenadeState,
         autoThrow: { enabled: !!this.config.grenadeAutoThrow, phase: this.grenadeAuto.phase,
           last: this.lastGrenadeAutoEvidence ? (({ recordedAt, ...rest }) => ({ ...rest, ageMs: Math.max(0, Math.round(this.win.performance.now() - recordedAt)) }))(this.lastGrenadeAutoEvidence) : null },
         last: this.lastGrenadeEvidence ? { state: this.lastGrenadeEvidence.state, ageMs: Math.max(0, Math.round(this.win.performance.now() - this.lastGrenadeEvidence.recordedAt)) } : null },
@@ -1100,7 +1109,7 @@ export class Features {
       inputBlockReason: this.inputBlockReason(),
       mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
       registry: { state: m?.registryState ?? 'waiting-mapping', ...m?.registryEvidence },
-      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || 'responsive' },
+      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || 'responsive' },
       aimPreparation: this.aimPreparation,
       runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: 'Script-local hook durations only; not game FPS, GPU time, network delay or hit rate.' },
       aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),

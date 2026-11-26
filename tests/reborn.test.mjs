@@ -1219,6 +1219,47 @@ test('Wallcheck treats another player as blocking, and fails closed on unknown o
   } finally { f.close(); }
 });
 
+test('ally gun targeting is opt-in, independent of grenade, and excludes unknown teams', () => {
+  const f = coordinated({ grenadeAimAllies: true });
+  try {
+    f.app.game.barn.teamInfo[10].playerIds.push(2); f.app.game.barn.teamInfo[20].playerIds = [];
+    f.send(); assert.equal(f.engine.target, null); assert.equal(f.engine.stats.aimRejections.teammate, 1);
+    f.cfg.aimAllies = true; f.engine.configurationChanged('aimAllies'); f.advance();
+    const { native, wire } = f.send(); assert.equal(f.engine.target.__id, 2);
+    assert.equal(wire.shootHold, native.shootHold); assert.equal(wire.shootStart, native.shootStart);
+    f.app.game.barn.teamInfo[10].playerIds = [1]; f.advance(); f.send();
+    assert.equal(f.engine.target, null); assert.equal(f.engine.stats.aimRejections.unknownTeam, 1);
+    f.app.game.barn.teamInfo[20].playerIds = [2]; f.cfg.aimAllies = false; f.advance(); f.send();
+    assert.equal(f.engine.target.__id, 2, 'enemy targeting remains available');
+    assert.equal(DEFAULTS.aimAllies, false); assert.equal(DEFAULTS.grenadeAimAllies, false);
+    assert.equal(normalizeConfig({ aimAllies: true }).aimAllies, true);
+    assert.equal(normalizeConfig({ grenadeAimAllies: true }).grenadeAimAllies, true);
+  } finally { f.close(); }
+});
+
+test('fire edge revalidates cached aim at the sender and preserves native fire', () => {
+  const f = coordinated();
+  try {
+    f.engine.pre(); assert.ok(f.engine.aimPlan);
+    f.engine.aimPlan = { dir: { x: 0, y: 1 }, distance: 2 }; // stale frame plan
+    const native = new InputMsg(); native.toMouseLen = 1.25; native.shootStart = true; native.shootHold = true;
+    f.app.game.transmit(3, native); const wire = f.app.game.sent.at(-1).data;
+    assert.ok(wire.toMouseDir.x > .99); assert.equal(wire.shootStart, true); assert.equal(wire.shootHold, true);
+  } finally { f.close(); }
+});
+
+test('sender revalidates when physical mouse moves after the cached frame', () => {
+  const f = coordinated({ fov: 100 });
+  try {
+    f.engine.pre(); assert.ok(f.engine.aimPlan); assert.ok(f.engine.mouseInput.record);
+    f.app.input.mousePos.x = 400; f.app.input.mousePos.y = 40;
+    const native = new InputMsg(); native.toMouseDir = { x: 0, y: 1 }; native.toMouseLen = 8; native.shootHold = true;
+    f.app.game.transmit(3, native); const wire = f.app.game.sent.at(-1).data;
+    assert.deepEqual(wire.toMouseDir, { x: 0, y: 1 }); assert.equal(f.engine.stats.aimState, 'no-candidate');
+    assert.equal(wire.shootHold, true);
+  } finally { f.close(); }
+});
+
 test('indicator follows selected rendered player only, not the predicted impact point', () => {
   const f = coordinated({ showTarget: true, targetStyle: 'ring', showFov: false, showDot: false });
   try {
@@ -1234,6 +1275,19 @@ test('indicator follows selected rendered player only, not the predicted impact 
     f.cfg.showTarget = false; f.engine.draw([]); assert.equal(strokes.length, 1);
     f.cfg.showTarget = true; enemy.__id = 999; f.engine.draw([]); assert.equal(strokes.length, 1);
   } finally { f.close(); }
+});
+
+test('separate ally debug toggles are available and persist independently', () => {
+  const dom = env(), config = { ...DEFAULTS }, menu = createMenu(dom.window, config, {});
+  try {
+    menu.capabilities({ aim: true, prediction: true, wallcheck: true });
+    const gun = menu.root.querySelector('[data-config=aimAllies]'), grenade = menu.root.querySelector('[data-config=grenadeAimAllies]');
+    assert.ok(gun); assert.ok(grenade); assert.equal(gun.checked, false); assert.equal(grenade.checked, false);
+    gun.click(); assert.equal(config.aimAllies, true); assert.equal(config.grenadeAimAllies, false);
+    grenade.click(); assert.equal(config.grenadeAimAllies, true);
+    assert.equal(loadConfig(dom.window.localStorage).aimAllies, true);
+    assert.equal(loadConfig(dom.window.localStorage).grenadeAimAllies, true);
+  } finally { menu.dispose(); dom.window.close(); }
 });
 
 test('target indicator controls persist only validated styles and hide style when disabled', () => {
@@ -1479,6 +1533,20 @@ test('grenade preview, assist and lock are isolated and preserve native Fire; mi
     }
     const input = new InputMsg(); input.toMouseLen = 2;
     assert.equal(f.engine.processAim(input, true), null); assert.ok(f.engine.grenadePlan, f.engine.grenadeState);
+    // Same target is confirmed ally. Gun toggle alone must not enable grenade targeting.
+    f.app.game.barn.teamInfo[10].playerIds.push(2); f.app.game.barn.teamInfo[20].playerIds = [];
+    f.cfg.aimAllies = true; f.cfg.grenadeAimAllies = false;
+    assert.equal(f.engine.processAim(input, true), null); assert.equal(f.engine.grenadePlan, null);
+    assert.equal(f.engine.grenadeState, 'no-target-or-fresh-track');
+    f.cfg.grenadeAimAllies = true;
+    assert.equal(f.engine.processAim(input, true), null); assert.ok(f.engine.grenadePlan, f.engine.grenadeState);
+    f.cfg.grenadeAimMode = 'lock'; assert.ok(f.engine.processAim(input, true), f.engine.grenadeState);
+    f.cfg.grenadeAimMode = 'assist'; assert.ok(f.engine.processAim(input, true), f.engine.grenadeState);
+    f.cfg.grenadeAimMode = 'preview';
+    // Unknown relation must never become target, even in debug mode.
+    f.app.game.barn.teamInfo[10].playerIds = [1];
+    assert.equal(f.engine.processAim(input, true), null); assert.equal(f.engine.grenadePlan, null);
+    f.app.game.barn.teamInfo[20].playerIds = [2]; f.cfg.grenadeAimAllies = false;
     f.cfg.grenadeAimMode = 'lock'; const lock = f.engine.processAim(input, true);
     assert.ok(lock, f.engine.grenadeState); assert.equal(lock.toMouseHit, true); assert.ok(lock.distance >= 0 && lock.distance <= 18);
     f.cfg.grenadeAimMode = 'assist'; const assist = f.engine.processAim(input, true);
