@@ -1313,6 +1313,36 @@ test('last prediction diagnostics expose bounded snapshot evidence without posit
   } finally { f.close(); }
 });
 
+test('sender evidence counts malformed inputs without changing the native message', () => {
+  const f = coordinated();
+  try {
+    f.send(); const before = f.engine.diagnostics().aimEvidence;
+    const malformed = new InputMsg(); malformed.inputs = Array(8).fill(1);
+    f.app.game.transmit(3, malformed);
+    const after = f.engine.diagnostics().aimEvidence;
+    assert.equal(after.inputCalls, before.inputCalls + 1); assert.equal(after.invalidInputs, before.invalidInputs + 1);
+    assert.equal(f.app.game.sent.at(-1).data, malformed); assert.equal(after.forwardedInputs, before.forwardedInputs);
+  } finally { f.close(); }
+});
+
+test('fire evidence retains a no-candidate packet across later successful aim and release', () => {
+  const f = coordinated();
+  try {
+    f.send(); assert.equal(f.engine.diagnostics().aimEvidence.lastFireForward.aimApplied, true);
+    f.app.game.barn.playerPool.list[1].n.dead = true;
+    f.advance(); f.send();
+    let failure = f.engine.diagnostics().aimEvidence.lastFireFailure;
+    assert.equal(failure.aimState, 'no-candidate'); assert.equal(failure.packetHeld, true);
+    assert.equal(failure.physicalHeld, true); assert.equal(failure.aimApplied, false);
+    f.app.game.barn.playerPool.list[1].n.dead = false;
+    f.advance(); f.send(); f.app.input.mouseButtons[0] = false; f.advance(); f.send();
+    const evidence = f.engine.diagnostics().aimEvidence;
+    assert.equal(evidence.lastFireForward.aimApplied, true); assert.equal(evidence.lastFireFailure.aimState, 'no-candidate');
+    failure.rejections.fake = 1;
+    assert.equal(f.engine.diagnostics().aimEvidence.lastFireFailure.rejections.fake, undefined);
+  } finally { f.close(); }
+});
+
 test('sender must recompute cached aim if a position snapshot arrives after pre-frame', () => {
   const f = coordinated({ predict: false });
   try {

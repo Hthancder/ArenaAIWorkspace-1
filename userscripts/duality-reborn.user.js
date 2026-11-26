@@ -7342,11 +7342,16 @@ THE SOFTWARE.
       this.requests = 0;
       this.forwarded = 0;
       this.corrected = 0;
+      this.inputCalls = 0;
+      this.invalidInputs = 0;
+      this.inputErrors = 0;
       this.lastLiveAttempt = null;
       this.lastEngagedAttempt = null;
       this.lastEngagedFailure = null;
       this.lastGameplayForward = null;
       this.lastCorrection = null;
+      this.lastFireForward = null;
+      this.lastFireFailure = null;
       this.transitions = [];
     }
     attempt(state, controls, rejections, now, live) {
@@ -7362,7 +7367,7 @@ THE SOFTWARE.
         this.transitions = this.transitions.slice(-12);
       }
     }
-    sent(native, output, applied, now, live) {
+    sent(native, output, applied, now, live, fireContext = null) {
       this.forwarded++;
       if (!live) return;
       const a = native.toMouseDir, b = output.toMouseDir;
@@ -7375,6 +7380,20 @@ THE SOFTWARE.
         movementPreserved: ["moveLeft", "moveRight", "moveUp", "moveDown"].every((k) => native[k] === output[k])
       };
       this.lastGameplayForward = record;
+      if (fireContext && (native.shootStart || native.shootHold || fireContext.physicalHeld)) {
+        this.lastFireForward = {
+          ...record,
+          packetStart: native.shootStart,
+          packetHeld: native.shootHold,
+          physicalHeld: !!fireContext.physicalHeld,
+          aimKeyHeld: !!fireContext.aimKeyHeld,
+          aimState: fireContext.aimState,
+          rejections: { ...fireContext.rejections },
+          directMouseEnabled: !!fireContext.directMouseEnabled,
+          directMouseActive: !!fireContext.directMouseActive
+        };
+        if (!record.aimApplied) this.lastFireFailure = this.lastFireForward;
+      }
       if (record.aimApplied && degrees > 0.01) {
         this.corrected++;
         this.lastCorrection = { ...record };
@@ -7388,12 +7407,17 @@ THE SOFTWARE.
       }, "stamp");
       return {
         schedulerRequests: this.requests,
+        inputCalls: this.inputCalls,
+        invalidInputs: this.invalidInputs,
+        inputErrors: this.inputErrors,
         forwardedInputs: this.forwarded,
         correctedGameplayInputs: this.corrected,
         lastLiveAttempt: stamp(this.lastLiveAttempt),
         lastEngagedAttempt: stamp(this.lastEngagedAttempt),
         lastEngagedFailure: stamp(this.lastEngagedFailure),
         lastGameplayForward: stamp(this.lastGameplayForward),
+        lastFireForward: stamp(this.lastFireForward),
+        lastFireFailure: stamp(this.lastFireFailure),
         lastCorrection: stamp(this.lastCorrection),
         transitions: this.transitions.map(stamp),
         meaning: "Observed native sender forwards only; not a server acknowledgement or proof of hit."
@@ -8319,7 +8343,8 @@ THE SOFTWARE.
       if (!key) return;
       const self = this;
       this.senderReady = patchMethod(game, key, (original) => function(type, data2, ...rest) {
-        let outgoing = data2, joinRecord = null, intent = data2;
+        let outgoing = data2, joinRecord = null, intent = data2, inputBypassed = false;
+        if (type === 3) self.aimEvidence.inputCalls++;
         try {
           if (type === 1 && Number.isInteger(data2?.protocol) && typeof data2.name === "string" && typeof data2.joinToken === "string" && (typeof data2.isMobile === "boolean" || data2.isMobile === void 0) && typeof data2.useTouch === "boolean" && typeof data2.serialize === "function") {
             self.aimEvidence.reset();
@@ -8340,7 +8365,10 @@ THE SOFTWARE.
             self.stats.lootState = "paused-after-drop";
           }
           if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
-            if (!inputShape(data2)) return Reflect.apply(original, this, arguments);
+            if (!inputShape(data2)) {
+              self.aimEvidence.invalidInputs++;
+              return Reflect.apply(original, this, arguments);
+            }
             intent = self.mouseInput.intent(self.app.input, self.mapping?.camera, data2);
             const manualEquip = data2.inputs.some(isManualEquip);
             if (manualEquip) {
@@ -8408,6 +8436,10 @@ THE SOFTWARE.
             self.switchSlot = null;
           }
         } catch (e) {
+          if (type === 3) {
+            self.aimEvidence.inputErrors++;
+            inputBypassed = true;
+          }
           self.report("warning", `Input bypassed: ${e.message}`);
           self.aimOutput = null;
           self.restoreInput();
@@ -8417,7 +8449,14 @@ THE SOFTWARE.
         if (type === 3 && inputShape(outgoing)) {
           const now = self.win.performance.now();
           if (self.grenadeAuto.phase === "armed") self.lastGrenadeAutoSent = now;
-          self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, now, self.inputReady());
+          self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, now, self.inputReady(), {
+            physicalHeld: self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0],
+            aimKeyHeld: self.holdAim,
+            aimState: inputBypassed ? "input-bypassed-error" : self.stats.aimState,
+            rejections: inputBypassed ? {} : self.stats.aimRejections,
+            directMouseEnabled: self.config.directMouseInput !== false,
+            directMouseActive: !!self.mouseInput.record
+          });
           self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null;
           self.timing.sent(outgoing, now);
           if (self.config.grenadeTimer || self.grenadeTimer.active) self.guard("grenade-timer", () => self.grenadeTimer.forwarded(self.grenadeContext(), outgoing, now, outgoing.inputs.some(isManualEquip)));

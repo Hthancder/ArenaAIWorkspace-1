@@ -239,7 +239,8 @@ export class Features {
     if (!key) return;
     const self = this;
     this.senderReady = patchMethod(game, key, original => function (type, data, ...rest) {
-      let outgoing = data, joinRecord = null, intent = data;
+      let outgoing = data, joinRecord = null, intent = data, inputBypassed = false;
+      if (type === 3) self.aimEvidence.inputCalls++;
       try {
         if (type === 1 && Number.isInteger(data?.protocol) && typeof data.name === 'string'
           && typeof data.joinToken === 'string' && (typeof data.isMobile === 'boolean' || data.isMobile === undefined)
@@ -261,7 +262,7 @@ export class Features {
           self.stats.lootState = 'paused-after-drop';
         }
         if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
-          if (!inputShape(data)) return Reflect.apply(original, this, arguments);
+          if (!inputShape(data)) { self.aimEvidence.invalidInputs++; return Reflect.apply(original, this, arguments); }
           intent = self.mouseInput.intent(self.app.input, self.mapping?.camera, data);
           const manualEquip = data.inputs.some(isManualEquip);
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
@@ -310,12 +311,17 @@ export class Features {
           if (self.meleeDirection && self.switchSlot === 2 && outgoing !== data && outgoing.inputs.includes(13)) self.meleeEquip = { id: self.target?.__id, until: self.win.performance.now() + 1000 };
           self.switchSlot = null;
         }
-      } catch (e) { self.report('warning', `Input bypassed: ${e.message}`); self.aimOutput = null; self.restoreInput(); outgoing = intent; }
+      } catch (e) { if (type === 3) { self.aimEvidence.inputErrors++; inputBypassed = true; } self.report('warning', `Input bypassed: ${e.message}`); self.aimOutput = null; self.restoreInput(); outgoing = intent; }
       const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
       if (type === 3 && inputShape(outgoing)) {
         const now = self.win.performance.now();
         if (self.grenadeAuto.phase === 'armed') self.lastGrenadeAutoSent = now;
-        self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, now, self.inputReady()); self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null; self.timing.sent(outgoing, now);
+        self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, now, self.inputReady(), {
+          physicalHeld: self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0], aimKeyHeld: self.holdAim,
+          aimState: inputBypassed ? 'input-bypassed-error' : self.stats.aimState, rejections: inputBypassed ? {} : self.stats.aimRejections,
+          directMouseEnabled: self.config.directMouseInput !== false, directMouseActive: !!self.mouseInput.record,
+        });
+        self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null; self.timing.sent(outgoing, now);
         if (self.config.grenadeTimer || self.grenadeTimer.active) self.guard('grenade-timer', () => self.grenadeTimer.forwarded(self.grenadeContext(), outgoing, now, outgoing.inputs.some(isManualEquip)));
         if (self.config.grenadeAimMode !== 'off' && self.config.grenadeAimMode) self.grenadeAimTimer.forwarded({ ...self.grenadeContext(), enabled: true }, outgoing, now, outgoing.inputs.some(isManualEquip));
         if (self.grenadeManualOverride && intent.shootHold === false && !(self.binds ? self.binds.isBindDown(4) : self.app.input.mouseButtons?.[0])) self.grenadeManualOverride = false;
