@@ -7288,6 +7288,23 @@ THE SOFTWARE.
   };
 
   // src/aim-geometry.mjs
+  function geometryObjects(registry) {
+    const obstacles = [], structures = [];
+    if (!registry || typeof registry !== "object" && typeof registry !== "function") return { obstacles, structures };
+    try {
+      for (const key of Object.getOwnPropertyNames(registry)) {
+        const descriptor = Object.getOwnPropertyDescriptor(registry, key);
+        if (!descriptor || !("value" in descriptor)) continue;
+        const o = descriptor.value;
+        if (Array.isArray(read(o, "stairs"))) structures.push(o);
+        if (read(o, "__type") === 2 || read(o, "collider") !== null && typeof read(o, "collider") === "object" && typeof read(o, "collidable") === "boolean") obstacles.push(o);
+      }
+    } catch {
+      return { obstacles: [], structures: [] };
+    }
+    return { obstacles, structures };
+  }
+  __name(geometryObjects, "geometryObjects");
   function shotLayer(pos, direction, layer, radius, structures) {
     for (const structure of structures.slice(0, 256)) {
       if (structure.active !== true || !Array.isArray(structure.stairs)) continue;
@@ -8456,7 +8473,7 @@ THE SOFTWARE.
             } else {
               const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
               const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
-              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true, !!self.mouseInput.record?.captured);
+              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.timedProcessAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.timedProcessAim(intent, true, !!self.mouseInput.record?.captured);
             }
             if (manualEquip) {
               self.weaponSwitch.reset();
@@ -8662,8 +8679,8 @@ THE SOFTWARE.
     blocked(from, to, bulletPath = true, source = null) {
       if (!this.config.wallcheck) return false;
       if (!this.capabilities.wallcheck) return true;
-      const eligible = (source || this.mapping.obstacles()).filter((o) => read(o, "active") !== false && !read(o, "dead") && read(o, "collidable") !== false && !(bulletPath && this.protocol === VERIFIED_PROTOCOL && finite(read(o, "height")) && read(o, "height") < BULLET_HEIGHT) && (!finite(read(o, "layer")) || sameLayer(read(o, "layer"), from.layer)));
-      const relevant = segmentCandidates(eligible, from.pos, to.pos);
+      const nearby = segmentCandidates(source || this.mapping.obstacles(), from.pos, to.pos);
+      const relevant = nearby.filter((o) => read(o, "active") !== false && !read(o, "dead") && read(o, "collidable") !== false && !(bulletPath && this.protocol === VERIFIED_PROTOCOL && finite(read(o, "height")) && read(o, "height") < BULLET_HEIGHT) && (!finite(read(o, "layer")) || sameLayer(read(o, "layer"), from.layer)));
       if (relevant.length > 1024) return true;
       return relevant.some((o) => segmentBlocked(from.pos, to.pos, read(o, "collider")));
     }
@@ -8706,7 +8723,7 @@ THE SOFTWARE.
       if (this.inputReady()) this.updateSwitch();
       else this.weaponSwitch.reset();
       const aimFrame = ++this.aimFrame, directMouse = this.config.directMouseInput !== false && !!this.flushReady;
-      const plan = this.processAim(null, directMouse, directMouse);
+      const plan = this.timedProcessAim(null, directMouse, directMouse);
       this.aimPlan = plan;
       this.aimPlanFrame = aimFrame;
       this.aimPlanDirect = directMouse;
@@ -8924,6 +8941,14 @@ THE SOFTWARE.
       }
       return fail(this.grenadeState === "off" ? "no-clear-solution" : this.grenadeState);
     }
+    timedProcessAim(native, advance2, applyDirect = false) {
+      const start2 = this.win.performance.now();
+      try {
+        return this.processAim(native, advance2, applyDirect);
+      } finally {
+        this.runtimePerf.add(native ? "aimSender" : "aimFrame", this.win.performance.now() - start2);
+      }
+    }
     processAim(native, advance2, applyDirect = false) {
       const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
       this.grenadePlan = null;
@@ -9002,14 +9027,9 @@ THE SOFTWARE.
         y: read(camera.camera, camera.heightKey) / 2 - physical.y * native.toMouseLen * scale
       } : mouse;
       const rawLayer = this.sourceLayer(m.active), selfRadius = at2(m.active, [m.schema.netKey, this.sourceFields?.scale]) || 1;
-      let structures;
-      const layerFor = /* @__PURE__ */ __name((dir) => shotLayer(
-        pos,
-        dir,
-        rawLayer,
-        selfRadius,
-        structures ||= entries(read(m.creator, m.registryKey)).map(([, o]) => o).filter((o) => Array.isArray(read(o, "stairs")))
-      ), "layerFor");
+      let geometry;
+      const world = /* @__PURE__ */ __name(() => geometry ||= geometryObjects(read(m.creator, m.registryKey)), "world");
+      const layerFor = /* @__PURE__ */ __name((dir) => shotLayer(pos, dir, rawLayer, selfRadius, world().structures), "layerFor");
       const candidates = [], reject = /* @__PURE__ */ __name((key) => {
         this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1;
       }, "reject");
@@ -9048,7 +9068,7 @@ THE SOFTWARE.
       if (!ordered.length) return fail("no-candidate");
       const perks = at2(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
       const profile = weaponProfile(this.definitions, localWeapon(m), perks);
-      const obstacles = profile || cfg.wallcheck ? m.obstacles() : [];
+      const obstacles = profile || cfg.wallcheck ? world().obstacles : [];
       const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
       if (profile && muzzleObstacles.length > 1024) return fail("muzzle-obstacle-budget");
       for (const candidate of ordered.slice(0, 6)) {

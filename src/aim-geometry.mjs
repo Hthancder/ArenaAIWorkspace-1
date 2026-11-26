@@ -2,6 +2,23 @@ import { finite, read, sameLayer, vec } from './core.mjs';
 import { muzzleAt } from './aim.mjs';
 import { rayHit } from './previews.mjs';
 
+// Take one fresh registry snapshot per aim solve. Never invoke registry getters or
+// reuse membership across packets: newly spawned/moved cover must be visible.
+export function geometryObjects(registry) {
+  const obstacles = [], structures = [];
+  if (!registry || typeof registry !== 'object' && typeof registry !== 'function') return { obstacles, structures };
+  try {
+    for (const key of Object.getOwnPropertyNames(registry)) {
+      const descriptor = Object.getOwnPropertyDescriptor(registry, key);
+      if (!descriptor || !('value' in descriptor)) continue;
+      const o = descriptor.value;
+      if (Array.isArray(read(o, 'stairs'))) structures.push(o);
+      if (read(o, '__type') === 2 || read(o, 'collider') !== null && typeof read(o, 'collider') === 'object' && typeof read(o, 'collidable') === 'boolean') obstacles.push(o);
+    }
+  } catch { return { obstacles: [], structures: [] }; }
+  return { obstacles, structures };
+}
+
 // Structure.stairs is public client state built from shared map definitions.
 // Server checkStructureStairs uses circle/AABB, then cardinal facing to choose aimLayer.
 export function shotLayer(pos, direction, layer, radius, structures) {

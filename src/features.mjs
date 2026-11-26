@@ -11,7 +11,7 @@ import { WeaponSwitch } from './weapon-switch.mjs';
 import { MovementSmoother, throwPreview, traceShot } from './previews.mjs';
 import { AimController, SnapshotTracker, modeOf, predictShot, unit, weaponProfile, angleDelta } from './aim.mjs';
 import { discoverInputTimeout, discoverUpdateReceiver, discoverSourceFields, NetworkTiming } from './aim-adapters.mjs';
-import { clippedMuzzle, shotLayer, segmentCandidates, pathToTarget } from './aim-geometry.mjs';
+import { clippedMuzzle, shotLayer, segmentCandidates, pathToTarget, geometryObjects } from './aim-geometry.mjs';
 import { AimEvidence } from './aim-evidence.mjs';
 import { MouseInputFrame } from './mouse-input.mjs';
 import { NativeNames } from './native-names.mjs';
@@ -278,10 +278,10 @@ export class Features {
             const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
             const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
             self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3
-            ? self.processAim(intent, true) // Revalidate at the actual sender, not a cached render plan.
+            ? self.timedProcessAim(intent, true) // Revalidate at the actual sender, not a cached render plan.
             : !data.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
                 && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0])
-                && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true, !!self.mouseInput.record?.captured);
+                && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.timedProcessAim(intent, true, !!self.mouseInput.record?.captured);
           }
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
@@ -432,10 +432,12 @@ export class Features {
   blocked(from, to, bulletPath = true, source = null) {
     if (!this.config.wallcheck) return false;
     if (!this.capabilities.wallcheck) return true;
-    const eligible = (source || this.mapping.obstacles()).filter(o => read(o, 'active') !== false && !read(o, 'dead') && read(o, 'collidable') !== false
+    // Cheap spatial rejection first; keep the eligibility and budget semantics
+    // unchanged, including unsupported shapes which must still fail closed.
+    const nearby = segmentCandidates(source || this.mapping.obstacles(), from.pos, to.pos);
+    const relevant = nearby.filter(o => read(o, 'active') !== false && !read(o, 'dead') && read(o, 'collidable') !== false
       && !(bulletPath && this.protocol === VERIFIED_PROTOCOL && finite(read(o, 'height')) && read(o, 'height') < BULLET_HEIGHT)
       && (!finite(read(o, 'layer')) || sameLayer(read(o, 'layer'), from.layer)));
-    const relevant = segmentCandidates(eligible, from.pos, to.pos);
     if (relevant.length > 1024) return true;
     return relevant.some(o => segmentBlocked(from.pos, to.pos, read(o, 'collider')));
   }
@@ -471,7 +473,7 @@ export class Features {
     this.switchSlot = null;
     if (this.inputReady()) this.updateSwitch(); else this.weaponSwitch.reset();
     const aimFrame = ++this.aimFrame, directMouse = this.config.directMouseInput !== false && !!this.flushReady;
-    const plan = this.processAim(null, directMouse, directMouse);
+    const plan = this.timedProcessAim(null, directMouse, directMouse);
     this.aimPlan = plan; this.aimPlanFrame = aimFrame; this.aimPlanDirect = directMouse;
     this.aimPlanCursor = this.mouseInput.physical(this.app.input);
     this.aimPlanFiring = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0]; this.aimPlanHoldAim = this.holdAim;
@@ -655,6 +657,11 @@ export class Features {
     }
     return fail(this.grenadeState === 'off' ? 'no-clear-solution' : this.grenadeState);
   }
+  timedProcessAim(native, advance, applyDirect = false) {
+    const start = this.win.performance.now();
+    try { return this.processAim(native, advance, applyDirect); }
+    finally { this.runtimePerf.add(native ? 'aimSender' : 'aimFrame', this.win.performance.now() - start); }
+  }
   processAim(native, advance, applyDirect = false) {
     const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
     this.grenadePlan = null; this.grenadeAutoPlan = null; this.grenadeState = 'off';
@@ -698,9 +705,9 @@ export class Features {
       y: read(camera.camera, camera.heightKey) / 2 - physical.y * native.toMouseLen * scale } : mouse;
     const rawLayer = this.sourceLayer(m.active), selfRadius = at(m.active, [m.schema.netKey, this.sourceFields?.scale]) || 1;
     // Defer the registry and obstacle scans until a plausible target needs them.
-    let structures;
-    const layerFor = dir => shotLayer(pos, dir, rawLayer, selfRadius,
-      structures ||= entries(read(m.creator, m.registryKey)).map(([, o]) => o).filter(o => Array.isArray(read(o, 'stairs'))));
+    let geometry;
+    const world = () => geometry ||= geometryObjects(read(m.creator, m.registryKey));
+    const layerFor = dir => shotLayer(pos, dir, rawLayer, selfRadius, world().structures);
     const candidates = [], reject = key => { this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1; };
     const players = m.players();
     for (const p of players.slice(0, 256)) {
@@ -731,7 +738,7 @@ export class Features {
     if (!ordered.length) return fail('no-candidate');
     const perks = at(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
     const profile = weaponProfile(this.definitions, localWeapon(m), perks);
-    const obstacles = profile || cfg.wallcheck ? m.obstacles() : [];
+    const obstacles = profile || cfg.wallcheck ? world().obstacles : [];
     const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
     if (profile && muzzleObstacles.length > 1024) return fail('muzzle-obstacle-budget');
     for (const candidate of ordered.slice(0, 6)) {
