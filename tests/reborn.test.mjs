@@ -1562,3 +1562,42 @@ test('grenade stationary inference uses complete recent world updates and is iso
     assert.equal(f.engine.grenadeTracker.estimate(hero, f.dom.window.performance.now()), null, 'incomplete update fails closed');
   } finally { f.close(); }
 });
+
+test('aim prepares in FOV before Fire without steering or firing and revalidates after activation', () => {
+  const f = coordinated({ aim: true, aimMode: 'lock', aimActivation: 'fire', humanLikeAim: false, predict: false, wallcheck: false });
+  try {
+    f.app.input.mouseButtons[0] = false;
+    const before = { ...f.app.input.mousePos }, sent = f.app.game.sent.length;
+    f.engine.pre();
+    assert.equal(f.engine.stats.aimState, 'waiting-activation');
+    assert.equal(f.engine.diagnostics().aimPreparation.state, 'ready');
+    assert.equal(f.app.game.sent.length, sent, 'preparation does not send packets');
+    assert.deepEqual(f.app.input.mousePos, before, 'preparation does not move mouse');
+    assert.equal(f.engine.aimPlan, null); assert.equal(f.engine.target, null);
+    const up = new InputMsg(); up.shootHold = false; f.app.game.transmit(3, up);
+    const wire = f.app.game.sent.at(-1).data;
+    assert.equal(wire.shootStart, false); assert.equal(wire.shootHold, false); assert.deepEqual(wire.toMouseDir, up.toMouseDir);
+    // The preview is never applied later: re-evaluate blocking at Fire time.
+    f.cfg.wallcheck = true; f.engine.capabilities.wallcheck = true; f.engine.blocked = () => true;
+    f.app.input.mouseButtons[0] = true;
+    const down = new InputMsg(); down.shootStart = true; down.shootHold = true; down.toMouseLen = 1.25;
+    f.app.game.transmit(3, down);
+    assert.equal(f.engine.stats.aimState, 'wall-blocked'); assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, down.toMouseDir);
+    assert.equal(f.app.game.sent.at(-1).data.shootStart, true, 'native Fire remains untouched');
+  } finally { f.close(); }
+});
+
+test('activation transitions invalidate cached aim in the same frame', () => {
+  const f = coordinated({ aim: true, aimMode: 'lock', aimActivation: 'fire', humanLikeAim: false, predict: false, wallcheck: false });
+  try {
+    f.app.input.mouseButtons[0] = false; f.engine.pre(); assert.equal(f.engine.aimPreparation.state, 'ready');
+    f.app.input.mouseButtons[0] = true;
+    const down = new InputMsg(); down.shootStart = true; down.shootHold = true; down.toMouseLen = 1.25; down.toMouseDir = { x: .995, y: .1 };
+    f.app.game.transmit(3, down); assert.equal(f.engine.stats.aimState, 'input-applied');
+    assert.notDeepEqual(f.app.game.sent.at(-1).data.toMouseDir, down.toMouseDir, 'first Fire packet receives fresh correction');
+    f.advance(); f.engine.pre(); assert.ok(f.engine.aimPlan);
+    f.app.input.mouseButtons[0] = false;
+    const up = new InputMsg(); up.toMouseLen = 1.25; f.app.game.transmit(3, up);
+    assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, up.toMouseDir, 'cached Fire aim does not survive button-up');
+  } finally { f.close(); }
+});

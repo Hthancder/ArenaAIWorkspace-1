@@ -262,7 +262,9 @@ export class Features {
           else if (manualEquip && self.local?.data?.[self.local.slotKey] === 3 && ['preview', 'assist', 'lock'].includes(self.config.grenadeAimMode)) { self.aimOutput = null; self.grenadePlan = null; self.grenadeState = 'manual-equip'; }
           else self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3
             ? self.processAim(intent, true) // Revalidate at the actual sender, not a cached render plan.
-            : self.aimPlanFrame === self.aimFrame && self.aimPlanDirect ? self.aimPlan : self.processAim(intent, true);
+            : self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
+                && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0])
+                && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true);
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
           if (!self.config.mobileMovement) self.movement.reset();
@@ -441,6 +443,7 @@ export class Features {
     const aimFrame = ++this.aimFrame, directMouse = this.config.directMouseInput !== false && !!this.flushReady;
     const plan = this.processAim(null, directMouse, directMouse);
     this.aimPlan = plan; this.aimPlanFrame = aimFrame; this.aimPlanDirect = directMouse;
+    this.aimPlanFiring = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0]; this.aimPlanHoldAim = this.holdAim;
     const needsRestore = !plan && this.lastAimSent;
     const needsAim = plan && (!this.lastAimSent || Math.abs(angleDelta(Math.atan2(this.lastAimSent.y, this.lastAimSent.x), Math.atan2(plan.dir.y, plan.dir.x))) > Math.PI / 1800 || plan.toMouseHit && Math.abs((this.lastAimDistance || 0) - plan.distance) > .5);
     const autoTick = this.grenadeAuto.phase === 'armed' && this.config.grenadeAutoThrow && this.inputReady()
@@ -610,11 +613,15 @@ export class Features {
   processAim(native, advance, applyDirect = false) {
     const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
     this.grenadePlan = null; this.grenadeAutoPlan = null; this.grenadeState = 'off';
+    this.aimPreparation = null; let warming = false;
     this.target = null; this.targetId = null; this.dot = null; this.meleeDirection = null; this.stats.aimRejections = {}; this.stats.predictionState = null; this.stats.aimApproximate = false;
     const blockedInput = this.inputBlockReason();
     const note = state => this.aimEvidence.attempt(state, { mode, activation: cfg.aimActivation, wallcheckRequested: !!cfg.wallcheck,
       wallcheckAvailable: !!this.capabilities.wallcheck, predictionRequested: !!cfg.predict }, this.stats.aimRejections, now, !blockedInput);
-    const fail = state => { this.stats.aimState = state; this.aimController.reset(); if (state !== 'wall-blocked' || !cfg.sticky) this.stickyId = null; this.target = null; this.targetId = null; this.dot = null; note(state); return null; };
+    const fail = state => {
+      if (warming) { this.aimPreparation = { state }; this.stats.aimState = 'waiting-activation'; this.aimController.reset(); note('waiting-activation'); return null; }
+      this.stats.aimState = state; this.aimController.reset(); if (state !== 'wall-blocked' || !cfg.sticky) this.stickyId = null; this.target = null; this.targetId = null; this.dot = null; note(state); return null;
+    };
     if (blockedInput) return fail(blockedInput);
     const pos = this.sourcePos(m.active), mouse = this.mouseInput.physical(this.app.input), camera = m.camera;
     if (!vec(pos) || !vec(mouse) || !camera) return fail('invalid-input-position');
@@ -631,7 +638,12 @@ export class Features {
     const gun = this.definitions?.[localWeapon(m)], slot = this.local?.data[this.local.slotKey];
     const meleeDef = gun?.type === 'melee' ? gun : cfg.autoMelee && [0, 1].includes(slot) ? this.definitions?.[this.local?.data[this.local.weaponsKey]?.[2]?.type] : null;
     const reach = meleeReach(meleeDef), melee = !!(cfg.melee && !this.manualEquipHeld && this.capabilities.mobile && firing && reach);
-    if ((!trigger || mode === 'off' || !this.capabilities.aim) && !melee) return fail(mode === 'off' ? 'disabled' : !trigger ? 'waiting-activation' : 'missing-input-scheduler');
+    if ((mode === 'off' || !this.capabilities.aim) && !melee) return fail(mode === 'off' ? 'disabled' : 'missing-input-scheduler');
+    // Before activation, calculate the same selection, prediction and wallcheck
+    // but never advance the controller, steer input, fire, or schedule packets.
+    // Recompute on activation so a previously prepared result cannot go stale.
+    warming = !trigger && !melee;
+    if (warming) { this.aimController.reset(); this.stickyId = null; }
     if (mode === 'assist' && cfg.assistStrength === 0 && !melee) return fail('assist-zero');
     const relations = teamRelations(m.barn, m.active.__id);
     if (!relations.ready) return fail('missing-own-team');
@@ -702,7 +714,11 @@ export class Features {
       const rayFrom = { pos: shot.muzzle, layer: layerFor(shot.dir) };
       const rayTo = { pos: pathToTarget(shot.muzzle, shot.world, hitRadius) };
       if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
-        reject('wall'); if (cfg.sticky) this.stickyId = candidate.p.__id; return fail('wall-blocked');
+        reject('wall'); if (cfg.sticky && !warming) this.stickyId = candidate.p.__id; return fail('wall-blocked');
+      }
+      if (warming) {
+        this.aimPreparation = { state: 'ready', prediction: shot.state, approximate: !!shot.approximate };
+        this.stats.aimState = 'waiting-activation'; note('waiting-activation'); return null;
       }
       this.target = candidate.p; this.targetId = candidate.p.__id; this.stickyId = candidate.p.__id;
       this.stats.predictionState = shot.state;
@@ -1031,6 +1047,7 @@ export class Features {
       mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
       registry: { state: m?.registryState ?? 'waiting-mapping', ...m?.registryEvidence },
       aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || 'responsive' },
+      aimPreparation: this.aimPreparation,
       aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
       lastPrediction: this.lastPredictionEvidence ? (() => {
         const { recordedAt, ...evidence } = this.lastPredictionEvidence;

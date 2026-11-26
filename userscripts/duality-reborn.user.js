@@ -8304,7 +8304,7 @@ THE SOFTWARE.
               self.aimOutput = null;
               self.grenadePlan = null;
               self.grenadeState = "manual-equip";
-            } else self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : self.aimPlanFrame === self.aimFrame && self.aimPlanDirect ? self.aimPlan : self.processAim(intent, true);
+            } else self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true);
             if (manualEquip) {
               self.weaponSwitch.reset();
               self.switchSlot = null;
@@ -8535,6 +8535,8 @@ THE SOFTWARE.
       this.aimPlan = plan;
       this.aimPlanFrame = aimFrame;
       this.aimPlanDirect = directMouse;
+      this.aimPlanFiring = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+      this.aimPlanHoldAim = this.holdAim;
       const needsRestore = !plan && this.lastAimSent;
       const needsAim = plan && (!this.lastAimSent || Math.abs(angleDelta(Math.atan2(this.lastAimSent.y, this.lastAimSent.x), Math.atan2(plan.dir.y, plan.dir.x))) > Math.PI / 1800 || plan.toMouseHit && Math.abs((this.lastAimDistance || 0) - plan.distance) > 0.5);
       const autoTick = this.grenadeAuto.phase === "armed" && this.config.grenadeAutoThrow && this.inputReady() && this.win.performance.now() - this.lastGrenadeAutoSent >= 33;
@@ -8744,6 +8746,8 @@ THE SOFTWARE.
       this.grenadePlan = null;
       this.grenadeAutoPlan = null;
       this.grenadeState = "off";
+      this.aimPreparation = null;
+      let warming = false;
       this.target = null;
       this.targetId = null;
       this.dot = null;
@@ -8760,6 +8764,13 @@ THE SOFTWARE.
         predictionRequested: !!cfg.predict
       }, this.stats.aimRejections, now, !blockedInput), "note");
       const fail = /* @__PURE__ */ __name((state) => {
+        if (warming) {
+          this.aimPreparation = { state };
+          this.stats.aimState = "waiting-activation";
+          this.aimController.reset();
+          note("waiting-activation");
+          return null;
+        }
         this.stats.aimState = state;
         this.aimController.reset();
         if (state !== "wall-blocked" || !cfg.sticky) this.stickyId = null;
@@ -8792,7 +8803,12 @@ THE SOFTWARE.
       const gun = this.definitions?.[localWeapon(m)], slot = this.local?.data[this.local.slotKey];
       const meleeDef = gun?.type === "melee" ? gun : cfg.autoMelee && [0, 1].includes(slot) ? this.definitions?.[this.local?.data[this.local.weaponsKey]?.[2]?.type] : null;
       const reach = meleeReach(meleeDef), melee = !!(cfg.melee && !this.manualEquipHeld && this.capabilities.mobile && firing && reach);
-      if ((!trigger || mode === "off" || !this.capabilities.aim) && !melee) return fail(mode === "off" ? "disabled" : !trigger ? "waiting-activation" : "missing-input-scheduler");
+      if ((mode === "off" || !this.capabilities.aim) && !melee) return fail(mode === "off" ? "disabled" : "missing-input-scheduler");
+      warming = !trigger && !melee;
+      if (warming) {
+        this.aimController.reset();
+        this.stickyId = null;
+      }
       if (mode === "assist" && cfg.assistStrength === 0 && !melee) return fail("assist-zero");
       const relations = teamRelations(m.barn, m.active.__id);
       if (!relations.ready) return fail("missing-own-team");
@@ -8907,8 +8923,14 @@ THE SOFTWARE.
         const rayTo = { pos: pathToTarget(shot.muzzle, shot.world, hitRadius) };
         if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
           reject("wall");
-          if (cfg.sticky) this.stickyId = candidate.p.__id;
+          if (cfg.sticky && !warming) this.stickyId = candidate.p.__id;
           return fail("wall-blocked");
+        }
+        if (warming) {
+          this.aimPreparation = { state: "ready", prediction: shot.state, approximate: !!shot.approximate };
+          this.stats.aimState = "waiting-activation";
+          note("waiting-activation");
+          return null;
         }
         this.target = candidate.p;
         this.targetId = candidate.p.__id;
@@ -9387,6 +9409,7 @@ THE SOFTWARE.
         mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
         aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || "responsive" },
+        aimPreparation: this.aimPreparation,
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
         lastPrediction: this.lastPredictionEvidence ? (() => {
           const { recordedAt, ...evidence } = this.lastPredictionEvidence;
