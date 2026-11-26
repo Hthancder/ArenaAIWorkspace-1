@@ -159,3 +159,6 @@ Dưới danh sách tab, **Chọn thêm…** có thể chọn nhanh toàn bộ ta
 
 ### Tìm nhanh trong Cài đặt (0.121)
 Trang **Cài đặt & sao lưu** có ô tìm không phân biệt chữ hoa/thường hoặc dấu tiếng Việt, và các nhóm Thường dùng, Tự động, Thông báo, Bảo vệ, Dữ liệu. Có thể kết hợp từ khóa với nhóm; số mục phù hợp và trạng thái không có kết quả được hiển thị, **Xóa bộ lọc** đưa về tất cả. Tìm kiếm chỉ ẩn/hiện các mục, không thay đổi thiết lập; lựa chọn được giữ khi trang tự làm mới hoặc đổi màn hình trong cùng phiên. Phím `/` tập trung ô tìm cài đặt khi đang ở trang này. Phần tổng quan tab và nút tạo nhóm không còn chiếm chỗ trên trang cài đặt; nút tạo nhóm ở thanh bên vẫn dùng được.
+
+### An toàn khi nhập sao lưu (0.122)
+Khi xác nhận nhập, Tabspace dùng khóa dữ liệu chung trước khi đọc lại dữ liệu, kiểm tra thay đổi và ghi kết quả. Nếu một thao tác Tabspace khác đang giữ khóa, việc nhập dừng và có thể thử lại; chế độ thêm đọc dữ liệu mới nhất sau khi lấy khóa, chế độ thay thế vẫn dừng nếu dữ liệu liên quan đã đổi. Khóa chỉ điều phối các thao tác Tabspace cùng dùng khóa, không bảo vệ khỏi thay đổi bên ngoài. Hãy xuất và kiểm tra bản sao lưu trước khi thay thế.
