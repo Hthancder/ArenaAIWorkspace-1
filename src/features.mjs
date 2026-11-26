@@ -10,7 +10,6 @@ import { MapHighlights } from './map-highlights.mjs';
 import { WeaponSwitch } from './weapon-switch.mjs';
 import { MovementSmoother, throwPreview, traceShot } from './previews.mjs';
 import { AimController, SnapshotTracker, modeOf, predictShot, unit, weaponProfile, angleDelta } from './aim.mjs';
-import { projectOwnOrigin } from './self-motion.mjs';
 import { discoverInputTimeout, discoverUpdateReceiver, discoverSourceFields, NetworkTiming } from './aim-adapters.mjs';
 import { clippedMuzzle, shotLayer, segmentCandidates, pathToTarget } from './aim-geometry.mjs';
 import { AimEvidence } from './aim-evidence.mjs';
@@ -280,8 +279,7 @@ export class Features {
             const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
             self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3
             ? self.processAim(intent, true) // Revalidate at the actual sender, not a cached render plan.
-            : !(self.config.ownMotionCompensation && modeOf(self.config) === 'lock' && self.local?.data?.[self.local.slotKey] !== 3)
-                && !data.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
+            : !data.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
                 && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0])
                 && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true, !!self.mouseInput.record?.captured);
           }
@@ -736,16 +734,6 @@ export class Features {
     const obstacles = profile || cfg.wallcheck ? m.obstacles() : [];
     const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
     if (profile && muzzleObstacles.length > 1024) return fail('muzzle-obstacle-budget');
-    // This opt-in uses an observed own velocity and current desktop movement,
-    // never guesses through cover, unknown timing, stale data or stairs.
-    let ownProjection = null;
-    if (cfg.ownMotionCompensation && cfg.predict && cfg.wallcheck && !cfg.predictionStrict && mode === 'lock' && !melee && profile
-        && this.protocol === VERIFIED_PROTOCOL && this.capabilities.prediction && this.binds && !native?.touchMoveActive) {
-      const movement = native ? { x: Number(native.moveRight) - Number(native.moveLeft), y: Number(native.moveUp) - Number(native.moveDown) }
-        : { x: Number(!!this.binds.isBindDown(1)) - Number(!!this.binds.isBindDown(0)), y: Number(!!this.binds.isBindDown(2)) - Number(!!this.binds.isBindDown(3)) };
-      const candidate = projectOwnOrigin(pos, this.tracker.estimate(m.active, now), movement, this.timing, now);
-      if (candidate && !segmentCandidates(obstacles, pos, candidate, Math.abs(profile.offset) + profile.barrel + selfRadius + 1.5).length) ownProjection = candidate;
-    }
     for (const candidate of ordered.slice(0, 6)) {
       let shot, track = null;
       if (melee) shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos, distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: 'melee' };
@@ -756,12 +744,12 @@ export class Features {
         const predictionReady = !!(cfg.predict && profile && this.capabilities.prediction);
         track = predictionReady ? this.tracker.estimate(candidate.p, now) : null;
         let inferredStationary = false;
-        if (predictionReady && !track && this.tracker.states.has(candidate.p)) {
+        if (predictionReady && (!track || track.age > .15) && this.tracker.states.has(candidate.p)) {
           // A visible player omitted by a continuous source-shaped update stream
           // may be stationary. Do not fabricate velocity for moving targets or
           // use this fallback in strict prediction; real updates always win.
           const stationary = this.grenadeTracker.estimate(candidate.p, now);
-          const recent = stationary && stationary.age <= .15 && stationary.samples?.length >= 3
+          const recent = stationary && stationary.age <= .15 && stationary.samples?.length >= 2
             && Math.hypot(stationary.vx, stationary.vy) < .2 && stationary.samples.every(s => Math.hypot(s.p.x - stationary.pos.x, s.p.y - stationary.pos.y) < .02);
           if (!cfg.predictionStrict && recent) {
             track = { ...stationary, vx: 0, vy: 0, error: 0, velocityError: 0, motion: [] }; inferredStationary = true;
@@ -771,15 +759,10 @@ export class Features {
           shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos,
             distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: 'direct-missing-definitions', approximate: true };
         } else {
-          const solve = origin => predictShot({ origin, target: candidate.pos, track, profile,
+          shot = predictShot({ origin: pos, target: candidate.pos, track, profile,
             latency: track && cfg.latencyCompensation ? this.timing.transit() : 0, compensateSnapshot: mode === 'lock', lead: (cfg.leadAdjustment ?? 100) / 100,
             radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1, stabilize: mode === 'lock' && cfg.stabilizeStrafe !== false,
             muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, muzzleObstacles, layerFor(dir), rawLayer & 1, selfRadius) });
-          shot = solve(ownProjection || pos);
-          if (ownProjection && (!shot.dir || shotLayer(ownProjection, shot.dir, rawLayer, selfRadius, structures || []) !== layerFor(shot.dir))) {
-            ownProjection = null; shot = solve(pos);
-          }
-          if (shot.dir && ownProjection) { shot.ownMotionSeconds = ownProjection.seconds; shot.approximate = true; }
           if (shot.dir && cfg.predict && !track) { shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable'; shot.approximate = true; }
           if (shot.dir && inferredStationary) { shot.state = 'inferred-stationary'; shot.approximate = true; }
           // Strict prediction is an accuracy-first fallback policy: do not invent a
@@ -795,14 +778,6 @@ export class Features {
       if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
         reject('wall'); if (cfg.sticky && !warming) this.stickyId = candidate.p.__id; return fail('wall-blocked');
       }
-      if (ownProjection && shot.ownMotionSeconds) {
-        const currentMuzzle = clippedMuzzle(pos, shot.dir, profile, muzzleObstacles, layerFor(shot.dir), rawLayer & 1, selfRadius);
-        const length = Math.hypot(shot.world.x - currentMuzzle.x, shot.world.y - currentMuzzle.y) + hitRadius;
-        const from = { pos: currentMuzzle, layer: layerFor(shot.dir) }, to = { pos: { x: currentMuzzle.x + shot.dir.x * length, y: currentMuzzle.y + shot.dir.y * length } };
-        if (this.blocked(from, to, true, obstacles) || this.blockedByPlayer(from, to, candidate.p, players)) {
-          reject('wall'); if (cfg.sticky && !warming) this.stickyId = candidate.p.__id; return fail('wall-blocked');
-        }
-      }
       if (warming) {
         this.aimPreparation = { state: 'ready', prediction: shot.state, approximate: !!shot.approximate };
         this.stats.aimState = 'waiting-activation'; note('waiting-activation'); return null;
@@ -810,12 +785,8 @@ export class Features {
       this.target = candidate.p; this.targetId = candidate.p.__id; this.stickyId = candidate.p.__id;
       this.stats.predictionState = shot.state;
       this.stats.aimApproximate = !!shot.approximate;
-      // Optional direct fire tracking: keep human-like acquisition when using
-      // key activation, but remove controller lag while physical Fire is held.
-      // Does not alter prediction, activation, Fire or Assist.
-      const instantFire = !melee && mode === 'lock' && cfg.lockInstantFire && firing;
       const dir = advance ? this.aimController.step(physical, shot.dir, { mode: melee ? 'lock' : mode, strength: cfg.assistStrength ?? 35,
-        smooth: melee || !cfg.humanLikeAim || instantFire ? 0 : cfg.smooth, now, target: candidate.p, humanLike: !!cfg.humanLikeAim && !instantFire, profile: cfg.smoothProfile || 'responsive',
+        smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth, now, target: candidate.p, humanLike: !!cfg.humanLikeAim, profile: cfg.smoothProfile || 'responsive',
         cursorRadius: Math.hypot(mouse.x - read(camera.camera, camera.widthKey) / 2, mouse.y - read(camera.camera, camera.heightKey) / 2),
         targetRadius: shot.distance * scale }) : !melee && mode === 'assist' ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
       if (cfg.wallcheck && !melee && dir && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) {
@@ -844,7 +815,6 @@ export class Features {
           visualCrossTrack: finite(visualCrossTrack) ? Math.round(visualCrossTrack * 1000) / 1000 : null,
           snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1000) : null,
           estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
-          ownMotionMs: finite(shot.ownMotionSeconds) ? Math.round(shot.ownMotionSeconds * 1000) : null,
           ownSnapshotAgeMs: finite(ownTrack?.age) ? Math.round(ownTrack.age * 1000) : null,
           ownEstimatedSpeed: finite(ownTrack?.vx) && finite(ownTrack?.vy) ? Math.round(Math.hypot(ownTrack.vx, ownTrack.vy) * 100) / 100 : null,
           historySamples: Array.isArray(track?.motion) ? track.motion.length : 0,
@@ -1156,7 +1126,7 @@ export class Features {
       inputBlockReason: this.inputBlockReason(),
       mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, capturingWrites: !!this.mouseInput.record?.captured, ...this.mouseInput.snapshot() },
       registry: { state: m?.registryState ?? 'waiting-mapping', ...m?.registryEvidence },
-      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, ownMotionCompensation: !!this.config.ownMotionCompensation, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, lockInstantFire: !!this.config.lockInstantFire, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || 'responsive' },
+      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || 'responsive' },
       aimPreparation: this.aimPreparation,
       runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: 'Script-local hook durations only; not game FPS, GPU time, network delay or hit rate.' },
       aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),

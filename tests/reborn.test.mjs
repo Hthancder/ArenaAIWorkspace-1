@@ -963,8 +963,10 @@ test('Mode groups are conditional; range adjustment keeps focus/DOM and open sta
     const mode = menu.root.querySelector('[data-config=aimMode]'); mode.value = 'lock'; mode.dispatchEvent(new dom.window.Event('change'));
     assert.equal(menu.root.querySelector('[data-config=assistStrength]'), null); assert.ok(menu.root.querySelector('[data-config=humanLikeAim]')); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, false, 'Human-like is on by default'); assert.equal(menu.root.querySelector('[data-config=smoothProfile]').closest('label').hidden, false); const profile = menu.root.querySelector('[data-config=smoothProfile]'); profile.focus(); profile.value = 'natural'; profile.dispatchEvent(new dom.window.Event('change')); assert.equal(menu.root.querySelector('details').open, true);
     const human = menu.root.querySelector('[data-config=humanLikeAim]'); human.click(); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, true); assert.equal(menu.root.querySelector('[data-config=smoothProfile]').closest('label').hidden, true); human.click();
-    const instant = menu.root.querySelector('[data-config=lockInstantFire]'); assert.ok(instant); assert.equal(instant.checked, false);
-    instant.click(); assert.equal(config.lockInstantFire, true); assert.equal(loadConfig(dom.window.localStorage).lockInstantFire, true);
+    assert.equal(menu.root.querySelector('[data-config=lockInstantFire]'), null); assert.equal(menu.root.querySelector('[data-config=ownMotionCompensation]'), null);
+    const migrated = normalizeConfig({ lockInstantFire: true, ownMotionCompensation: true, aimAllies: true, grenadeAimAllies: true });
+    assert.equal('lockInstantFire' in migrated, false); assert.equal('ownMotionCompensation' in migrated, false);
+    assert.equal(migrated.aimAllies, true); assert.equal(migrated.grenadeAimAllies, true);
     mode.value = 'off'; // old disconnected control must not be used after rerender
     const currentMode = menu.root.querySelector('[data-config=aimMode]'); currentMode.value = 'off'; currentMode.dispatchEvent(new dom.window.Event('change')); assert.equal(config.aim, false);
     assert.ok(!/SQUAD|ENEMY|legend/.test(menu.root.querySelector('#ui').textContent));
@@ -991,53 +993,8 @@ test('Final configuration is equivalent across unrelated visual toggle orders; s
   assert.deepEqual(outputs[0], outputs[1]);
 });
 
-test('own-motion experiment adjusts sender only with fresh matching movement and safe open space', () => {
-  const f = coordinated({ predict: true, wallcheck: true, ownMotionCompensation: true, humanLikeAim: false });
-  try {
-    const table = {};
-    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
-    f.engine.reconcile(true); f.engine.pre(); f.engine.capabilities.prediction = true;
-    for (const [time,y] of [[870,19.04],[910,19.36],[950,19.68],[990,20]]) f.engine.tracker.observe(f.app.game.hero, {x:10,y}, time, 0);
-    f.engine.timing.rtt = 80; f.engine.timing.lastRtt = 80; f.engine.timing.rttAt = 990;
-    const msg = new InputMsg(); msg.moveRight = false; msg.moveUp = true; msg.shootHold = true; msg.toMouseLen = 1.25;
-    f.app.game.transmit(3, msg);
-    let wire = f.app.game.sent.at(-1).data;
-    assert.ok(wire.toMouseDir.y < -.2, JSON.stringify(wire.toMouseDir));
-    assert.equal(f.engine.diagnostics().lastPrediction.ownMotionMs, 90); assert.equal(wire.shootHold, true);
-    msg.moveUp = false; f.app.game.transmit(3, msg); wire = f.app.game.sent.at(-1).data;
-    assert.ok(Math.abs(wire.toMouseDir.y) < .001, 'stopping immediately falls back to observed origin');
-    assert.equal(f.engine.diagnostics().lastPrediction.ownMotionMs, null);
-    msg.moveUp = true; f.engine.timing.rttAt = -1000; f.app.game.transmit(3, msg);
-    assert.equal(f.engine.diagnostics().lastPrediction.ownMotionMs, null, 'stale RTT fails closed');
-    f.engine.timing.rttAt = 990;
-    table[900] = { __id: 900, __type: 2, active: true, collidable: true, layer: 0, height: 1,
-      collider: { type: 0, pos: {x:10,y:22}, rad:.2 } };
-    f.app.game.transmit(3, msg);
-    assert.equal(f.engine.diagnostics().lastPrediction.ownMotionMs, null, 'nearby obstacle disables projected origin');
-    assert.equal(DEFAULTS.ownMotionCompensation, false);
-  } finally { f.close(); }
-});
-
-test('optional instant-fire Lock removes controller lag only while physical Fire is held', () => {
-  const f = coordinated({ aimMode: 'lock', aimActivation: 'key', humanLikeAim: true, smooth: 90, lockInstantFire: true, fov: 400 });
-  try {
-    f.engine.holdAim = true; f.app.input.mouseButtons[0] = false;
-    f.send(); const enemy = f.app.game.barn.playerPool.list[1]; enemy.p = { x: 12, y: 21 };
-    f.advance(17); f.send();
-    let evidence = f.engine.diagnostics().lastPrediction;
-    assert.ok(evidence.controllerErrorDeg > 1, JSON.stringify(evidence));
-    f.app.input.mouseButtons[0] = true; f.advance(17);
-    const result = f.send(); evidence = f.engine.diagnostics().lastPrediction;
-    assert.equal(evidence.controllerErrorDeg, 0); assert.ok(result.wire.toMouseDir.y > .4);
-    assert.equal(result.wire.shootHold, true); assert.equal(f.cfg.humanLikeAim, true);
-    f.app.input.mouseButtons[0] = false; enemy.p = { x: 12, y: 19 }; f.advance(17); f.send();
-    assert.ok(f.engine.diagnostics().lastPrediction.controllerErrorDeg > 1, 'human-like resumes without Fire');
-    assert.equal(DEFAULTS.lockInstantFire, false); assert.equal(normalizeConfig({ lockInstantFire: true }).lockInstantFire, true);
-  } finally { f.close(); }
-});
-
 test('direct fire Lock follows a stationary target as the shooter moves laterally', () => {
-  const f = coordinated({ humanLikeAim: true, smooth: 90, lockInstantFire: true, fov: 400 });
+  const f = coordinated({ humanLikeAim: false, smooth: 90, fov: 400 });
   try {
     f.send();
     for (const y of [20.1, 20.3, 20.5, 20.8]) {
@@ -1048,16 +1005,6 @@ test('direct fire Lock follows a stationary target as the shooter moves laterall
       assert.equal(wire.shootHold, true);
     }
   } finally { f.close(); }
-});
-
-test('instant-fire option does not change Assist blend', () => {
-  const outputs = [];
-  for (const lockInstantFire of [false, true]) {
-    const f = coordinated({ aimMode: 'assist', assistStrength: 35, lockInstantFire });
-    try { f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.5 }; outputs.push(f.send().wire.toMouseDir); }
-    finally { f.close(); }
-  }
-  assert.deepEqual(outputs[0], outputs[1]);
 });
 
 test('Lock Keep target stays authoritative while physical cursor crosses FOV, releases on Fire up', () => {
@@ -1884,6 +1831,49 @@ test('auto throw reports high latency instead of treating it as a mouse-hook fai
     assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.reason, 'latency-unavailable-or-high');
     assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.rttMs, 259);
     assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.lastRttMs, 259);
+  } finally { f.close(); }
+});
+
+test('stationary teammate Lock survives orbit, native mouse writes and sender across sparse updates', () => {
+  const f = coordinated({ aimAllies: true, predict: true, aimActivation: 'fire', fov: 400, humanLikeAim: false });
+  try {
+    const hero = f.app.game.hero, ally = f.app.game.barn.playerPool.list[1];
+    f.app.game.barn.teamInfo[10].playerIds.push(2); f.app.game.barn.teamInfo[20].playerIds = [];
+    hero.n.sourcePos = { x: 10, y: 20 }; ally.n.sourcePos = { x: 12, y: 20 };
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks', scale: 'scale' }; f.engine.capabilities.prediction = true;
+    const base = { fullObjects: [{ __id: 1, pos: hero.n.sourcePos }, { __id: 2, pos: ally.n.sourcePos }], partObjects: [], delObjIds: [], activePlayerData: {} };
+    f.engine.observeUpdate(base, f.dom.window.performance.now());
+    for (let i = 1; i <= 180; i++) {
+      f.advance(10); const now = f.dom.window.performance.now();
+      hero.n.sourcePos = { x: 10, y: 20 + .4 * Math.sin(i / 30) }; hero.p = hero.n.sourcePos;
+      if (i % 10 === 0) f.engine.observeUpdate({ ...base, fullObjects: [], partObjects: [{ __id: 1, pos: hero.n.sourcePos }] }, now);
+      f.app.input.mousePos.x = 500; f.app.input.mousePos.y = 300;
+      const { wire } = f.send();
+      assert.equal(wire.shootHold, true); assert.equal(f.engine.target, ally, `lost on frame ${i}: ${JSON.stringify(f.engine.stats)}`);
+      const expected = Math.atan2(20 - hero.n.sourcePos.y, 2);
+      assert.ok(Math.abs(Math.atan2(wire.toMouseDir.y, wire.toMouseDir.x) - expected) < .03, `wire on frame ${i}`);
+    }
+  } finally { f.close(); }
+});
+
+test('gun Lock keeps a stationary teammate through sustained sparse complete updates', () => {
+  const f = coordinated({ aim: true, aimMode: 'lock', aimAllies: true, predict: true, wallcheck: false, humanLikeAim: false });
+  try {
+    const hero = f.app.game.hero, ally = f.app.game.barn.playerPool.list[1];
+    f.app.game.barn.teamInfo[10].playerIds.push(2); f.app.game.barn.teamInfo[20].playerIds = [];
+    hero.n.sourcePos = { x: 10, y: 20 }; ally.n.sourcePos = { x: 12, y: 20.5 };
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks', scale: 'scale' }; f.engine.capabilities.prediction = true;
+    const full = { fullObjects: [{ __id: 1, pos: hero.n.sourcePos }, { __id: 2, pos: ally.n.sourcePos }], partObjects: [], delObjIds: [], activePlayerData: {} };
+    f.engine.observeUpdate(full, f.dom.window.performance.now());
+    for (let i=0; i<12; i++) {
+      f.advance(100); const now = f.dom.window.performance.now(); f.engine.lastMap = now;
+      f.engine.observeUpdate({ ...full, fullObjects: [] }, now);
+      const input = new InputMsg(); input.shootHold = true; input.toMouseLen = 1.25;
+      const result = f.engine.processAim(input, true);
+      assert.ok(result, `lost Lock on sparse update ${i}: ${JSON.stringify(f.engine.stats)}`);
+      assert.equal(f.engine.target, ally); assert.ok(result.dir.y > .2);
+    }
+    f.advance(300); assert.equal(f.engine.processAim(new InputMsg(), true), null, 'a stalled stream still fails closed');
   } finally { f.close(); }
 });
 

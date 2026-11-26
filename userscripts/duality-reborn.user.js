@@ -7199,21 +7199,6 @@ THE SOFTWARE.
     }
   };
 
-  // src/self-motion.mjs
-  function projectOwnOrigin(origin, track, movement, timing, now) {
-    if (!vec(origin) || !track || !vec(movement) || !finite(now)) return null;
-    if (!finite(track.age) || track.age < 0 || track.age > 0.1 || !Array.isArray(track.samples) || track.samples.length < 3) return null;
-    const first = track.samples[0], last = track.samples.at(-1);
-    if (!finite(first?.t) || !finite(last?.t) || last.t - first.t < 60 || !finite(track.error) || track.error > 0.12) return null;
-    const { vx, vy } = track, speed = Math.hypot(vx, vy), magnitude = Math.hypot(movement.x, movement.y);
-    if (!finite(vx) || !finite(vy) || speed < 0.6 || speed > 20 || magnitude < 0.5) return null;
-    if ((vx * movement.x + vy * movement.y) / (speed * magnitude) < 0.9) return null;
-    if (!finite(timing?.rtt) || !finite(timing?.lastRtt) || !finite(timing?.rttAt) || timing.rtt < 0 || timing.rtt > 200 || timing.lastRtt < 0 || timing.lastRtt > 200 || now < timing.rttAt || now - timing.rttAt > 1500) return null;
-    const seconds = Math.min(0.2, track.age + timing.rtt / 1e3);
-    return { x: origin.x + vx * seconds, y: origin.y + vy * seconds, seconds };
-  }
-  __name(projectOwnOrigin, "projectOwnOrigin");
-
   // src/aim-adapters.mjs
   function discoverInputTimeout(game) {
     const found = [];
@@ -8471,7 +8456,7 @@ THE SOFTWARE.
             } else {
               const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
               const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
-              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : !(self.config.ownMotionCompensation && modeOf(self.config) === "lock" && self.local?.data?.[self.local.slotKey] !== 3) && !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true, !!self.mouseInput.record?.captured);
+              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true, !!self.mouseInput.record?.captured);
             }
             if (manualEquip) {
               self.weaponSwitch.reset();
@@ -9066,12 +9051,6 @@ THE SOFTWARE.
       const obstacles = profile || cfg.wallcheck ? m.obstacles() : [];
       const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
       if (profile && muzzleObstacles.length > 1024) return fail("muzzle-obstacle-budget");
-      let ownProjection = null;
-      if (cfg.ownMotionCompensation && cfg.predict && cfg.wallcheck && !cfg.predictionStrict && mode === "lock" && !melee && profile && this.protocol === VERIFIED_PROTOCOL && this.capabilities.prediction && this.binds && !native?.touchMoveActive) {
-        const movement = native ? { x: Number(native.moveRight) - Number(native.moveLeft), y: Number(native.moveUp) - Number(native.moveDown) } : { x: Number(!!this.binds.isBindDown(1)) - Number(!!this.binds.isBindDown(0)), y: Number(!!this.binds.isBindDown(2)) - Number(!!this.binds.isBindDown(3)) };
-        const candidate = projectOwnOrigin(pos, this.tracker.estimate(m.active, now), movement, this.timing, now);
-        if (candidate && !segmentCandidates(obstacles, pos, candidate, Math.abs(profile.offset) + profile.barrel + selfRadius + 1.5).length) ownProjection = candidate;
-      }
       for (const candidate of ordered.slice(0, 6)) {
         let shot, track = null;
         if (melee) shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos, distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: "melee" };
@@ -9080,9 +9059,9 @@ THE SOFTWARE.
           const predictionReady = !!(cfg.predict && profile && this.capabilities.prediction);
           track = predictionReady ? this.tracker.estimate(candidate.p, now) : null;
           let inferredStationary = false;
-          if (predictionReady && !track && this.tracker.states.has(candidate.p)) {
+          if (predictionReady && (!track || track.age > 0.15) && this.tracker.states.has(candidate.p)) {
             const stationary = this.grenadeTracker.estimate(candidate.p, now);
-            const recent = stationary && stationary.age <= 0.15 && stationary.samples?.length >= 3 && Math.hypot(stationary.vx, stationary.vy) < 0.2 && stationary.samples.every((s) => Math.hypot(s.p.x - stationary.pos.x, s.p.y - stationary.pos.y) < 0.02);
+            const recent = stationary && stationary.age <= 0.15 && stationary.samples?.length >= 2 && Math.hypot(stationary.vx, stationary.vy) < 0.2 && stationary.samples.every((s) => Math.hypot(s.p.x - stationary.pos.x, s.p.y - stationary.pos.y) < 0.02);
             if (!cfg.predictionStrict && recent) {
               track = { ...stationary, vx: 0, vy: 0, error: 0, velocityError: 0, motion: [] };
               inferredStationary = true;
@@ -9101,8 +9080,8 @@ THE SOFTWARE.
               approximate: true
             };
           } else {
-            const solve = /* @__PURE__ */ __name((origin) => predictShot({
-              origin,
+            shot = predictShot({
+              origin: pos,
               target: candidate.pos,
               track,
               profile,
@@ -9111,17 +9090,8 @@ THE SOFTWARE.
               lead: (cfg.leadAdjustment ?? 100) / 100,
               radius: at2(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
               stabilize: mode === "lock" && cfg.stabilizeStrafe !== false,
-              muzzleFor: /* @__PURE__ */ __name((origin2, dir2, model) => clippedMuzzle(origin2, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1, selfRadius), "muzzleFor")
-            }), "solve");
-            shot = solve(ownProjection || pos);
-            if (ownProjection && (!shot.dir || shotLayer(ownProjection, shot.dir, rawLayer, selfRadius, structures || []) !== layerFor(shot.dir))) {
-              ownProjection = null;
-              shot = solve(pos);
-            }
-            if (shot.dir && ownProjection) {
-              shot.ownMotionSeconds = ownProjection.seconds;
-              shot.approximate = true;
-            }
+              muzzleFor: /* @__PURE__ */ __name((origin, dir2, model) => clippedMuzzle(origin, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1, selfRadius), "muzzleFor")
+            });
             if (shot.dir && cfg.predict && !track) {
               shot.state = predictionReady ? "direct-awaiting-snapshot" : "direct-prediction-unavailable";
               shot.approximate = true;
@@ -9152,16 +9122,6 @@ THE SOFTWARE.
           if (cfg.sticky && !warming) this.stickyId = candidate.p.__id;
           return fail("wall-blocked");
         }
-        if (ownProjection && shot.ownMotionSeconds) {
-          const currentMuzzle = clippedMuzzle(pos, shot.dir, profile, muzzleObstacles, layerFor(shot.dir), rawLayer & 1, selfRadius);
-          const length = Math.hypot(shot.world.x - currentMuzzle.x, shot.world.y - currentMuzzle.y) + hitRadius;
-          const from = { pos: currentMuzzle, layer: layerFor(shot.dir) }, to = { pos: { x: currentMuzzle.x + shot.dir.x * length, y: currentMuzzle.y + shot.dir.y * length } };
-          if (this.blocked(from, to, true, obstacles) || this.blockedByPlayer(from, to, candidate.p, players)) {
-            reject("wall");
-            if (cfg.sticky && !warming) this.stickyId = candidate.p.__id;
-            return fail("wall-blocked");
-          }
-        }
         if (warming) {
           this.aimPreparation = { state: "ready", prediction: shot.state, approximate: !!shot.approximate };
           this.stats.aimState = "waiting-activation";
@@ -9173,14 +9133,13 @@ THE SOFTWARE.
         this.stickyId = candidate.p.__id;
         this.stats.predictionState = shot.state;
         this.stats.aimApproximate = !!shot.approximate;
-        const instantFire = !melee && mode === "lock" && cfg.lockInstantFire && firing;
         const dir = advance2 ? this.aimController.step(physical, shot.dir, {
           mode: melee ? "lock" : mode,
           strength: cfg.assistStrength ?? 35,
-          smooth: melee || !cfg.humanLikeAim || instantFire ? 0 : cfg.smooth,
+          smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth,
           now,
           target: candidate.p,
-          humanLike: !!cfg.humanLikeAim && !instantFire,
+          humanLike: !!cfg.humanLikeAim,
           profile: cfg.smoothProfile || "responsive",
           cursorRadius: Math.hypot(mouse.x - read(camera.camera, camera.widthKey) / 2, mouse.y - read(camera.camera, camera.heightKey) / 2),
           targetRadius: shot.distance * scale
@@ -9213,7 +9172,6 @@ THE SOFTWARE.
             visualCrossTrack: finite(visualCrossTrack) ? Math.round(visualCrossTrack * 1e3) / 1e3 : null,
             snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1e3) : null,
             estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
-            ownMotionMs: finite(shot.ownMotionSeconds) ? Math.round(shot.ownMotionSeconds * 1e3) : null,
             ownSnapshotAgeMs: finite(ownTrack?.age) ? Math.round(ownTrack.age * 1e3) : null,
             ownEstimatedSpeed: finite(ownTrack?.vx) && finite(ownTrack?.vy) ? Math.round(Math.hypot(ownTrack.vx, ownTrack.vy) * 100) / 100 : null,
             historySamples: Array.isArray(track?.motion) ? track.motion.length : 0,
@@ -9660,7 +9618,7 @@ THE SOFTWARE.
         inputBlockReason: this.inputBlockReason(),
         mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, capturingWrites: !!this.mouseInput.record?.captured, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
-        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, ownMotionCompensation: !!this.config.ownMotionCompensation, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, lockInstantFire: !!this.config.lockInstantFire, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || "responsive" },
+        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || "responsive" },
         aimPreparation: this.aimPreparation,
         runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: "Script-local hook durations only; not game FPS, GPU time, network delay or hit rate." },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
@@ -9699,7 +9657,6 @@ THE SOFTWARE.
     humanLikeAim: true,
     smooth: 50,
     smoothProfile: "responsive",
-    lockInstantFire: false,
     predictionStrict: false,
     knocked: false,
     sticky: true,
@@ -9713,7 +9670,6 @@ THE SOFTWARE.
     wallcheck: true,
     predict: true,
     stabilizeStrafe: true,
-    ownMotionCompensation: false,
     melee: false,
     autoMelee: false,
     autoSwitch: false,
@@ -9819,11 +9775,11 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 `;
   var GROUPS = {
     Main: [
-      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["lockInstantFire", "Lock tức thời khi giữ Fire", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
+      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
       ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["aimAllies", "Nhắm đồng đội (debug; cả địch)", "aim"], ["wallcheck", "Wallcheck", "wallcheck"], [null, "Lock + Keep target: sau khi chọn trong FOV, giữ mục tiêu trong lần kích hoạt kể cả khi chuột ra ngoài FOV. Vật cản/người chắn vẫn khiến aim nhả. Assist vẫn theo FOV."]]],
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
-      ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["ownMotionCompensation", "Bù di chuyển bản thân (thử nghiệm)", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
-      ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Lock tức thời khi giữ Fire bỏ smooth trong lúc bắn; không tự bắn và không xóa độ trễ mạng. Shotgun vẫn chịu random pellet spread."]]],
+      ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
+      ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread."]]],
       ["Grenade Aim (thử nghiệm)", [["grenadeAimMode", "Chế độ"], ["grenadeAimActivation", "Kích hoạt Assist / Lock"], ["grenadeAssistStrength", "Lực Assist bom (%)"], ["grenadeFov", "FOV bom (pixel)"], ["grenadeAimAllies", "Nhắm bom vào đồng đội (debug; cả địch)"], ["grenadeAutoThrow", "Tự thả (thử nghiệm, chỉ Lock)"], [null, "Debug đồng đội có thể chọn cả địch và đồng đội; Auto Throw có thể tự thả vào mục tiêu đã chọn. Không tự bắt đầu giữ. Mạng và fuse chưa xác nhận; không bảo đảm an toàn hoặc trúng."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
       ["Auto Switch", [["autoSwitch", "Enabled", "switch"], ["useOneGun", "Use One Gun (switch away then return)", "switch"], [null, "Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server."]]],
@@ -9988,7 +9944,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
           const details = el("details");
           details.open = openGroups.get(name) ?? (name.includes("Mode") || name === "Aim — Prediction");
           details.ontoggle = () => openGroups.set(name, details.open);
-          const visible = rows.filter(([key]) => key !== "assistStrength" || config.aim && config.aimMode === "assist").filter(([key]) => !["smooth", "smoothProfile", "lockInstantFire"].includes(key) || config.aimMode === "lock");
+          const visible = rows.filter(([key]) => key !== "assistStrength" || config.aim && config.aimMode === "assist").filter(([key]) => !["smooth", "smoothProfile"].includes(key) || config.aimMode === "lock");
           details.append(el("summary", { text: name }), ...visible.map(row));
           panel.append(details);
         }
