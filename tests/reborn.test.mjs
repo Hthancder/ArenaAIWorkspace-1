@@ -1468,6 +1468,9 @@ test('grenade preview, assist and lock are isolated and preserve native Fire; mi
     assert.equal(switched.shootHold, true); assert.equal(f.engine.grenadeAimTimer.active, null);
     f.engine.manualEquipHeld = false; f.app.input.mouseButtons[0] = false;
     f.engine.mapping.map = {}; assert.equal(f.engine.processAim(input, true), null); assert.equal(f.engine.grenadeState, 'missing-terrain');
+    f.engine.focusBlocked = true; f.advance(100); assert.equal(f.engine.processAim(input, true), null);
+    assert.deepEqual(f.engine.diagnostics().grenadeAim.last, { state: 'missing-terrain', ageMs: 100 }, 'diagnostic survives blocked input/menu focus');
+    f.engine.focusBlocked = false;
     f.dom.window.dispatchEvent(new f.dom.window.Event('blur')); assert.equal(f.engine.grenadeAimTimer.active, null);
   } finally { f.close(); }
 });

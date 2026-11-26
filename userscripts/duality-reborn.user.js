@@ -7898,6 +7898,7 @@ THE SOFTWARE.
       this.grenadeAimTimer = new GrenadeTimer();
       this.grenadePlan = null;
       this.grenadeState = "off";
+      this.lastGrenadeEvidence = null;
       this.timing = new NetworkTiming();
       this.grenadeTimer = new GrenadeTimer();
       this.names = new NativeNames();
@@ -8052,6 +8053,7 @@ THE SOFTWARE.
       this.grenadeAimTimer.reset();
       this.grenadePlan = null;
       this.grenadeState = "off";
+      this.lastGrenadeEvidence = null;
       this.lastAimSent = null;
       this.aimOutput = null;
       this.aimPlan = null;
@@ -8437,8 +8439,12 @@ THE SOFTWARE.
     }
     processGrenadeAim({ native, applyDirect, pos, mouse, camera, physical, firing, now }) {
       const m = this.mapping, cfg = this.config, mode = cfg.grenadeAimMode;
+      const record = /* @__PURE__ */ __name((state) => {
+        this.grenadeState = state;
+        this.lastGrenadeEvidence = { state, recordedAt: now };
+      }, "record");
       const fail = /* @__PURE__ */ __name((reason) => {
-        this.grenadeState = reason;
+        record(reason);
         this.grenadePlan = null;
         return null;
       }, "fail");
@@ -8470,6 +8476,7 @@ THE SOFTWARE.
         if (distance <= cfg.fov) candidates.push({ p, target, track, distance });
       }
       candidates.sort((a, b) => a.distance - b.distance);
+      if (!candidates.length) return fail("no-target-or-fresh-track");
       const obstacles = m.obstacles();
       const groundAt = /* @__PURE__ */ __name((point2, floor) => {
         const result = Reflect.apply(surface, map, [point2, floor]);
@@ -8485,7 +8492,7 @@ THE SOFTWARE.
           continue;
         }
         this.grenadePlan = { points: solution.points, end: solution.end, type: ctx.type };
-        this.grenadeState = timer ? "estimate-unconfirmed" : "estimate-before-throw";
+        record(timer ? "estimate-unconfirmed" : "estimate-before-throw");
         if (mode === "preview" || cfg.grenadeAimActivation !== "equip" && !firing && !timer) return null;
         const strength = mode === "assist" ? clamp((cfg.grenadeAssistStrength ?? 35) / 100, 0, 1) : 1;
         if (strength === 0) return null;
@@ -9129,7 +9136,11 @@ THE SOFTWARE.
         checks,
         autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
         grenadeTimer: { enabled: !!this.config.grenadeTimer, state: this.grenadeTimer.active ? "forwarded-edge-unconfirmed" : this.config.grenadeTimer ? "waiting-for-edge" : "disabled" },
-        grenadeAim: { mode: this.config.grenadeAimMode || "off", state: this.grenadeState },
+        grenadeAim: {
+          mode: this.config.grenadeAimMode || "off",
+          state: this.grenadeState,
+          last: this.lastGrenadeEvidence ? { state: this.lastGrenadeEvidence.state, ageMs: Math.max(0, Math.round(this.win.performance.now() - this.lastGrenadeEvidence.recordedAt)) } : null
+        },
         mapHighlights: { ...this.mapHighlights.stats },
         nativeNames: { ...this.names.stats },
         inputBlockReason: this.inputBlockReason(),
