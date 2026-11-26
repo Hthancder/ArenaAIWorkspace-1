@@ -124,6 +124,24 @@ check(
     "embedded assets must not be cacheable",
 )
 
+
+# 10) The HTTP request path must not write flash/SD/Serial. isValidWebUISession()
+#     runs on the AsyncWebServer task for every authenticated request and used to
+#     call saveFile(), which rewrites the config to LittleFS, copies it to the SD
+#     card and pretty-prints it to USB Serial. That can hold the task for seconds
+#     and is exactly how /ota/begin ends up never answered.
+cfg = read("src/core/config.cpp")
+check(
+    "no flash write on the auth path",
+    "saveFile();\n    return true;" not in cfg.split("bool BruceConfig::isValidWebUISession")[1][:1400],
+    "isValidWebUISession must not persist on every request",
+)
+check(
+    "saveFile does not dump to Serial",
+    "serializeJsonPretty(jsonDoc, Serial)" not in cfg,
+    "a multi-KB USB-CDC dump on every config save stalls the caller",
+)
+
 if fails:
     print("UI/UX consistency checks FAILED:")
     for f in fails:

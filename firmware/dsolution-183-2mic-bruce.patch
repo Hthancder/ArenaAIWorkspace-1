@@ -11669,7 +11669,7 @@ index d8ec5e0..d1c5953 100644
  	; elecrow-28B
  	; elecrow-35B
 diff --git a/src/core/config.cpp b/src/core/config.cpp
-index e7ceca1..3bc596c 100644
+index e7ceca1..9e16c52 100644
 --- a/src/core/config.cpp
 +++ b/src/core/config.cpp
 @@ -14,6 +14,8 @@ JsonDocument BruceConfig::toJson() const {
@@ -11831,7 +11831,20 @@ index e7ceca1..3bc596c 100644
      if (!setting["disabledMenus"].isNull()) {
          disabledMenus.clear();
          JsonArray dm = setting["disabledMenus"].as<JsonArray>();
-@@ -474,11 +582,16 @@ void BruceConfig::factoryReset() {
+@@ -455,8 +563,10 @@ void BruceConfig::saveFile() {
+         return;
+     };
+ 
+-    // Serialize JSON to file
+-    serializeJsonPretty(jsonDoc, Serial);
++    // Serialize JSON to file. Do NOT also dump it to Serial here: saveFile()
++    // is called from the UI task on every setting change, USB-CDC writes block
++    // when no host is attached, and a multi-kilobyte pretty-printed dump on
++    // each save is a debug leftover that stalls the caller.
+     if (serializeJsonPretty(jsonDoc, file) < 5) log_e("Failed to write config file");
+     else log_i("config file written successfully");
+ 
+@@ -474,11 +584,16 @@ void BruceConfig::factoryReset() {
  
  void BruceConfig::validateConfig() {
      validateDimmerValue();
@@ -11848,7 +11861,7 @@ index e7ceca1..3bc596c 100644
  #ifdef HAS_RGB_LED
      validateLedBrightValue();
      validateLedColorValue();
-@@ -493,6 +606,7 @@ void BruceConfig::validateConfig() {
+@@ -493,6 +608,7 @@ void BruceConfig::validateConfig() {
      validateMainMenuStyle();
      validateBadUSBBLEKeyboardLayout();
      validateBadUSBBLEKeyDelay();
@@ -11856,7 +11869,7 @@ index e7ceca1..3bc596c 100644
      validateEvilEndpointCreds();
      validateEvilEndpointSsid();
      validateEvilPasswordMode();
-@@ -511,8 +625,29 @@ void BruceConfig::setDimmer(int value) {
+@@ -511,8 +627,29 @@ void BruceConfig::setDimmer(int value) {
  }
  
  void BruceConfig::validateDimmerValue() {
@@ -11888,7 +11901,7 @@ index e7ceca1..3bc596c 100644
  }
  
  void BruceConfig::setBright(uint8_t value) {
-@@ -580,6 +715,58 @@ void BruceConfig::validateWifiAtStartupValue() {
+@@ -580,6 +717,58 @@ void BruceConfig::validateWifiAtStartupValue() {
      if (wifiAtStartup > 1) wifiAtStartup = 1;
  }
  
@@ -11947,7 +11960,7 @@ index e7ceca1..3bc596c 100644
  #ifdef HAS_RGB_LED
  void BruceConfig::setLedBright(int value) {
      ledBright = value;
-@@ -801,7 +988,7 @@ void BruceConfig::setMainMenuStyle(int value) {
+@@ -801,7 +990,7 @@ void BruceConfig::setMainMenuStyle(int value) {
  
  void BruceConfig::validateMainMenuStyle() {
      if (mainMenuStyle < MAIN_MENU_CAROUSEL || mainMenuStyle > MAIN_MENU_GRID)
@@ -11956,7 +11969,7 @@ index e7ceca1..3bc596c 100644
  }
  
  void BruceConfig::setBadUSBBLEKeyboardLayout(int value) {
-@@ -829,6 +1016,44 @@ void BruceConfig::setBadUSBBLEShowOutput(bool value) {
+@@ -829,6 +1018,44 @@ void BruceConfig::setBadUSBBLEShowOutput(bool value) {
      badUSBBLEShowOutput = value;
      saveFile();
  }
@@ -12001,6 +12014,27 @@ index e7ceca1..3bc596c 100644
  void BruceConfig::ensureMifareKeysLoaded() {
      if (!_mifareKeysLoaded) {
          MifareKeysManager::ensureLoaded(mifareKeys);
+@@ -909,13 +1136,18 @@ bool BruceConfig::isValidWebUISession(const String &token) {
+         return true; // Already most recent, no changes needed
+     }
+ 
+-    // Move token to end and save
++    // Move token to end. Deliberately in RAM only, no saveFile(): this runs on
++    // the AsyncWebServer task for *every* authenticated request, and saveFile()
++    // rewrites the whole config to LittleFS, copies it to the SD card and dumps
++    // it to USB Serial. A request path must not touch flash, let alone an SD
++    // card, or a single request can hold the HTTP task for seconds -- that is
++    // how /ota/begin ends up unanswered while the browser waits on it.
++    // Session order is a convenience, not state worth persisting.
+     webUISessions.erase(it);
+     webUISessions.push_back(token);
+ 
+     // Limit to maximum 10 sessions
+     if (webUISessions.size() > 10) { webUISessions.erase(webUISessions.begin()); }
+ 
+-    saveFile();
+     return true;
+ }
 diff --git a/src/core/config.h b/src/core/config.h
 index 72d69eb..7fbd4ed 100644
 --- a/src/core/config.h
