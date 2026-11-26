@@ -1086,7 +1086,7 @@ test('Lock aligns the native body after game render and yields on release, Assis
     assert.equal(hero.bodyContainer.rotation, .75, 'release never overrides native render');
     f.app.input.mouseButtons[0] = true; f.cfg.aimMode = 'assist'; f.advance(); f.engine.pre();
     hero.bodyContainer.rotation = .5; f.engine.post(); assert.equal(hero.bodyContainer.rotation, .5, 'Assist is not forced');
-    f.cfg.aimMode = 'lock'; f.cfg.wallcheck = true; f.engine.capabilities.wallcheck = true; f.engine.blocked = () => true;
+    f.cfg.aimMode = 'lock'; f.cfg.wallcheck = true; f.engine.capabilities.wallcheck = true; f.engine.mapping.creator = { table: {} }; f.engine.mapping.registryKey = 'table'; f.engine.blocked = () => true;
     f.advance(); f.engine.pre(); hero.bodyContainer.rotation = .3; f.engine.post();
     assert.equal(f.engine.stats.aimState, 'wall-blocked'); assert.equal(hero.bodyContainer.rotation, .3, 'blocked aim yields visual control');
   } finally { f.close(); }
@@ -1407,6 +1407,22 @@ test('Wallcheck treats another player as blocking, and fails closed on unknown o
   } finally { f.close(); }
 });
 
+test('Wallcheck fails closed if a discovered registry disappears or cannot be scanned, then recovers', () => {
+  const f = coordinated({ wallcheck: true });
+  try {
+    const enemy = f.app.game.barn.playerPool.list[1]; enemy.p = { x: 12, y: 20.4 };
+    const creator = f.app.game.creator = { table: {}, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true); f.send(); assert.equal(f.engine.stats.aimState, 'input-applied');
+    const table = creator.table; creator.table = null;
+    f.advance(); const missing = f.send();
+    assert.equal(f.engine.stats.aimState, 'wallcheck-unavailable'); assert.equal(f.engine.target, null);
+    assert.deepEqual(missing.wire.toMouseDir, missing.native.toMouseDir); assert.equal(missing.wire.shootHold, true);
+    creator.table = new Proxy({}, { ownKeys() { throw Error('cannot scan'); } });
+    f.advance(); f.send(); assert.equal(f.engine.stats.aimState, 'wallcheck-unavailable');
+    creator.table = table; f.advance(); f.send(); assert.equal(f.engine.stats.aimState, 'input-applied');
+  } finally { f.close(); }
+});
+
 test('ally gun targeting is opt-in, independent of grenade, and excludes unknown teams', () => {
   const f = coordinated({ grenadeAimAllies: true });
   try {
@@ -1715,7 +1731,7 @@ test('grenade preview, assist and lock are isolated and preserve native Fire; mi
     hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = [];
     enemy.n.sourcePos = { x: 12, y: 20 }; f.app.input.mouseButtons[0] = false;
     f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' };
-    f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true;
+    f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true; f.engine.mapping.creator = { table: {} }; f.engine.mapping.registryKey = 'table';
     f.engine.mapping.map = { getGroundSurface() { return { type: 'grass' }; } };
     const now = f.dom.window.performance.now();
     for (const t of [now - 66, now - 33, now]) {
@@ -1723,6 +1739,11 @@ test('grenade preview, assist and lock are isolated and preserve native Fire; mi
     }
     const input = new InputMsg(); input.toMouseLen = 2;
     assert.equal(f.engine.processAim(input, true), null); assert.ok(f.engine.grenadePlan, f.engine.grenadeState);
+    f.engine.mapping.creator.table = null;
+    f.cfg.grenadeAimMode = 'lock'; assert.equal(f.engine.processAim(input, true), null);
+    assert.equal(f.engine.grenadeState, 'missing-geometry'); assert.equal(f.engine.grenadePlan, null);
+    f.engine.mapping.creator.table = {}; f.cfg.grenadeAimMode = 'preview';
+    assert.equal(f.engine.processAim(input, true), null); assert.ok(f.engine.grenadePlan, 'plan recovers with readable geometry');
     // Same target is confirmed ally. Gun toggle alone must not enable grenade targeting.
     f.app.game.barn.teamInfo[10].playerIds.push(2); f.app.game.barn.teamInfo[20].playerIds = [];
     f.cfg.aimAllies = true; f.cfg.grenadeAimAllies = false;
@@ -1783,7 +1804,7 @@ test('experimental auto throw releases only a verified live hold, then suppresse
     hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = [];
     enemy.n.sourcePos = { x: 20, y: 20 };
     f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' };
-    f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true;
+    f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true; f.engine.mapping.creator = { table: {} }; f.engine.mapping.registryKey = 'table';
     f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
     const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
     const update = { fullObjects: [{ __id: hero.__id, pos: hero.n.sourcePos }, { __id: enemy.__id, pos: enemy.n.sourcePos }], partObjects: [], delObjIds: [], activePlayerData: {} };
@@ -1812,7 +1833,7 @@ test('auto throw yields immediately on lost terrain and cannot retarget before p
     const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
     f.engine.definitions.frag = { type: 'throwable', cookable: true, fuseTime: 4, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
     hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = []; enemy.n.sourcePos = { x: 20, y: 20 };
-    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' }; f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true;
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' }; f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true; f.engine.mapping.creator = { table: {} }; f.engine.mapping.registryKey = 'table';
     f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
     const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; input.toMouseDir = { x: 0, y: 1 }; input.toMouseLen = 4; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
     send(true);
@@ -1880,7 +1901,7 @@ test('aim does not prepare in FOV before Fire and checks blocking after activati
     const wire = f.app.game.sent.at(-1).data;
     assert.equal(wire.shootStart, false); assert.equal(wire.shootHold, false); assert.deepEqual(wire.toMouseDir, up.toMouseDir);
     // The preview is never applied later: re-evaluate blocking at Fire time.
-    f.cfg.wallcheck = true; f.engine.capabilities.wallcheck = true; f.engine.blocked = () => true;
+    f.cfg.wallcheck = true; f.engine.capabilities.wallcheck = true; f.engine.mapping.creator = { table: {} }; f.engine.mapping.registryKey = 'table'; f.engine.blocked = () => true;
     f.app.input.mouseButtons[0] = true;
     const down = new InputMsg(); down.shootStart = true; down.shootHold = true; down.toMouseLen = 1.25;
     f.app.game.transmit(3, down);
@@ -1965,7 +1986,7 @@ test('auto throw reports high latency instead of treating it as a mouse-hook fai
     const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
     f.engine.definitions.frag = { type: 'throwable', cookable: true, fuseTime: 4, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
     hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = []; enemy.n.sourcePos = { x: 20, y: 20 };
-    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' }; f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true;
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' }; f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true; f.engine.mapping.creator = { table: {} }; f.engine.mapping.registryKey = 'table';
     f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
     const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
     send(true);

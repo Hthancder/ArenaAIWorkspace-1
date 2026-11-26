@@ -11,10 +11,15 @@ test('single fresh geometry scan matches legacy selection without invoking acces
   Object.defineProperty(table, 'getter', { get() { calls++; throw Error('must not run'); }, configurable: true });
   const legacy = () => ({ structures: entries(table).map(([, o]) => o).filter(o => Array.isArray(read(o, 'stairs'))),
     obstacles: entries(table).map(([, o]) => o).filter(o => read(o, '__type') === 2 || object(read(o, 'collider')) && typeof read(o, 'collidable') === 'boolean') });
-  assert.deepEqual(geometryObjects(table), legacy());
-  delete table.a; table.newWall = { __type: 2, collider: { type: 1, min: { x: 0, y: 0 }, max: { x: 2, y: 2 } } };
-  assert.deepEqual(geometryObjects(table), legacy(), 'registry mutations are reflected on the next solve');
-  assert.equal(calls, 0);
+  const first = geometryObjects(table);
+  assert.deepEqual({ obstacles: first.obstacles, structures: first.structures }, legacy());
+  assert.equal(first.valid, false, 'accessor may hide geometry');
+  delete table.getter; delete table.a; table.newWall = { __type: 2, collider: { type: 1, min: { x: 0, y: 0 }, max: { x: 2, y: 2 } } };
+  const second = geometryObjects(table);
+  assert.deepEqual({ obstacles: second.obstacles, structures: second.structures }, legacy(), 'registry mutations are reflected on the next solve');
+  assert.equal(second.valid, true); assert.equal(calls, 0);
+  assert.equal(geometryObjects(null).valid, false);
+  assert.equal(geometryObjects(new Proxy({}, { ownKeys() { throw Error('unreadable'); } })).valid, false);
 });
 
 test('wallcheck broadphase reorder preserves relevant obstacle set and unsupported shapes', () => {

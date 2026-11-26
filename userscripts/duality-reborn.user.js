@@ -7328,19 +7328,23 @@ THE SOFTWARE.
   // src/aim-geometry.mjs
   function geometryObjects(registry) {
     const obstacles = [], structures = [];
-    if (!registry || typeof registry !== "object" && typeof registry !== "function") return { obstacles, structures };
+    if (!registry || typeof registry !== "object" && typeof registry !== "function" || Array.isArray(registry)) return { obstacles, structures, valid: false };
+    let valid = true;
     try {
       for (const key of Object.getOwnPropertyNames(registry)) {
         const descriptor = Object.getOwnPropertyDescriptor(registry, key);
-        if (!descriptor || !("value" in descriptor)) continue;
+        if (!descriptor || !("value" in descriptor)) {
+          valid = false;
+          continue;
+        }
         const o = descriptor.value;
         if (Array.isArray(read(o, "stairs"))) structures.push(o);
         if (read(o, "__type") === 2 || read(o, "collider") !== null && typeof read(o, "collider") === "object" && typeof read(o, "collidable") === "boolean") obstacles.push(o);
       }
     } catch {
-      return { obstacles: [], structures: [] };
+      return { obstacles: [], structures: [], valid: false };
     }
-    return { obstacles, structures };
+    return { obstacles, structures, valid };
   }
   __name(geometryObjects, "geometryObjects");
   function shotLayer(pos, direction, layer, radius, structures) {
@@ -8943,7 +8947,9 @@ THE SOFTWARE.
       }
       candidates.sort((a, b) => a.distance - b.distance);
       if (!candidates.length) return fail("no-target-or-fresh-track");
-      const obstacles = m.obstacles();
+      const geometry = geometryObjects(read(m.creator, m.registryKey));
+      if (!geometry.valid) return fail("missing-geometry");
+      const obstacles = geometry.obstacles;
       const drySurfaces = /* @__PURE__ */ new Set(["asphalt", "brick", "bunker", "carpet", "container", "grass", "shack", "snow", "stone", "tile", "warehouse", "house", "sand"]);
       const groundAt = /* @__PURE__ */ __name((point2, floor) => {
         const result = Reflect.apply(surface, map, [point2, floor]);
@@ -9097,6 +9103,7 @@ THE SOFTWARE.
           reject("outsideFov");
           continue;
         }
+        if (cfg.wallcheck && !world().valid) return fail("wallcheck-unavailable");
         if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical))) {
           reject("otherLayer");
           continue;

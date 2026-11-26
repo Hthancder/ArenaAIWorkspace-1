@@ -6,17 +6,20 @@ import { rayHit } from './previews.mjs';
 // reuse membership across packets: newly spawned/moved cover must be visible.
 export function geometryObjects(registry) {
   const obstacles = [], structures = [];
-  if (!registry || typeof registry !== 'object' && typeof registry !== 'function') return { obstacles, structures };
+  if (!registry || typeof registry !== 'object' && typeof registry !== 'function' || Array.isArray(registry)) return { obstacles, structures, valid: false };
+  let valid = true;
   try {
     for (const key of Object.getOwnPropertyNames(registry)) {
       const descriptor = Object.getOwnPropertyDescriptor(registry, key);
-      if (!descriptor || !('value' in descriptor)) continue;
+      // A disappearing entry or accessor could hide a world object. Do not
+      // invoke it, and do not claim the wallcheck snapshot is complete.
+      if (!descriptor || !('value' in descriptor)) { valid = false; continue; }
       const o = descriptor.value;
       if (Array.isArray(read(o, 'stairs'))) structures.push(o);
       if (read(o, '__type') === 2 || read(o, 'collider') !== null && typeof read(o, 'collider') === 'object' && typeof read(o, 'collidable') === 'boolean') obstacles.push(o);
     }
-  } catch { return { obstacles: [], structures: [] }; }
-  return { obstacles, structures };
+  } catch { return { obstacles: [], structures: [], valid: false }; }
+  return { obstacles, structures, valid };
 }
 
 // Structure.stairs is public client state built from shared map definitions.

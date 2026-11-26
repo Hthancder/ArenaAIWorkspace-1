@@ -621,7 +621,9 @@ export class Features {
     }
     candidates.sort((a, b) => a.distance - b.distance);
     if (!candidates.length) return fail('no-target-or-fresh-track');
-    const obstacles = m.obstacles();
+    const geometry = geometryObjects(read(m.creator, m.registryKey));
+    if (!geometry.valid) return fail('missing-geometry');
+    const obstacles = geometry.obstacles;
     // Only accept surface types present in the pinned upstream contract. An
     // unknown future surface must not silently be treated as dry ground.
     const drySurfaces = new Set(['asphalt', 'brick', 'bunker', 'carpet', 'container', 'grass', 'shack', 'snow', 'stone', 'tile', 'warehouse', 'house', 'sand']);
@@ -726,6 +728,9 @@ export class Features {
       const retainLock = !melee && mode === 'lock' && trigger && stickyCurrent;
       const radius = melee ? reach : cfg.fov * (stickyCurrent ? 1.25 : 1);
       if (!retainLock && distance > radius) { reject('outsideFov'); continue; }
+      // The discovered registry can disappear or become unreadable between
+      // reconciliations. An empty failed scan is not evidence of clear cover.
+      if (cfg.wallcheck && !world().valid) return fail('wallcheck-unavailable');
       if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical))) { reject('otherLayer'); continue; }
       // A real switch margin prevents two enemies on opposite sides of the FOV from
       // trading ownership every frame. The current target needs to be meaningfully
