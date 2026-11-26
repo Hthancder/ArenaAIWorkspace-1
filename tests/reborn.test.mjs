@@ -1622,3 +1622,26 @@ test('auto throw reports high latency instead of treating it as a mouse-hook fai
     assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.lastRttMs, 259);
   } finally { f.close(); }
 });
+
+test('gun Lock retains stationary enemy on continuous source-shaped updates, but never across a stall', () => {
+  const f = coordinated({ aim: true, aimMode: 'lock', aimActivation: 'fire', humanLikeAim: false, predict: true, wallcheck: false, grenadeAimMode: 'off' });
+  try {
+    const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+    hero.n.sourcePos = { x: 10, y: 20 }; enemy.n.sourcePos = { x: 12, y: 20 };
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks', scale: 'scale' }; f.engine.capabilities.prediction = true;
+    const full = { fullObjects: [{ __id: hero.__id, pos: hero.n.sourcePos }, { __id: enemy.__id, pos: enemy.n.sourcePos }], partObjects: [], delObjIds: [], activePlayerData: {} };
+    const empty = { ...full, fullObjects: [] };
+    f.engine.observeUpdate(full, f.dom.window.performance.now());
+    for (let i = 0; i < 12; i++) { f.advance(33); const now = f.dom.window.performance.now(); f.engine.lastMap = now; f.engine.observeUpdate(empty, now); }
+    assert.equal(f.engine.tracker.estimate(enemy, f.dom.window.performance.now()), null, 'real observation expired');
+    const input = new InputMsg(); input.shootHold = true; input.toMouseLen = 1.25;
+    assert.ok(f.engine.processAim(input, true));
+    assert.equal(f.engine.stats.predictionState, 'inferred-stationary'); assert.equal(f.engine.stats.aimApproximate, true);
+    f.cfg.predictionStrict = true; assert.equal(f.engine.processAim(input, true), null); assert.equal(f.engine.stats.aimRejections.staleSnapshot, 1);
+    f.cfg.predictionStrict = false; f.advance(300);
+    assert.equal(f.engine.processAim(input, true), null, 'stale update stream must fail closed');
+    enemy.n.sourcePos = { x: 12.2, y: 20 }; f.engine.lastMap = f.dom.window.performance.now();
+    f.engine.observeUpdate({ ...empty, partObjects: [{ __id: enemy.__id, pos: enemy.n.sourcePos }] }, f.dom.window.performance.now());
+    assert.ok(f.engine.processAim(input, true)); assert.notEqual(f.engine.stats.predictionState, 'inferred-stationary', 'real motion replaces inference');
+  } finally { f.close(); }
+});

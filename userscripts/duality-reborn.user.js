@@ -7337,6 +7337,8 @@ THE SOFTWARE.
       this.forwarded = 0;
       this.corrected = 0;
       this.lastLiveAttempt = null;
+      this.lastEngagedAttempt = null;
+      this.lastEngagedFailure = null;
       this.lastGameplayForward = null;
       this.lastCorrection = null;
       this.transitions = [];
@@ -7345,6 +7347,10 @@ THE SOFTWARE.
       if (!live) return;
       const record = { time: now, state, ...controls, rejections: { ...rejections } };
       this.lastLiveAttempt = record;
+      if (state !== "waiting-activation" && state !== "disabled") {
+        this.lastEngagedAttempt = record;
+        if (state !== "input-applied" && state !== "ready-to-send") this.lastEngagedFailure = record;
+      }
       if (this.transitions.at(-1)?.state !== state) {
         this.transitions.push({ time: now, state });
         this.transitions = this.transitions.slice(-12);
@@ -7379,6 +7385,8 @@ THE SOFTWARE.
         forwardedInputs: this.forwarded,
         correctedGameplayInputs: this.corrected,
         lastLiveAttempt: stamp(this.lastLiveAttempt),
+        lastEngagedAttempt: stamp(this.lastEngagedAttempt),
+        lastEngagedFailure: stamp(this.lastEngagedFailure),
         lastGameplayForward: stamp(this.lastGameplayForward),
         lastCorrection: stamp(this.lastCorrection),
         transitions: this.transitions.map(stamp),
@@ -8579,11 +8587,13 @@ THE SOFTWARE.
           mentioned.add(o.__id);
           if (vec(o.pos)) ids.add(o.__id);
         }
-        const complete = this.config.grenadeAimMode && this.config.grenadeAimMode !== "off" && Array.isArray(msg.fullObjects) && Array.isArray(msg.partObjects) && Array.isArray(msg.delObjIds);
+        const needsInference = this.config.grenadeAimMode && this.config.grenadeAimMode !== "off" || this.config.aim && this.config.aimMode !== "off" && this.config.predict;
+        const complete = needsInference && this.protocol === VERIFIED_PROTOCOL && Array.isArray(msg.fullObjects) && Array.isArray(msg.partObjects) && Array.isArray(msg.delObjIds);
         const cadence = complete && this.grenadeUpdateAt !== null && now > this.grenadeUpdateAt && now - this.grenadeUpdateAt <= 150;
         if (!cadence) this.grenadeTracker.reset();
         this.grenadeUpdateAt = complete ? now : null;
-        const visible = complete ? new Set(m.players()) : null;
+        const players = complete || ids.size ? m.players() : null;
+        const visible = complete ? new Set(players) : null;
         if (complete) for (const [id, p] of this.observedEntities) {
           if (!visible.has(p) || p.__id !== id || !p.active || mentioned.has(id) && !ids.has(id)) {
             this.grenadeTracker.forget(p);
@@ -8595,7 +8605,7 @@ THE SOFTWARE.
           }
         }
         if (!ids.size) return;
-        const players = m.players(), live = new Set(players);
+        const live = visible || new Set(players);
         for (const [id, p] of this.observedEntities) if (!live.has(p) || p.__id !== id) {
           this.tracker.forget(p);
           this.observedEntities.delete(id);
@@ -8881,9 +8891,17 @@ THE SOFTWARE.
           if (!profile && !([0, 1].includes(slot) && !gun)) return fail("unsupported-weapon-profile");
           const predictionReady = !!(cfg.predict && profile && this.capabilities.prediction);
           track = predictionReady ? this.tracker.estimate(candidate.p, now) : null;
+          let inferredStationary = false;
           if (predictionReady && !track && this.tracker.states.has(candidate.p)) {
-            reject("staleSnapshot");
-            continue;
+            const stationary = this.grenadeTracker.estimate(candidate.p, now);
+            const recent = stationary && stationary.age <= 0.15 && stationary.samples?.length >= 3 && Math.hypot(stationary.vx, stationary.vy) < 0.2 && stationary.samples.every((s) => Math.hypot(s.p.x - stationary.pos.x, s.p.y - stationary.pos.y) < 0.02);
+            if (!cfg.predictionStrict && recent) {
+              track = { ...stationary, vx: 0, vy: 0, error: 0, velocityError: 0, motion: [] };
+              inferredStationary = true;
+            } else {
+              reject("staleSnapshot");
+              continue;
+            }
           }
           if (!profile) {
             shot = {
@@ -8909,6 +8927,10 @@ THE SOFTWARE.
             });
             if (shot.dir && cfg.predict && !track) {
               shot.state = predictionReady ? "direct-awaiting-snapshot" : "direct-prediction-unavailable";
+              shot.approximate = true;
+            }
+            if (shot.dir && inferredStationary) {
+              shot.state = "inferred-stationary";
               shot.approximate = true;
             }
             if (cfg.predictionStrict && (shot.approximate || shot.confidence < 0.85 || shot.state === "uncertain")) {

@@ -481,13 +481,16 @@ export class Features {
       // Source sends a visible player's position whenever that player's position
       // changes; absence from consecutive complete updates is a bounded
       // stationary inference, not a new observed position or server ACK. Keep it
-      // separate from the gun predictor and reset on missing/stalled updates.
-      const complete = this.config.grenadeAimMode && this.config.grenadeAimMode !== 'off'
+      // separate from observed gun velocity and reset on missing/stalled updates.
+      const needsInference = this.config.grenadeAimMode && this.config.grenadeAimMode !== 'off'
+        || this.config.aim && this.config.aimMode !== 'off' && this.config.predict;
+      const complete = needsInference && this.protocol === VERIFIED_PROTOCOL
         && Array.isArray(msg.fullObjects) && Array.isArray(msg.partObjects) && Array.isArray(msg.delObjIds);
       const cadence = complete && this.grenadeUpdateAt !== null && now > this.grenadeUpdateAt && now - this.grenadeUpdateAt <= 150;
       if (!cadence) this.grenadeTracker.reset();
       this.grenadeUpdateAt = complete ? now : null;
-      const visible = complete ? new Set(m.players()) : null;
+      const players = complete || ids.size ? m.players() : null;
+      const visible = complete ? new Set(players) : null;
       if (complete) for (const [id, p] of this.observedEntities) {
         if (!visible.has(p) || p.__id !== id || !p.active || mentioned.has(id) && !ids.has(id)) { this.grenadeTracker.forget(p); continue; }
         if (!mentioned.has(id) && cadence) {
@@ -497,7 +500,7 @@ export class Features {
       }
       // Most control-only updates do not change positions: avoid a full player scan for gun prediction.
       if (!ids.size) return;
-      const players = m.players(), live = new Set(players);
+      const live = visible || new Set(players);
       for (const [id, p] of this.observedEntities) if (!live.has(p) || p.__id !== id) { this.tracker.forget(p); this.observedEntities.delete(id); }
       for (const p of players) if (ids.has(p.__id)) {
         const old = this.observedEntities.get(p.__id); if (old && old !== p) { this.tracker.forget(old); this.grenadeTracker.forget(old); }
@@ -701,7 +704,18 @@ export class Features {
         if (!profile && !([0, 1].includes(slot) && !gun)) return fail('unsupported-weapon-profile');
         const predictionReady = !!(cfg.predict && profile && this.capabilities.prediction);
         track = predictionReady ? this.tracker.estimate(candidate.p, now) : null;
-        if (predictionReady && !track && this.tracker.states.has(candidate.p)) { reject('staleSnapshot'); continue; }
+        let inferredStationary = false;
+        if (predictionReady && !track && this.tracker.states.has(candidate.p)) {
+          // A visible player omitted by a continuous source-shaped update stream
+          // may be stationary. Do not fabricate velocity for moving targets or
+          // use this fallback in strict prediction; real updates always win.
+          const stationary = this.grenadeTracker.estimate(candidate.p, now);
+          const recent = stationary && stationary.age <= .15 && stationary.samples?.length >= 3
+            && Math.hypot(stationary.vx, stationary.vy) < .2 && stationary.samples.every(s => Math.hypot(s.p.x - stationary.pos.x, s.p.y - stationary.pos.y) < .02);
+          if (!cfg.predictionStrict && recent) {
+            track = { ...stationary, vx: 0, vy: 0, error: 0, velocityError: 0, motion: [] }; inferredStationary = true;
+          } else { reject('staleSnapshot'); continue; }
+        }
         if (!profile) {
           shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos,
             distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: 'direct-missing-definitions', approximate: true };
@@ -711,6 +725,7 @@ export class Features {
             radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1, stabilize: mode === 'lock' && cfg.stabilizeStrafe !== false,
             muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, muzzleObstacles, layerFor(dir), rawLayer & 1, selfRadius) });
           if (shot.dir && cfg.predict && !track) { shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable'; shot.approximate = true; }
+          if (shot.dir && inferredStationary) { shot.state = 'inferred-stationary'; shot.approximate = true; }
           // Strict prediction is an accuracy-first fallback policy: do not invent a
           // confident solution from stale/missing snapshots or large slope uncertainty.
           if (cfg.predictionStrict && (shot.approximate || shot.confidence < .85 || shot.state === 'uncertain')) { reject('predictionUncertain'); continue; }

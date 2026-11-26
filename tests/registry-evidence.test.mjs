@@ -32,9 +32,12 @@ test('shape fallback remains explicit and ambiguous fallback never chooses first
 
 test('last live attempt/correction survive death/menu and exported history is bounded and immutable', () => {
   const evidence = new AimEvidence(), controls = { mode: 'lock', wallcheckRequested: true, wallcheckAvailable: false };
-  evidence.attempt('wallcheck-unavailable', controls, {}, 1000, true);
+  evidence.attempt('wallcheck-unavailable', controls, { wall: 1 }, 1000, true);
   evidence.attempt('dead', controls, {}, 1100, false);
   assert.equal(evidence.snapshot(1200).lastLiveAttempt.state, 'wallcheck-unavailable');
+  evidence.attempt('waiting-activation', controls, {}, 1200, true);
+  assert.equal(evidence.snapshot(1200).lastEngagedFailure.state, 'wallcheck-unavailable');
+  assert.deepEqual(evidence.snapshot(1200).lastEngagedFailure.rejections, { wall: 1 });
   const native = { toMouseDir: { x: 1, y: 0 }, shootStart: true, shootHold: true };
   evidence.sent(native, { ...native, toMouseDir: { x: 0, y: 1 } }, true, 1300, true);
   evidence.sent(native, native, false, 1400, false);
