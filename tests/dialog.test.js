@@ -20,4 +20,13 @@ assert.equal(dialog.open, true);
 form.onsubmit({preventDefault(){}, submitter:{value:'cancel'}, currentTarget:form});
 assert.equal(dialog.open, false, 'Cancel must close dialog');
 assert.equal(submitted, false, 'Cancel must not perform action');
-console.log('Dialog cancel regression: OK');
+(async()=>{
+ let locked=false, calls=0, messages=[];
+ context.MutationLock={run:async work=>{assert.equal(locked,false,'dialog must acquire only one lock');locked=true;try{return await work()}finally{locked=false}}};
+ context.notify=message=>messages.push(message);
+ context.showDialog('<h2>Import</h2>',async()=>{assert.equal(locked,true);calls++});
+ const submitter={value:'submit',disabled:false};
+ await form.onsubmit({preventDefault(){},submitter,currentTarget:form});
+ assert.equal(calls,1);assert.equal(locked,false);assert.equal(submitter.disabled,false);assert.deepEqual(messages,[]);
+ console.log('Dialog cancel and single-lock submission: OK');
+})().catch(e=>{console.error(e);process.exitCode=1});
