@@ -1,4 +1,4 @@
-# Tabspace 0.117 — bản thử nghiệm
+# Tabspace 0.118 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -258,3 +258,8 @@ Nghỉ nhiều tab từ trang quản lý kiểm tra lại trạng thái và bả
 Trong popup, đánh dấu các tab muốn giữ lại; tìm kiếm và thu gọn không xóa lựa chọn. Mở **Thao tác nhanh nhiều tab**, chọn phạm vi rồi chọn **Tất cả, trừ các tab đã chọn** riêng cho nguồn lưu hoặc nguồn cho nghỉ. Cũng có thể chọn **Chỉ các tab đã chọn**. Lưu tạo bản sao vào đích và không đóng/nghỉ; khi cho nghỉ, tab đang xem ở mọi cửa sổ, tab ghim, có âm thanh và website được bảo vệ vẫn được giữ dù không đánh dấu. Số tab chọn gồm cả mục đang ẩn, hiển thị trong popup; nếu chưa chọn hoặc một tab đã chọn thay đổi/biến mất, thao tác dừng thay vì hiểu là xử lý tất cả.
 
 Trong trang quản lý **Tab đang mở → Chọn nhanh nhiều tab…**, nguồn tương tự gồm tất cả, chỉ các tab đã chọn trước đó hoặc trừ các tab đó, kể cả lựa chọn ẩn; thao tác này thay thế lựa chọn hiện tại nhưng chưa tự lưu/nghỉ. Sau đó dùng nút lưu hoặc cho nghỉ. Kiểm tra phạm vi cửa sổ, xem trước và kết quả; tùy chọn thao tác ngay vẫn áp dụng riêng cho từng hành động trong popup. Giới hạn lựa chọn popup 100 tab, thao tác nhanh tối đa 500 tab web; dữ liệu trang chưa lưu có thể mất khi nghỉ, và Chrome có thể thay đổi đồng thời.
+
+### Làm mới giao diện (0.118)
+Trang quản lý và popup dùng bảng màu xanh trầm, hệ thống nút và bề mặt thống nhất hơn; thông tin tổng quan gọn để dành chỗ cho danh sách tab, bộ lọc và thao tác. Các trạng thái sáng/tối, mật độ và giảm chuyển động vẫn dùng lựa chọn đã lưu. Thêm lối tắt bàn phím đến nội dung chính; bố cục hẹp giữ điều hướng có tên và cuộn ngang. Không thay đổi dữ liệu hay hành vi lưu, đóng, nghỉ.
+
+Tham khảo các nguyên tắc từ [taste-skill](https://github.com/Leonxlnx/taste-skill/blob/main/skills/taste-skill/SKILL.md), điều chỉnh cho giao diện công cụ thay vì áp dụng cấu trúc trang quảng bá. Đã xem giao diện bằng Chromium headless với dữ liệu và Chrome API giả lập ở kích thước rộng/hẹp, sáng/tối; điều này không thay thế kiểm thử extension trên Chrome thực tế.
