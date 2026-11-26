@@ -485,3 +485,6 @@ Dưới danh sách tab, **Chọn thêm…** có thể chọn nhanh toàn bộ ta
 
 ### Trang tab đang mở gọn hơn (0.120)
 **Bộ lọc & sắp xếp** có thể thu gọn; dòng tóm tắt vẫn cho biết số bộ lọc đang áp dụng và thứ tự khi khác mặc định. Mở ra để thay đổi hoặc đặt lại; thu gọn không xóa lọc, tìm kiếm hay lựa chọn. Nút **Chọn nhanh…** luôn ở thanh tìm kiếm của trang Tab đang mở. Khi chọn nhiều tab, các thao tác thường dùng vẫn ở ngoài; **Thêm thao tác** chứa lưu phiên, ghim, nhóm Chrome và bỏ chọn phần đang thấy. Menu thích ứng cửa sổ hẹp và vẫn dùng được bằng bàn phím.
+
+### Tìm nhanh trong Cài đặt (0.121)
+Trang **Cài đặt & sao lưu** có ô tìm không phân biệt chữ hoa/thường hoặc dấu tiếng Việt, và các nhóm Thường dùng, Tự động, Thông báo, Bảo vệ, Dữ liệu. Có thể kết hợp từ khóa với nhóm; số mục phù hợp và trạng thái không có kết quả được hiển thị, **Xóa bộ lọc** đưa về tất cả. Tìm kiếm chỉ ẩn/hiện các mục, không thay đổi thiết lập; lựa chọn được giữ khi trang tự làm mới hoặc đổi màn hình trong cùng phiên. Phím `/` tập trung ô tìm cài đặt khi đang ở trang này. Phần tổng quan tab và nút tạo nhóm không còn chiếm chỗ trên trang cài đặt; nút tạo nhóm ở thanh bên vẫn dùng được.
