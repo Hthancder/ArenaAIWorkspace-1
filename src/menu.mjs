@@ -12,11 +12,11 @@ export const DEFAULTS = Object.freeze({
   espMaxDistance: 500, espFontSize: 12, espOpacity: 85, espLineWidth: 1.5,
   espEnemyColor: ESP_PALETTE.enemy, espAllyColor: ESP_PALETTE.ally,
   espUnknownColor: ESP_PALETTE.unknown, espTargetColor: ESP_PALETTE.target,
-  ownFlashlight: false, othersFlashlight: false, bulletTrajectory: false, grenadeTrajectory: false, grenadeZones: false, grenadeTimer: false, zoom: false, zoomFactor: 1.5,
+  ownFlashlight: false, othersFlashlight: false, bulletTrajectory: false, grenadeTrajectory: false, grenadeZones: false, grenadeTimer: false, grenadeAimMode: 'off', grenadeAimActivation: 'hold', grenadeAssistStrength: 35, zoom: false, zoomFactor: 1.5,
   autoLoot: false, lootMode: 'nearby', mobileMovement: false, movementSmooth: 50, menuKey: 'ShiftRight', aimKey: 'KeyB', stickyKey: 'KeyN', holdAim: false,
 });
 export const STORAGE_KEY = 'duality-reborn.config.v1';
-const ranges = { assistStrength: [0, 100], leadAdjustment: [50, 200], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [.5, 3] };
+const ranges = { assistStrength: [0, 100], grenadeAssistStrength: [0, 100], leadAdjustment: [50, 200], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [.5, 3] };
 const colors = new Set(['espEnemyColor', 'espAllyColor', 'espUnknownColor', 'espTargetColor']);
 export function normalizeConfig(saved) {
   const result = { ...DEFAULTS };
@@ -31,7 +31,7 @@ export function normalizeConfig(saved) {
   }
   if (['nearby', 'mobile'].includes(saved.lootMode)) result.lootMode = saved.lootMode;
   if (['ring', 'cross', 'brackets', 'diamond'].includes(saved.targetStyle)) result.targetStyle = saved.targetStyle;
-  for (const [key, values] of Object.entries({ aimMode: ['off', 'assist', 'lock'], aimActivation: ['fire', 'key', 'both'], smoothProfile: ['responsive', 'natural', 'precise'] })) if (values.includes(saved[key])) result[key] = saved[key];
+  for (const [key, values] of Object.entries({ aimMode: ['off', 'assist', 'lock'], aimActivation: ['fire', 'key', 'both'], smoothProfile: ['responsive', 'natural', 'precise'], grenadeAimMode: ['off', 'preview', 'assist', 'lock'], grenadeAimActivation: ['hold', 'equip'] })) if (values.includes(saved[key])) result[key] = saved[key];
   // Removed HUD/tag fields never reappear, including old saved configurations.
   for (const key of ['espLegend', 'espLabels', 'espDistance', 'espWeapons', 'espHighlightTarget', 'espMarkers', 'espOffscreen']) result[key] = false;
   if (saved.version !== 2) { result.lines = false; result.showDot = false; }
@@ -62,6 +62,7 @@ const GROUPS = {
     ['Aim — Hỗ trợ ngắm', [['showFov', 'FOV circle'], ['showDot', 'Predicted point (optional)'], ['showTarget', 'Hiển thị mục tiêu đang ngắm'], ['targetStyle', 'Kiểu mục tiêu'], [null, 'Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ.']]],
     ['Aim — Prediction', [['predict', 'Auto prediction', 'prediction'], ['stabilizeStrafe', 'Ổn định dao động A–D (Lock)', 'prediction'], [null, 'Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này.']]],
     ['Aim — Advanced prediction', [['latencyCompensation', 'Estimated latency compensation', 'prediction'], ['leadAdjustment', 'Lead adjustment (%)', 'prediction'], ['predictionStrict', 'Strict prediction (skip uncertain shots)', 'prediction'], [null, 'Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread.']]],
+    ['Grenade Aim (thử nghiệm)', [['grenadeAimMode', 'Chế độ'], ['grenadeAimActivation', 'Kích hoạt Assist / Lock'], ['grenadeAssistStrength', 'Lực Assist bom (%)'], [null, 'Ước lượng: không tự giữ hay ném. Không bảo đảm an toàn hoặc trúng.']]],
     ['Melee Lock', [['melee', 'Enabled', 'mobile'], ['autoMelee', 'Auto Melee (from gun, while firing)', 'switch']]],
     ['Auto Switch', [['autoSwitch', 'Enabled', 'switch'], ['useOneGun', 'Use One Gun (switch away then return)', 'switch'], [null, 'Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server.']]],
     ['Semi Auto', [['semi', 'Held Fire: single guns + fists / melee', 'semi'], [null, 'Giữ nút Fire để lặp; auto/burst dùng shootHold gốc; không lặp lựu đạn. Server vẫn quyết định cooldown.']]],
@@ -136,7 +137,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
   const row = ([key, label, capability]) => {
     if (key === null) return el('div', { class: 'hint', text: label });
     const title = el('span', { text: label }), labelEl = el('label', { class: 'row' }, title);
-    const choices = { targetStyle: [['ring', 'Vòng tròn'], ['cross', 'Tâm ngắm'], ['brackets', 'Góc khung'], ['diamond', 'Hình thoi']], lootMode: [['nearby', 'Nearby supplies (now)'], ['mobile', 'Mobile loot / doors (next join)']], aimMode: [['off', 'Off'], ['assist', 'Aim Assist'], ['lock', 'Aim Lock']], aimActivation: [['fire', 'Hold Fire'], ['key', 'Hold aim key'], ['both', 'Aim key + Fire']], smoothProfile: [['responsive', 'Responsive / pro'], ['natural', 'Natural'], ['precise', 'Precise / cinematic']] };
+    const choices = { grenadeAimMode: [['off', 'Off'], ['preview', 'Preview'], ['assist', 'Assist'], ['lock', 'Lock']], grenadeAimActivation: [['hold', 'Giữ Fire'], ['equip', 'Cầm bom']], targetStyle: [['ring', 'Vòng tròn'], ['cross', 'Tâm ngắm'], ['brackets', 'Góc khung'], ['diamond', 'Hình thoi']], lootMode: [['nearby', 'Nearby supplies (now)'], ['mobile', 'Mobile loot / doors (next join)']], aimMode: [['off', 'Off'], ['assist', 'Aim Assist'], ['lock', 'Aim Lock']], aimActivation: [['fire', 'Hold Fire'], ['key', 'Hold aim key'], ['both', 'Aim key + Fire']], smoothProfile: [['responsive', 'Responsive / pro'], ['natural', 'Natural'], ['precise', 'Precise / cinematic']] };
     const input = choices[key] ? el('select') : el('input', { type: colors.has(key) ? 'color' : ranges[key] ? 'range' : 'checkbox' });
     input.dataset.config = key;
     if (choices[key]) {

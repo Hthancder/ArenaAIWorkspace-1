@@ -14,6 +14,7 @@ import { Features, VERIFIED_PROTOCOL } from '../src/features.mjs';
 import { discover, discoverSender } from '../src/core.mjs';
 import { DEFAULTS } from '../src/menu.mjs';
 import { buildEspFrame } from '../src/esp.mjs';
+import { simulateOpenThrow } from '../src/grenade-aim.mjs';
 import { mapHighlightCompatible, highlightMinimap } from '../src/map-highlights.mjs';
 
 const root = resolve(process.argv[2] || '../survev-reference');
@@ -51,8 +52,12 @@ const fistsSource = meleeJS.slice(fistsNode.start, fistsNode.end);
 const throwJS = transformSync(readFileSync(resolve(root, 'shared/defs/gameObjects/throwableDefs.ts'), 'utf8'), { loader: 'ts', target: 'es2022' }).code;
 const throwTree = parse(throwJS, { ecmaVersion: 'latest', sourceType: 'module' });
 const throwDefs = throwTree.body.map(n => n.declaration || n).find(n => n.type === 'VariableDeclaration' && n.declarations[0].id.name === 'ThrowableDefs').declarations[0].init;
-const fragNode = throwDefs.properties.find(n => n.key.name === 'frag').value;
-const fragSource = throwJS.slice(fragNode.start, fragNode.end);
+const throwableNames = ['frag', 'mirv', 'mirv_mini', 'martyr_nade', 'smoke', 'snowball', 'bomb_iron'];
+const throwableSource = throwableNames.map(name => {
+  const node = throwDefs.properties.find(n => n.key.name === name)?.value;
+  assert.ok(node, `source throwable definition ${name}`);
+  return `${JSON.stringify(name)}:${throwJS.slice(node.start, node.end)}`;
+}).join(',');
 const playerJS = transformSync(readFileSync(resolve(root, 'client/src/objects/player.ts'), 'utf8'), { loader: 'ts', target: 'es2022' }).code;
 const playerTree = parse(playerJS, { ecmaVersion: 'latest', sourceType: 'module' });
 const nativeNameFactory = playerTree.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === 'createPlayerNameText');
@@ -86,7 +91,7 @@ class Sprite { constructor(){this.alpha=1;this.visible=false;this._destroyed=fal
 class NativeText extends PixiContainer { constructor(text,style){super();this._text=text;this._style=new PixiTextStyle(style);this.anchor={set(){}};}get style(){return this._style;}get text(){return this._text;}set text(v){this._text=v;} }
 const PIXI={Text:NativeText,Sprite:{from(){return new Sprite()}}};
 ${nameFactorySource}
-const fistsDef=${fistsSource}; const fragDef=${fragSource}; const GameObjectDefs={typeToId(){return 0},idToType(){return ''},typeToDef(){return fistsDef}};
+const fistsDef=${fistsSource}; const throwableDefs={${throwableSource}}; const fragDef=throwableDefs.frag; const GameObjectDefs={typeToId(){return 0},idToType(){return ''},typeToDef(){return fistsDef}};
 const sharedShapes=[{color:123,scale:3,collider:{type:0,pos:{x:0,y:0},rad:1}}];
 const MapObjectDefs={typeToDef(){return {type:'obstacle',img:{zIdx:1},map:{shapes:sharedShapes}}}}; const nativeMap=new Map();
 const device = {mobile:false,touch:false}; const window = {innerWidth:800,innerHeight:600};
@@ -127,7 +132,7 @@ const serverWeapon=Object.assign(new WeaponManager(),{player:serverPlayer,curWea
  meleeAttacks:[],meleeAnimCooldown:0,throwableCooldown:0,meleeDamage(){}});
 globalThis.result={localRotation:()=>{Player.prototype.updateRotation.call(rotationSubject,input,camera,true,false,false);return rotationSubject.bodyContainer.rotation;},setWall:on=>{if(on)game.m_objectCreator.m_idToObj[99]={__id:99,__type:2,active:true,collidable:true,dead:false,height:1,layer:0,collider:{type:0,pos:{x:10.85,y:20.17},rad:.2}};else delete game.m_objectCreator.m_idToObj[99];},setZoom:z=>{camera.m_zoom=z;camera.m_targetZoom=z;},nativePrevious:()=>game.m_prevInputMsg,nativeFrame:dt=>game.nativeInputFrame(dt),receive:pos=>game.m_processGameUpdate({ack:game.seq,playerInfos:[],deletedPlayerIds:[],delObjIds:[],fullObjects:[],partObjects:[{__id:2,__type:1,pos,dir:{x:1,y:0}}],activePlayerData:{},bullets:[],explosions:[],emotes:[],planes:[],airstrikeZones:[],mapIndicators:[]}),app,callbacks,fistsDef,nativeMap,readInputAim:()=>game.readInputAim(),
  frameInput:()=>{const msg=new InputMsg();msg.shootStart=!!binds.isBindPressed(4);msg.shootHold=!!binds.isBindDown(4);if(binds.isBindPressed(10))msg.addInput(10);return msg;},
- fragDef, setGrenade:()=>{hero.m_netData.m_activeWeapon='frag';hero.m_localData.m_curWeapIdx=3;hero.m_localData.m_weapons[3].type='frag';input.mouseButtons[0]=true;input.mouseButtonsOld[0]=false;},
+ fragDef, throwableDefs, setGrenade:(type='frag')=>{hero.m_netData.m_activeWeapon=type;hero.m_localData.m_curWeapIdx=3;hero.m_localData.m_weapons[3].type=type;input.mouseButtons[0]=true;input.mouseButtonsOld[0]=false;},
  setMelee:()=>{hero.m_netData.m_activeWeapon='fists';hero.m_localData.m_curWeapIdx=2;input.mouseButtonsOld[0]=true;},
  serverTick:(msg,dt)=>{serverPlayer.animTicker-=dt;if(serverPlayer.animTicker<=0)serverPlayer.animType=0;serverPlayer.shootStart=msg.shootStart;serverPlayer.shootHold=msg.shootHold;serverWeapon.update(dt);return serverPlayer.swings;},
  spawnSmoke:()=>{const p=game.m_smokeBarn.m_allocParticle();p.m_init({x:10,y:20},2,0,0);return p;},
@@ -225,6 +230,47 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.ok(context.sent.at(-1).decoded.toMouseDir.y>.1,'Lock reaches native wire with default wallcheck after obstacle removal');
     const liveEvidence=engine.diagnostics().aimEvidence;
     assert.ok(liveEvidence.lastCorrection.correctionDegrees>1);assert.equal(liveEvidence.lastGameplayForward.firePreserved,true);
+    // Controlled virtual-time latency check: a stationary target shifts immediately
+    // after a completed frame. Neither this fixture nor the receiver forces the
+    // native timeout. The next pre/native frame must reach the real serialized
+    // input direction. This measures scheduling in the fixture, not browser CPU,
+    // network, live ticks or actual hit latency.
+    const originalLoot = engine.config.autoLoot, originalPredict = engine.config.predict;
+    engine.config.autoLoot = false; engine.config.predict = false;
+    for (const hz of [30, 60, 144]) for (const phase of [.1, .5, .9]) {
+      app.input.flush(); clock += 100; context.result.receive({x:12,y:20}); engine.pre(); context.result.nativeFrame(1/hz); app.input.flush();
+      const frameMs = 1000 / hz, priorCount = context.sent.length;
+      clock += frameMs * phase; const receivedAt = clock;
+      context.result.receive({x:12,y:20.7});
+      assert.equal(context.sent.length, priorCount, 'Receiver must not emit input');
+      clock += frameMs * (1 - phase); engine.pre(); context.result.nativeFrame(1/hz);
+      const updated = context.sent.slice(priorCount).find(x => x.type === 3 && x.decoded?.toMouseDir.y > .3);
+      assert.ok(updated, `Fresh serialized direction after next native frame at ${hz}Hz, phase ${phase}`);
+      assert.ok(Math.abs((clock - receivedAt) - frameMs * (1 - phase)) < 1e-8, 'Virtual frame scheduling delay');
+    }
+    // Human-like convergence is a separate measurement, still without prediction.
+    // Warm up at the original target before each trial, then measure simulated
+    // time from receive to 90% of the geometric target angle on the actual wire.
+    engine.config.humanLikeAim = true;
+    const humanReaction = [];
+    for (const smooth of [0, 20, 50]) for (const hz of [30, 60, 144]) {
+      engine.config.smooth = smooth;
+      const dt = 1 / hz, ms = 1000 / hz;
+      app.input.flush(); clock += 100; context.result.receive({x:12,y:20}); engine.aimController.reset();
+      for (let i = 0; i < hz; i++) { clock += ms; engine.pre(); context.result.nativeFrame(dt); app.input.flush(); }
+      clock += ms / 2; const receivedAt = clock; context.result.receive({x:12,y:20.7});
+      const threshold = .9 * Math.atan2(.7, 2), startCount = context.sent.length;
+      let elapsed = null;
+      for (let i = 0; i < hz; i++) {
+        clock += i === 0 ? ms / 2 : ms; engine.pre(); context.result.nativeFrame(dt); app.input.flush();
+        if (context.sent.slice(startCount).some(x => x.type === 3 && x.decoded && Math.atan2(x.decoded.toMouseDir.y, x.decoded.toMouseDir.x) >= threshold)) { elapsed = clock - receivedAt; break; }
+      }
+      assert.notEqual(elapsed, null, `Human-like converges on serialized wire at ${hz}Hz`);
+      humanReaction.push(`smooth${smooth}/${hz}Hz=${elapsed.toFixed(1)}ms`);
+    }
+    console.log(`Fixture receive-to-90%-wire (virtual time, Human-like, predict off): ${humanReaction.join(', ')}`);
+    app.input.flush(); engine.config.humanLikeAim = false; engine.config.autoLoot = originalLoot; engine.config.predict = originalPredict;
+    clock += 100; context.result.receive({x:12,y:20}); engine.pre(); context.result.nativeFrame(1/60);
     // Exercise the actual smoke renderer every frame; the adapter must work with an
     // initially empty m_* array and survive native alpha/tint rewrites.
     assert.equal(engine.smokeSources.length, 1, 'Identify source smoke array before first spawn');
@@ -246,7 +292,54 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     clock += 500; assert.equal(engine.grenadeTimer.sample(engine.grenadeContext(), clock)?.seconds, 3.5);
     app.input.mouseButtons[0] = false; const release = frameInput(); app.game[discoverSender(app.game)](3, release, 128);
     assert.equal(engine.grenadeTimer.active, null, 'Release hides timer');
-    engine.config.grenadeTimer = false; app.input.mouseButtons[0] = true;
+    // Same native sender and source definitions for varied fuses, non-cookable
+    // smoke and source's sentinel-length snowball. These fixtures do not imply
+    // all types are normally equippable in live play.
+    Object.assign(engine.definitions, context.result.throwableDefs);
+    for (const type of ['mirv', 'mirv_mini', 'martyr_nade', 'smoke', 'snowball', 'bomb_iron']) {
+      context.result.setGrenade(type); clock += 17; engine.pre();
+      const msg = frameInput(); assert.equal(msg.shootStart, true); assert.equal(msg.shootHold, true);
+      app.game[discoverSender(app.game)](3, msg, 128);
+      const def = context.result.throwableDefs[type], timer = engine.grenadeTimer.sample(engine.grenadeContext(), clock);
+      if (def.cookable && def.fuseTime > 0 && def.fuseTime <= 30) assert.equal(timer?.seconds, def.fuseTime, `${type} uses its source fuse`);
+      else assert.equal(timer, null, `${type} must not invent an actionable countdown`);
+      assert.equal(context.sent.at(-1).decoded.shootHold, true, `${type} preserves Fire`);
+      app.input.mouseButtons[0] = false; app.game[discoverSender(app.game)](3, frameInput(), 128);
+      assert.equal(engine.grenadeTimer.active, null, `${type} release clears timer`);
+    }
+    engine.config.grenadeTimer = false;
+    // Exercise experimental grenade Lock through the real source serializer using
+    // deterministic injected movement samples and an inert flat-ground adapter.
+    // This does not verify live terrain discovery, tick timings or gameplay.
+    context.result.setGrenade('frag'); app.input.mouseButtons[0] = false;
+    engine.config.grenadeAimMode = 'lock'; engine.config.grenadeAimActivation = 'equip';
+    clock += 100; engine.pre(); engine.capabilities.prediction = true; engine.capabilities.wallcheck = true;
+    engine.mapping.map = { getGroundSurface() { return { type: 'grass' }; } };
+    const own = engine.mapping.active, enemy = engine.mapping.players().find(p => p.__id === 2);
+    const ownPos = engine.sourcePos(own), enemyPos = engine.sourcePos(enemy);
+    for (const t of [clock - 66, clock - 33, clock]) { engine.tracker.observe(own, ownPos, t); engine.tracker.observe(enemy, enemyPos, t); }
+    engine.aimPlanFrame = -1;
+    const aimInput = frameInput(); aimInput.toMouseLen = 2; app.game[discoverSender(app.game)](3, aimInput, 128);
+    const aimWire = context.sent.at(-1).decoded;
+    assert.equal(engine.grenadeState, 'estimate-before-throw', 'grenade plan reaches source sender');
+    assert.ok(engine.grenadePlan && aimWire.toMouseLen >= 0 && aimWire.toMouseLen <= 18.1, 'serialized grenade throw strength');
+    assert.equal(aimWire.shootHold, false, 'grenade aim never starts Fire');
+    engine.config.grenadeAimMode = 'off'; engine.configurationChanged('grenadeAimMode'); app.input.mouseButtons[0] = true;
+    // Measure only nominal endpoint changes caused by the real source InputMsg
+    // wire quantization. This is not a full server throw or a live hit test.
+    let maxQuantizedError = 0, quantizedCount = 0;
+    for (let i = 0; i < 16; i++) for (const mouseDistance of [0, 2, 9, 17.9]) {
+      const angle = i * Math.PI * 2 / 16, dir = { x: Math.cos(angle), y: Math.sin(angle) };
+      const input = frameInput(); input.toMouseDir = dir; input.toMouseLen = mouseDistance;
+      app.game[discoverSender(app.game)](3, input, 128);
+      const decoded = context.sent.at(-1).decoded, model = { def: context.result.fragDef, origin: { x: 100, y: 100 }, playerVelocity: { x: 0, y: 0 }, fuseRemaining: 2 };
+      const before = simulateOpenThrow({ ...model, direction: dir, mouseDistance });
+      const after = simulateOpenThrow({ ...model, direction: decoded.toMouseDir, mouseDistance: decoded.toMouseLen });
+      assert.ok(before && after, 'Native input quantization remains inside model range');
+      maxQuantizedError = Math.max(maxQuantizedError, Math.hypot(before.end.x - after.end.x, before.end.y - after.end.y)); quantizedCount++;
+    }
+    assert.ok(maxQuantizedError < .3, `Bounded source wire quantization proxy: ${maxQuantizedError}`);
+    console.log(`Fixture grenade input quantization: ${quantizedCount} samples, nominal max endpoint error ${maxQuantizedError.toFixed(3)} wu`);
     // An unchanged held mouse must create repeated fist edges, accepted only when
     // the native server WeaponManager.update/meleeUpdate cooldown and anim allow it.
     engine.config.semi = true; context.result.setMelee(); let swings = 0;

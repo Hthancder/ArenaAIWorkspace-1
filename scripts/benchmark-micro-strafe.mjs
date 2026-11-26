@@ -1,8 +1,12 @@
 // Synthetic A/D movement and abrupt departure. Development-only, not live hit rate.
-import { AimController, SnapshotTracker, predictShot } from '../src/aim.mjs';
+// Optional isolated module for comparing experiments without changing runtime.
+const { AimController, SnapshotTracker, predictShot } = await import(process.env.AIM_MODULE || '../src/aim.mjs');
 const q = (xs, f) => [...xs].sort((a, b) => a - b)[Math.floor((xs.length - 1) * f)];
 const quant = n => Math.round(n * 65535 / 1024) * 1024 / 65535;
 const rng = seed => () => { seed = (1664525 * seed + 1013904223) >>> 0; return seed / 2 ** 32; };
+const smoothArg = process.argv.find(x => x.startsWith('--smooth='));
+const smooth = smoothArg ? Number(smoothArg.slice('--smooth='.length)) : 50;
+if (!Number.isFinite(smooth) || smooth < 0 || smooth > 100) throw new Error('--smooth must be between 0 and 100');
 
 function run({ width, radius, escape, cadence, hz, seed, speed, drift = 0 }) {
   const random = rng(seed), dt = .002, states = [{ x: 60, y: 0 }]; let x = 60, y = 0, lo = 0, sign = 1, wasEscaping = false;
@@ -36,7 +40,7 @@ function run({ width, radius, escape, cadence, hz, seed, speed, drift = 0 }) {
     const flight = shot.time ?? Math.hypot(current.x, current.y) / speed;
     const actual = truth(now + .035 + flight), direct = { x: current.x / Math.hypot(current.x, current.y), y: current.y / Math.hypot(current.x, current.y) };
     if (!shot.dir) controller.reset();
-    const d = shot.dir && process.argv.includes('--human') ? controller.step(direct, shot.dir, { mode: 'lock', smooth: 50, humanLike: true, profile: 'responsive', target: entity, now: now * 1000 }) : shot.dir || direct;
+    const d = shot.dir && process.argv.includes('--human') ? controller.step(direct, shot.dir, { mode: 'lock', smooth, humanLike: true, profile: 'responsive', target: entity, now: now * 1000 }) : shot.dir || direct;
     const miss = Math.abs(d.x * actual.y - d.y * actual.x);
     errors.push(miss); misses.push(miss > radius ? 1 : 0); total++;
     // Separate the decision to depart from the many pre-departure frames.

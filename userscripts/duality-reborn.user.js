@@ -7153,7 +7153,9 @@ THE SOFTWARE.
         const selectedProfile = profiles[profile] || profiles.natural;
         const amount = clamp(finite(smooth) ? smooth : 50, 1, 100);
         const targetAngle = this.angle + angleDelta(this.angle, b);
-        const smoothTime = (0.065 + amount / 100 * 0.24) * selectedProfile.time;
+        const baseTime = (0.065 + amount / 100 * 0.24) * selectedProfile.time;
+        const braking = profile === "responsive" && this.angularVelocity * angleDelta(this.angle, b) < -1e-3;
+        const smoothTime = baseTime * (braking ? 0.7 : 1);
         const solved = smoothDamp(this.angle, targetAngle, this.angularVelocity, smoothTime, selectedProfile.rate, dt);
         this.angularVelocity = solved.velocity;
         this.angle = Math.atan2(Math.sin(solved.value), Math.cos(solved.value));
@@ -7655,6 +7657,99 @@ THE SOFTWARE.
   }
   __name(drawGrenadeTimer, "drawGrenadeTimer");
 
+  // src/grenade-aim.mjs
+  var GRAVITY = 10.5;
+  var GROUND_DRAG = 2.3;
+  var MAX_HEIGHT = 5;
+  var MOUSE_RANGE = 18;
+  var supported = /* @__PURE__ */ __name((def) => def?.type === "throwable" && def.cookable === true && def.explodeOnImpact === false && def.forceMaxThrowDistance !== true && !def.heavyType && !def.fuseVariance && def.playerCollision !== true && def.aimDistance === 0 && finite(def.throwPhysics?.speed) && def.throwPhysics.speed > 0 && finite(def.throwPhysics?.velZ) && finite(def.throwPhysics?.playerVelMult), "supported");
+  function simulateOpenThrow({ def, origin, direction, mouseDistance, playerVelocity, fuseRemaining, dt = 1 / 30 }) {
+    const len = Math.hypot(direction?.x, direction?.y);
+    if (!supported(def) || !vec(origin) || !vec(playerVelocity) || !finite(len) || len < 1e-6 || !finite(mouseDistance) || mouseDistance < 0 || mouseDistance > MOUSE_RANGE || !finite(fuseRemaining) || fuseRemaining <= 0 || fuseRemaining > 10 || !finite(dt) || dt < 1 / 240 || dt > 1 / 15) return null;
+    const dir = { x: direction.x / len, y: direction.y / len }, p = def.throwPhysics;
+    const speed = p.speed * clamp(mouseDistance / MOUSE_RANGE, 0, 1);
+    let x = origin.x + 0.5 * dir.x + dir.y, y = origin.y + 0.5 * dir.y - dir.x;
+    let vx = dir.x * speed + playerVelocity.x * p.playerVelMult;
+    let vy = dir.y * speed + playerVelocity.y * p.playerVelMult;
+    let z = 0.5, vz = p.velZ, time = 0, fuse = fuseRemaining;
+    const points = [{ x, y, z, t: 0 }];
+    for (let i = 0; i < 2400 && fuse > 0; i++) {
+      if (z <= 0) {
+        vx /= 1 + dt * GROUND_DRAG;
+        vy /= 1 + dt * GROUND_DRAG;
+      }
+      x += vx * dt;
+      y += vy * dt;
+      vz -= GRAVITY * dt;
+      z = clamp(z + vz * dt, 0, MAX_HEIGHT);
+      fuse -= dt;
+      time += dt;
+      points.push({ x, y, z, t: time });
+    }
+    if (fuse > 0) return null;
+    return { end: { x, y }, time, points, nominal: true };
+  }
+  __name(simulateOpenThrow, "simulateOpenThrow");
+  function solveOpenThrow({ def, origin, target, playerVelocity, fuseRemaining, dt = 1 / 30 }) {
+    if (!vec(origin) || !vec(target) || !vec(playerVelocity)) return null;
+    const args = { def, origin, playerVelocity, fuseRemaining, dt, direction: { x: 1, y: 0 } };
+    const zero = simulateOpenThrow({ ...args, mouseDistance: 0 });
+    const full = simulateOpenThrow({ ...args, mouseDistance: MOUSE_RANGE });
+    if (!zero || !full) return null;
+    const drift = { x: zero.end.x - origin.x - 0.5, y: zero.end.y - origin.y + 1 };
+    const displacement = { x: target.x - origin.x - drift.x, y: target.y - origin.y - drift.y };
+    const r = Math.hypot(displacement.x, displacement.y), maxForward = full.end.x - zero.end.x + 0.5;
+    if (!finite(r) || r < Math.hypot(0.5, 1) - 1e-8 || !finite(maxForward) || maxForward <= 0.5) return null;
+    const forward = Math.sqrt(Math.max(0, r * r - 1));
+    const fraction = (forward - 0.5) / (maxForward - 0.5);
+    if (fraction < -1e-8 || fraction > 1 + 1e-8) return null;
+    const angle = Math.atan2(displacement.y, displacement.x) + Math.atan2(1, forward);
+    const direction = { x: Math.cos(angle), y: Math.sin(angle) }, mouseDistance = clamp(fraction, 0, 1) * MOUSE_RANGE;
+    const simulated = simulateOpenThrow({ ...args, direction, mouseDistance });
+    return simulated ? { direction, mouseDistance, ...simulated } : null;
+  }
+  __name(solveOpenThrow, "solveOpenThrow");
+  function validateOpenThrow({ solution, origin, def, layer, obstacles, groundAt }) {
+    if (!solution || !Array.isArray(solution.points) || solution.points.length < 2 || solution.points.length > 2401 || !vec(origin) || !supported(def) || !finite(def.rad) || def.rad <= 0 || !Number.isInteger(layer) || layer & 2 || !Array.isArray(obstacles) || obstacles.length > 1024 || typeof groundAt !== "function") return { ok: false, reason: "missing-contract" };
+    const points = [origin, ...solution.points];
+    const solid = [];
+    for (const obstacle of obstacles) {
+      if (read(obstacle, "active") === false || read(obstacle, "dead") === true || read(obstacle, "collidable") === false) continue;
+      const otherLayer = read(obstacle, "layer");
+      if (!Number.isInteger(otherLayer)) return { ok: false, reason: "unknown-layer" };
+      if (!sameLayer(layer, otherLayer)) continue;
+      const shape = read(obstacle, "collider"), kind = read(shape, "type");
+      const margin = def.rad * 0.25 + 0.1;
+      if (kind === 0 && vec(read(shape, "pos")) && finite(read(shape, "rad")) && shape.rad >= 0) {
+        solid.push({ type: 0, pos: shape.pos, rad: shape.rad + margin });
+      } else if (kind === 1 && vec(read(shape, "min")) && vec(read(shape, "max")) && shape.min.x <= shape.max.x && shape.min.y <= shape.max.y) {
+        solid.push({ type: 1, min: { x: shape.min.x - margin, y: shape.min.y - margin }, max: { x: shape.max.x + margin, y: shape.max.y + margin } });
+      } else return { ok: false, reason: "unknown-collider" };
+    }
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      if (!vec(p) || p.x < 0 || p.x > 1024 || p.y < 0 || p.y > 1024) return { ok: false, reason: "invalid-point" };
+      try {
+        if (groundAt(p, layer) !== "ground") return { ok: false, reason: "unknown-or-water" };
+      } catch {
+        return { ok: false, reason: "unknown-or-water" };
+      }
+      if (i && solid.some((shape) => segmentBlocked(points[i - 1], p, shape))) return { ok: false, reason: "obstructed" };
+    }
+    return { ok: true, reason: "nominal-clear" };
+  }
+  __name(validateOpenThrow, "validateOpenThrow");
+  function solveMovingOpenThrow({ target, targetVelocity, releaseDelay = 0, ...args }) {
+    if (!vec(target) || !vec(targetVelocity) || !finite(releaseDelay) || releaseDelay < 0 || releaseDelay > 1 || Math.hypot(targetVelocity.x, targetVelocity.y) > 80) return null;
+    const probe = simulateOpenThrow({ ...args, direction: { x: 1, y: 0 }, mouseDistance: 0 });
+    if (!probe) return null;
+    const horizon = releaseDelay + probe.time;
+    const projected = { x: target.x + targetVelocity.x * horizon, y: target.y + targetVelocity.y * horizon };
+    const solution = solveOpenThrow({ ...args, target: projected });
+    return solution ? { ...solution, projectedTarget: projected, horizon } : null;
+  }
+  __name(solveMovingOpenThrow, "solveMovingOpenThrow");
+
   // src/features.mjs
   var VERIFIED_PROTOCOL = 1028;
   var isManualEquip = /* @__PURE__ */ __name((code) => code >= 11 && code <= 20 || code === 27 || code === 28, "isManualEquip");
@@ -7800,6 +7895,9 @@ THE SOFTWARE.
       this.overrides = new Overrides();
       this.tracker = new SnapshotTracker();
       this.aimController = new AimController();
+      this.grenadeAimTimer = new GrenadeTimer();
+      this.grenadePlan = null;
+      this.grenadeState = "off";
       this.timing = new NetworkTiming();
       this.grenadeTimer = new GrenadeTimer();
       this.names = new NativeNames();
@@ -7890,6 +7988,8 @@ THE SOFTWARE.
         this.holdAim = false;
         this.aimController.reset();
         this.grenadeTimer.reset();
+        this.grenadeAimTimer.reset();
+        this.grenadePlan = null;
       }, { signal: controller.signal });
       win.addEventListener("focus", () => {
         this.focusBlocked = false;
@@ -7899,6 +7999,8 @@ THE SOFTWARE.
           releaseLayer();
           this.restoreInput();
           this.grenadeTimer.reset();
+          this.grenadeAimTimer.reset();
+          this.grenadePlan = null;
         }
       }, { signal: controller.signal });
       this.reconcile(true);
@@ -7947,6 +8049,9 @@ THE SOFTWARE.
       this.tracker.reset();
       this.aimController.reset();
       this.grenadeTimer.reset();
+      this.grenadeAimTimer.reset();
+      this.grenadePlan = null;
+      this.grenadeState = "off";
       this.lastAimSent = null;
       this.aimOutput = null;
       this.aimPlan = null;
@@ -8014,6 +8119,7 @@ THE SOFTWARE.
           if (type === 1 && Number.isInteger(data2?.protocol) && typeof data2.name === "string" && typeof data2.joinToken === "string" && (typeof data2.isMobile === "boolean" || data2.isMobile === void 0) && typeof data2.useTouch === "boolean" && typeof data2.serialize === "function") {
             self.aimEvidence.reset();
             self.grenadeTimer.reset();
+            self.grenadeAimTimer.reset();
             self.protocol = data2.protocol;
             self.lastMap = -Infinity;
             if (self.protocol === VERIFIED_PROTOCOL && self.config.autoLoot && self.config.lootMode === "mobile") {
@@ -8045,6 +8151,10 @@ THE SOFTWARE.
               self.movement.reset();
               self.switchSlot = null;
               self.meleeDirection = null;
+            } else if (manualEquip && self.local?.data?.[self.local.slotKey] === 3 && ["preview", "assist", "lock"].includes(self.config.grenadeAimMode)) {
+              self.aimOutput = null;
+              self.grenadePlan = null;
+              self.grenadeState = "manual-equip";
             } else self.aimOutput = self.aimPlanFrame === self.aimFrame && self.aimPlanDirect ? self.aimPlan : self.processAim(intent, true);
             if (manualEquip) {
               self.weaponSwitch.reset();
@@ -8071,6 +8181,7 @@ THE SOFTWARE.
           self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null;
           self.timing.sent(outgoing, now);
           if (self.config.grenadeTimer || self.grenadeTimer.active) self.guard("grenade-timer", () => self.grenadeTimer.forwarded(self.grenadeContext(), outgoing, now, outgoing.inputs.some(isManualEquip)));
+          if (self.config.grenadeAimMode !== "off" && self.config.grenadeAimMode) self.grenadeAimTimer.forwarded({ ...self.grenadeContext(), enabled: true }, outgoing, now, outgoing.inputs.some(isManualEquip));
         }
         if (joinRecord) joinRecord.forwarded = true;
         return result;
@@ -8090,6 +8201,10 @@ THE SOFTWARE.
         this.stickyId = null;
       }
       if (key === "grenadeTimer") this.grenadeTimer.reset();
+      if (key === "grenadeAimMode" || key === "grenadeAimActivation") {
+        this.grenadeAimTimer.reset();
+        this.grenadePlan = null;
+      }
       if (["autoSwitch", "useOneGun", "autoMelee", "melee"].includes(key)) {
         this.weaponSwitch.reset();
         this.meleeEquip = null;
@@ -8260,7 +8375,10 @@ THE SOFTWARE.
         this.reconcile();
         const m = this.mapping, fields = this.sourceFields, now = arrivedAt;
         this.timing.received(msg, now);
-        if ((msg.fullObjects || []).length || (msg.partObjects || []).length || (msg.delObjIds || []).length) this.aimPlanFrame = -1;
+        if ((msg.fullObjects || []).length || (msg.partObjects || []).length || (msg.delObjIds || []).length) {
+          this.aimPlanFrame = -1;
+          this.grenadePlan = null;
+        }
         if (!m?.schema || !fields?.pos) return;
         for (const id of msg.delObjIds || []) {
           const old = this.observedEntities.get(id);
@@ -8317,8 +8435,73 @@ THE SOFTWARE.
     emoteOpen() {
       return entries(this.app.game).some(([, child]) => read(child, "wheelDisplayed") === true);
     }
+    processGrenadeAim({ native, applyDirect, pos, mouse, camera, physical, firing, now }) {
+      const m = this.mapping, cfg = this.config, mode = cfg.grenadeAimMode;
+      const fail = /* @__PURE__ */ __name((reason) => {
+        this.grenadeState = reason;
+        this.grenadePlan = null;
+        return null;
+      }, "fail");
+      if (!this.capabilities.aim || !this.capabilities.prediction || !this.capabilities.wallcheck || !this.local || this.manualEquipHeld) return fail("missing-contract");
+      const ctx = { ...this.grenadeContext(), enabled: true }, def = this.definitions?.[ctx.type];
+      if (!def || ctx.type !== ctx.activeType) return fail("missing-throwable");
+      const perks = at2(m.active, [m.schema.netKey, this.sourceFields?.perks]);
+      if (!Array.isArray(perks) || perks.some((p) => p?.type === "amped_explosives")) return fail("unknown-or-amped-perks");
+      const map = m.map, surface = readMethod(map, "getGroundSurface");
+      if (!surface) return fail("missing-terrain");
+      const playerTrack = this.tracker.estimate(m.active, now);
+      if (!playerTrack || playerTrack.age > 0.15 || playerTrack.samples?.length < 2 || !finite(playerTrack.vx) || !finite(playerTrack.vy)) return fail("missing-own-velocity");
+      const myVelocity = { x: playerTrack.vx, y: playerTrack.vy }, layer = this.sourceLayer(m.active);
+      const timer = this.grenadeAimTimer.sample(ctx, now);
+      if (firing && !timer) return fail("waiting-for-forwarded-fire");
+      const fuse = timer ? timer.seconds : def.fuseTime;
+      if (!finite(fuse) || fuse < 0.15 || fuse > 10) return fail("invalid-fuse");
+      const relations = teamRelations(m.barn, m.active.__id);
+      if (!relations.ready) return fail("missing-team");
+      const scale = read(camera.camera, camera.scaleKeys[0]) * read(camera.camera, camera.scaleKeys[1]);
+      if (!finite(scale) || scale <= 0) return fail("missing-camera");
+      const cursor = native ? { x: read(camera.camera, camera.widthKey) / 2 + physical.x * native.toMouseLen * scale, y: read(camera.camera, camera.heightKey) / 2 - physical.y * native.toMouseLen * scale } : mouse;
+      const candidates = [];
+      for (const p of m.players().slice(0, 256)) {
+        if (p === m.active || !p.active || at2(p, [m.schema.netKey, m.schema.deadKey]) || !cfg.knocked && p.downed || relations.classify(p.__id).kind !== "enemy" || !sameLayer(layer, this.sourceLayer(p))) continue;
+        const target = this.sourcePos(p), screen = aimPoint(camera, target, pos), track = this.tracker.estimate(p, now);
+        if (!screen || !track || track.age > 0.15 || track.samples?.length < 2 || !finite(track.vx) || !finite(track.vy)) continue;
+        const distance = Math.hypot(screen.x - cursor.x, screen.y - cursor.y);
+        if (distance <= cfg.fov) candidates.push({ p, target, track, distance });
+      }
+      candidates.sort((a, b) => a.distance - b.distance);
+      const obstacles = m.obstacles();
+      const groundAt = /* @__PURE__ */ __name((point2, floor) => {
+        const result = Reflect.apply(surface, map, [point2, floor]);
+        return typeof result?.type === "string" && result.type !== "water" ? "ground" : "unknown";
+      }, "groundAt");
+      for (const c of candidates.slice(0, 3)) {
+        const transit = this.timing.transit();
+        const solution = solveMovingOpenThrow({ def, origin: pos, target: c.target, playerVelocity: myVelocity, targetVelocity: { x: c.track.vx, y: c.track.vy }, fuseRemaining: fuse, releaseDelay: transit + c.track.age });
+        if (!solution) continue;
+        const checked = validateOpenThrow({ solution, origin: pos, def, layer, obstacles, groundAt });
+        if (!checked.ok) {
+          this.grenadeState = checked.reason;
+          continue;
+        }
+        this.grenadePlan = { points: solution.points, end: solution.end, type: ctx.type };
+        this.grenadeState = timer ? "estimate-unconfirmed" : "estimate-before-throw";
+        if (mode === "preview" || cfg.grenadeAimActivation !== "equip" && !firing && !timer) return null;
+        const strength = mode === "assist" ? clamp((cfg.grenadeAssistStrength ?? 35) / 100, 0, 1) : 1;
+        if (strength === 0) return null;
+        const a = Math.atan2(physical.y, physical.x), b = Math.atan2(solution.direction.y, solution.direction.x), angle = a + angleDelta(a, b) * strength;
+        const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+        const nativeLength = native?.toMouseLen ?? Math.hypot(mouse.x - read(camera.camera, camera.widthKey) / 2, mouse.y - read(camera.camera, camera.heightKey) / 2) / scale;
+        const distance = clamp(nativeLength + (solution.mouseDistance - nativeLength) * strength, 0, 64);
+        if (applyDirect && this.config.directMouseInput !== false && this.flushReady) this.mouseInput.apply(this.app.input, camera, { dir, distance, toMouseHit: true });
+        return { dir, distance, toMouseHit: true };
+      }
+      return fail(this.grenadeState === "off" ? "no-clear-solution" : this.grenadeState);
+    }
     processAim(native, advance2, applyDirect = false) {
       const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
+      this.grenadePlan = null;
+      this.grenadeState = "off";
       this.target = null;
       this.targetId = null;
       this.dot = null;
@@ -8358,6 +8541,10 @@ THE SOFTWARE.
       if (!firing) {
         this.manualEquipHeld = false;
         this.meleeEquip = null;
+      }
+      if (this.local?.data?.[this.local.slotKey] === 3 && ["preview", "assist", "lock"].includes(cfg.grenadeAimMode)) {
+        this.aimController.reset();
+        return this.processGrenadeAim({ native, applyDirect, pos, mouse, camera, physical, firing, now });
       }
       const trigger = cfg.aimActivation === "key" ? this.holdAim : cfg.aimActivation === "both" ? this.holdAim && firing : firing;
       const gun = this.definitions?.[localWeapon(m)], slot = this.local?.data[this.local.slotKey];
@@ -8626,7 +8813,7 @@ THE SOFTWARE.
         return;
       }
       const playerReady = !!(m?.schema && m.active?.active && this.capabilities.visuals);
-      if (!(cfg.esp || cfg.lines || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones || cfg.grenadeTimer)) {
+      if (!(cfg.esp || cfg.lines || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones || cfg.grenadeTimer || cfg.grenadeAimMode !== "off" && !!cfg.grenadeAimMode)) {
         if (this.overrides.records.size) this.overrides.clear();
         this.names.clear();
         return;
@@ -8737,6 +8924,30 @@ THE SOFTWARE.
       if (cfg.grenadeTimer && this.capabilities.grenadeTimer) {
         const timer = this.grenadeTimer.sample(this.grenadeContext(), this.win.performance.now());
         if (timer) drawGrenadeTimer(ctx, origin, timer.seconds);
+      }
+      if (this.grenadePlan && ["preview", "assist", "lock"].includes(cfg.grenadeAimMode)) {
+        const projected = this.grenadePlan.points.filter((_, i) => i % 3 === 0 || i === this.grenadePlan.points.length - 1).map((p) => project(m.camera, p));
+        if (projected.length > 1 && projected.every(Boolean)) {
+          ctx.save();
+          ctx.strokeStyle = "#80ffb5cc";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          projected.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+          ctx.stroke();
+          const end = projected.at(-1), def = this.definitions?.[this.grenadePlan.type], radius = this.definitions?.[def?.explosionType]?.rad?.max;
+          const scale = read(m.camera?.camera, m.camera?.scaleKeys?.[0]) * read(m.camera?.camera, m.camera?.scaleKeys?.[1]);
+          if (finite(radius) && radius > 0 && finite(scale)) {
+            ctx.beginPath();
+            ctx.arc(end.x, end.y, radius * scale, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "11px system-ui";
+          ctx.fillText("ước lượng / chưa xác nhận", end.x + 4, end.y - 8);
+          ctx.restore();
+        }
       }
       if (cfg.esp || cfg.lines) {
         espFrame ||= buildEspFrame(m, players, cfg, width, height, this.target);
@@ -8918,6 +9129,7 @@ THE SOFTWARE.
         checks,
         autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
         grenadeTimer: { enabled: !!this.config.grenadeTimer, state: this.grenadeTimer.active ? "forwarded-edge-unconfirmed" : this.config.grenadeTimer ? "waiting-for-edge" : "disabled" },
+        grenadeAim: { mode: this.config.grenadeAimMode || "off", state: this.grenadeState },
         mapHighlights: { ...this.mapHighlights.stats },
         nativeNames: { ...this.names.stats },
         inputBlockReason: this.inputBlockReason(),
@@ -9014,6 +9226,9 @@ THE SOFTWARE.
     grenadeTrajectory: false,
     grenadeZones: false,
     grenadeTimer: false,
+    grenadeAimMode: "off",
+    grenadeAimActivation: "hold",
+    grenadeAssistStrength: 35,
     zoom: false,
     zoomFactor: 1.5,
     autoLoot: false,
@@ -9026,7 +9241,7 @@ THE SOFTWARE.
     holdAim: false
   });
   var STORAGE_KEY = "duality-reborn.config.v1";
-  var ranges = { assistStrength: [0, 100], leadAdjustment: [50, 200], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [0.5, 3] };
+  var ranges = { assistStrength: [0, 100], grenadeAssistStrength: [0, 100], leadAdjustment: [50, 200], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [0.5, 3] };
   var colors = /* @__PURE__ */ new Set(["espEnemyColor", "espAllyColor", "espUnknownColor", "espTargetColor"]);
   function normalizeConfig(saved) {
     const result = { ...DEFAULTS };
@@ -9040,7 +9255,7 @@ THE SOFTWARE.
     }
     if (["nearby", "mobile"].includes(saved.lootMode)) result.lootMode = saved.lootMode;
     if (["ring", "cross", "brackets", "diamond"].includes(saved.targetStyle)) result.targetStyle = saved.targetStyle;
-    for (const [key, values] of Object.entries({ aimMode: ["off", "assist", "lock"], aimActivation: ["fire", "key", "both"], smoothProfile: ["responsive", "natural", "precise"] })) if (values.includes(saved[key])) result[key] = saved[key];
+    for (const [key, values] of Object.entries({ aimMode: ["off", "assist", "lock"], aimActivation: ["fire", "key", "both"], smoothProfile: ["responsive", "natural", "precise"], grenadeAimMode: ["off", "preview", "assist", "lock"], grenadeAimActivation: ["hold", "equip"] })) if (values.includes(saved[key])) result[key] = saved[key];
     for (const key of ["espLegend", "espLabels", "espDistance", "espWeapons", "espHighlightTarget", "espMarkers", "espOffscreen"]) result[key] = false;
     if (saved.version !== 2) {
       result.lines = false;
@@ -9074,6 +9289,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
       ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
       ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread."]]],
+      ["Grenade Aim (thử nghiệm)", [["grenadeAimMode", "Chế độ"], ["grenadeAimActivation", "Kích hoạt Assist / Lock"], ["grenadeAssistStrength", "Lực Assist bom (%)"], [null, "Ước lượng: không tự giữ hay ném. Không bảo đảm an toàn hoặc trúng."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
       ["Auto Switch", [["autoSwitch", "Enabled", "switch"], ["useOneGun", "Use One Gun (switch away then return)", "switch"], [null, "Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server."]]],
       ["Semi Auto", [["semi", "Held Fire: single guns + fists / melee", "semi"], [null, "Giữ nút Fire để lặp; auto/burst dùng shootHold gốc; không lặp lựu đạn. Server vẫn quyết định cooldown."]]]
@@ -9176,7 +9392,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     const row = /* @__PURE__ */ __name(([key, label, capability]) => {
       if (key === null) return el("div", { class: "hint", text: label });
       const title = el("span", { text: label }), labelEl = el("label", { class: "row" }, title);
-      const choices = { targetStyle: [["ring", "Vòng tròn"], ["cross", "Tâm ngắm"], ["brackets", "Góc khung"], ["diamond", "Hình thoi"]], lootMode: [["nearby", "Nearby supplies (now)"], ["mobile", "Mobile loot / doors (next join)"]], aimMode: [["off", "Off"], ["assist", "Aim Assist"], ["lock", "Aim Lock"]], aimActivation: [["fire", "Hold Fire"], ["key", "Hold aim key"], ["both", "Aim key + Fire"]], smoothProfile: [["responsive", "Responsive / pro"], ["natural", "Natural"], ["precise", "Precise / cinematic"]] };
+      const choices = { grenadeAimMode: [["off", "Off"], ["preview", "Preview"], ["assist", "Assist"], ["lock", "Lock"]], grenadeAimActivation: [["hold", "Giữ Fire"], ["equip", "Cầm bom"]], targetStyle: [["ring", "Vòng tròn"], ["cross", "Tâm ngắm"], ["brackets", "Góc khung"], ["diamond", "Hình thoi"]], lootMode: [["nearby", "Nearby supplies (now)"], ["mobile", "Mobile loot / doors (next join)"]], aimMode: [["off", "Off"], ["assist", "Aim Assist"], ["lock", "Aim Lock"]], aimActivation: [["fire", "Hold Fire"], ["key", "Hold aim key"], ["both", "Aim key + Fire"]], smoothProfile: [["responsive", "Responsive / pro"], ["natural", "Natural"], ["precise", "Precise / cinematic"]] };
       const input = choices[key] ? el("select") : el("input", { type: colors.has(key) ? "color" : ranges[key] ? "range" : "checkbox" });
       input.dataset.config = key;
       if (choices[key]) {

@@ -40,6 +40,24 @@ test('critically damped angular SmoothDamp eases in/out without overshoot and ho
   const carried = smoothDamp(1.2, 1.2, 5, .1, 9, 1 / 60); assert.ok(Number.isFinite(carried.value)); assert.ok(Number.isFinite(carried.velocity));
 });
 
+test('responsive Lock brakes observed reversals without changing Assist or other profiles', () => {
+  const target = {}, native = { x: 1, y: 0 }, wanted = { x: Math.cos(-.2), y: Math.sin(-.2) };
+  const run = profile => {
+    const c = new AimController(); Object.assign(c, { angle: .3, angularVelocity: 1, time: 0, target, mode: 'lock' });
+    const out = c.step(native, wanted, { mode: 'lock', smooth: 50, profile, target, now: 1000 / 60, humanLike: true });
+    return { c, out };
+  };
+  const base = (.065 + .5 * .24) * .78;
+  const expected = smoothDamp(.3, -.2, 1, base * .7, 12, 1 / 60);
+  const responsive = run('responsive');
+  assert.ok(Math.abs(angle(responsive.out) - expected.value) < 1e-12);
+  assert.ok(responsive.c.angularVelocity < smoothDamp(.3, -.2, 1, base, 12, 1 / 60).velocity);
+  const natural = run('natural'), unchanged = smoothDamp(.3, -.2, 1, .065 + .5 * .24, 8.5, 1 / 60);
+  assert.ok(Math.abs(angle(natural.out) - unchanged.value) < 1e-12);
+  const direct = new AimController().step(native, wanted, { mode: 'lock', smooth: 50, profile: 'responsive', target, now: 0, humanLike: false });
+  assert.ok(Math.abs(angle(direct) + .2) < 1e-12);
+});
+
 test('Assist is monotonic, strength zero is native and moving intent escapes without controller memory', () => {
   const c = new AimController(); let last = -1;
   for (const strength of [0, 10, 35, 70, 100]) {

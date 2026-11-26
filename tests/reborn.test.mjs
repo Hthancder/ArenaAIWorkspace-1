@@ -1428,3 +1428,46 @@ test('grenade timer menu toggle persists off by default and does not require tra
     assert.equal(normalizeConfig({ version: 3, grenadeTimer: 'true' }).grenadeTimer, false);
   } finally { menu.dispose(); dom.window.close(); }
 });
+
+test('grenade preview, assist and lock are isolated and preserve native Fire; missing terrain fails closed', () => {
+  const f = coordinated({ aim: false, grenadeAimMode: 'preview', grenadeAimActivation: 'equip', grenadeAssistStrength: 50 });
+  try {
+    const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+    f.engine.definitions.frag = { type: 'throwable', cookable: true, fuseTime: 4, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
+    hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = [];
+    enemy.n.sourcePos = { x: 12, y: 20 }; f.app.input.mouseButtons[0] = false;
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' };
+    f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true;
+    f.engine.mapping.map = { getGroundSurface() { return { type: 'grass' }; } };
+    const now = f.dom.window.performance.now();
+    for (const t of [now - 66, now - 33, now]) {
+      f.engine.tracker.observe(hero, hero.n.sourcePos, t); f.engine.tracker.observe(enemy, enemy.n.sourcePos, t);
+    }
+    const input = new InputMsg(); input.toMouseLen = 2;
+    assert.equal(f.engine.processAim(input, true), null); assert.ok(f.engine.grenadePlan, f.engine.grenadeState);
+    f.cfg.grenadeAimMode = 'lock'; const lock = f.engine.processAim(input, true);
+    assert.ok(lock, f.engine.grenadeState); assert.equal(lock.toMouseHit, true); assert.ok(lock.distance >= 0 && lock.distance <= 18);
+    f.cfg.grenadeAimMode = 'assist'; const assist = f.engine.processAim(input, true);
+    assert.ok(assist); assert.ok(Math.abs(assist.distance - (2 + lock.distance) / 2) < 1e-8);
+    f.cfg.grenadeAimActivation = 'hold'; assert.equal(f.engine.processAim(input, true), null, 'hold mode never applies while Fire is up');
+    f.cfg.grenadeAimMode = 'lock'; f.app.input.mouseButtons[0] = true;
+    const edge = new InputMsg(); edge.shootStart = true; edge.shootHold = true;
+    f.app.game.transmit(3, edge); assert.equal(f.app.game.sent.at(-1).data.shootHold, true);
+    assert.ok(f.engine.grenadeAimTimer.active, 'local forwarded Fire starts advisory timer');
+    assert.ok(f.engine.processAim(input, true), f.engine.grenadeState);
+    f.app.input.mouseButtons[0] = false;
+    assert.ok(f.engine.processAim(input, true), 'hold mode retains the observed fuse for the pending release');
+    const release = new InputMsg(); release.shootHold = false; f.engine.aimPlanFrame = -1; f.app.game.transmit(3, release);
+    assert.equal(f.app.game.sent.at(-1).data.shootHold, false); assert.equal(f.engine.grenadeAimTimer.active, null);
+    assert.equal(f.engine.processAim(input, true), null, 'hold mode relinquishes after release is forwarded');
+    f.app.input.mouseButtons[0] = true; f.app.game.transmit(3, edge);
+    f.engine.aimPlan = { dir: { x: 0, y: 1 }, distance: 18, toMouseHit: true }; f.engine.aimPlanFrame = f.engine.aimFrame; f.engine.aimPlanDirect = true;
+    const switchInput = new InputMsg(); switchInput.shootHold = true; switchInput.inputs = [11]; f.app.game.transmit(3, switchInput);
+    const switched = f.app.game.sent.at(-1).data;
+    assert.deepEqual(switched.toMouseDir, switchInput.toMouseDir, 'manual equip must not reuse a cached grenade aim');
+    assert.equal(switched.shootHold, true); assert.equal(f.engine.grenadeAimTimer.active, null);
+    f.engine.manualEquipHeld = false; f.app.input.mouseButtons[0] = false;
+    f.engine.mapping.map = {}; assert.equal(f.engine.processAim(input, true), null); assert.equal(f.engine.grenadeState, 'missing-terrain');
+    f.dom.window.dispatchEvent(new f.dom.window.Event('blur')); assert.equal(f.engine.grenadeAimTimer.active, null);
+  } finally { f.close(); }
+});

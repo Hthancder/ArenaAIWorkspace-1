@@ -222,7 +222,12 @@ export class AimController {
       const selectedProfile = profiles[profile] || profiles.natural;
       const amount = clamp(finite(smooth) ? smooth : 50, 1, 100);
       const targetAngle = this.angle + angleDelta(this.angle, b);
-      const smoothTime = (.065 + (amount / 100) * .24) * selectedProfile.time;
+      const baseTime = (.065 + (amount / 100) * .24) * selectedProfile.time;
+      // Responsive Lock brakes sooner only when the observed wanted direction is
+      // behind the controller's current angular motion. This uses no future
+      // target input and does not snap or affect Assist / other profiles.
+      const braking = profile === 'responsive' && this.angularVelocity * angleDelta(this.angle, b) < -.001;
+      const smoothTime = baseTime * (braking ? .7 : 1);
       const solved = smoothDamp(this.angle, targetAngle, this.angularVelocity, smoothTime, selectedProfile.rate, dt);
       this.angularVelocity = solved.velocity;
       this.angle = Math.atan2(Math.sin(solved.value), Math.cos(solved.value));
