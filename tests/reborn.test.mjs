@@ -953,6 +953,55 @@ test('Final configuration is equivalent across unrelated visual toggle orders; s
   assert.deepEqual(outputs[0], outputs[1]);
 });
 
+test('Lock Keep target stays authoritative while physical cursor crosses FOV, releases on Fire up', () => {
+  const f = coordinated({ sticky: true, aimMode: 'lock', humanLikeAim: false, fov: 100 });
+  try {
+    f.send(); assert.equal(f.engine.target.__id, 2);
+    for (let i = 0; i < 12; i++) {
+      f.app.input.mousePos.x = i % 2 ? 440 : 400; f.app.input.mousePos.y = i % 2 ? 300 : 40;
+      f.advance(); const { native, wire } = f.send();
+      assert.equal(f.engine.target.__id, 2); assert.equal(wire.shootHold, true); assert.equal(native.shootHold, true);
+      assert.ok(wire.toMouseDir.x > .99 && Math.abs(wire.toMouseDir.y) < .01);
+      assert.equal(f.engine.stats.aimState, 'input-applied');
+    }
+    f.app.input.mouseButtons[0] = false; f.app.input.mousePos.x = 400; f.app.input.mousePos.y = 40;
+    f.advance(); f.send(); assert.equal(f.engine.target, null); assert.equal(f.engine.stickyId, null);
+    f.app.input.mouseButtons[0] = true; f.advance(); const { wire } = f.send();
+    assert.equal(f.engine.target, null); assert.equal(f.engine.stats.aimRejections.outsideFov, 1);
+    assert.deepEqual(wire.toMouseDir, { x: 1, y: 0 }, 'native fixture input forwarded on failed acquisition');
+  } finally { f.close(); }
+});
+
+test('retained Lock yields to wallcheck and rejects invalidated team or dead target', () => {
+  const f = coordinated({ sticky: true, wallcheck: true, humanLikeAim: false });
+  try {
+    const wall = { __id: 900, __type: 2, active: false, collidable: true, layer: 0, height: 1,
+      collider: { type: 0, pos: { x: 11, y: 20 }, rad: .2 } };
+    const table = { 900: wall };
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true); f.send(); assert.equal(f.engine.target.__id, 2);
+    f.app.input.mousePos.x = 400; f.app.input.mousePos.y = 40; wall.active = true;
+    f.advance(); f.send(); assert.equal(f.engine.stats.aimState, 'wall-blocked'); assert.equal(f.engine.target, null);
+    wall.active = false; f.advance(); f.send(); assert.equal(f.engine.target.__id, 2);
+    f.app.game.barn.teamInfo[10].playerIds.push(2); f.app.game.barn.teamInfo[20].playerIds = [];
+    f.advance(); f.send(); assert.equal(f.engine.target, null); assert.equal(f.engine.stats.aimRejections.teammate, 1);
+    f.app.game.barn.teamInfo[10].playerIds = [1]; f.app.game.barn.teamInfo[20].playerIds = [2];
+    f.app.input.mousePos.x = 440; f.app.input.mousePos.y = 300; f.advance(); f.send(); assert.equal(f.engine.target.__id, 2);
+    f.app.game.barn.playerPool.list[1].n.dead = true; f.advance(); f.send(); assert.equal(f.engine.target, null);
+  } finally { f.close(); }
+});
+
+test('Assist and Lock without Keep target still release outside FOV', () => {
+  for (const config of [{ aimMode: 'assist', sticky: true }, { aimMode: 'lock', sticky: false }]) {
+    const f = coordinated({ ...config, fov: 100 });
+    try {
+      f.send(); assert.ok(f.engine.target);
+      f.app.input.mousePos.x = 400; f.app.input.mousePos.y = 40; f.advance(); f.send();
+      assert.equal(f.engine.target, null); assert.equal(f.engine.stats.aimRejections.outsideFov, 1);
+    } finally { f.close(); }
+  }
+});
+
 test('native ESP survives missing aim/camera schema and legacy hidden name setting, with observable applied counts', () => {
   const f = coordinated({ esp: true, nametags: false });
   try {
@@ -1249,7 +1298,7 @@ test('fire edge revalidates cached aim at the sender and preserves native fire',
 });
 
 test('sender revalidates when physical mouse moves after the cached frame', () => {
-  const f = coordinated({ fov: 100 });
+  const f = coordinated({ fov: 100, sticky: false });
   try {
     f.engine.pre(); assert.ok(f.engine.aimPlan); assert.ok(f.engine.mouseInput.record);
     f.app.input.mousePos.x = 400; f.app.input.mousePos.y = 40;

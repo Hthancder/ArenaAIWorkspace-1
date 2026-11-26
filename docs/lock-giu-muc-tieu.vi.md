@@ -1,0 +1,7 @@
+# Lock giữ mục tiêu khi đang khai hỏa
+
+Trước thay đổi này, `Keep target` chỉ mở rộng FOV mục tiêu hiện tại lên 1,25 lần. Vì FOV được tính theo chuột vật lý (không phải chuột đã hiệu chỉnh), di chuột khi giữ Fire có thể làm mục tiêu vượt ngưỡng rồi vào lại: aim nhả và bắt lại, có thể gây dao động giữa hai hướng. Đây là cơ chế có thể tái hiện trong fixture; chưa xác nhận là nguyên nhân duy nhất của hiện tượng live.
+
+Giờ khi **Lock + Keep target** đã chọn được mục tiêu trong FOV và activation vẫn giữ, nó tiếp tục ưu tiên mục tiêu đó kể cả khi chuột thật ra ngoài FOV. Nhả activation xóa sticky: lần kích hoạt sau phải chọn lại trong FOV. Tắt Keep target để dùng FOV liên tục. Assist không đổi: vẫn blend với chuột thật và vẫn dùng FOV. Lock Human-like vẫn có thể cần thời gian hội tụ; tắt Human-like nếu muốn hướng trực tiếp.
+
+Không bỏ các điều kiện an toàn: mục tiêu chết, biến mất, đội không rõ/không được phép, khác tầng, prediction không đủ theo chính sách, vật cản hoặc người chắn vẫn có thể làm aim nhả. Wallcheck với sticky vẫn đợi cho đường bắn thông; không bắn xuyên tường. Không thay nút Fire, không sửa hướng ngoài activation, không hứa server chấp nhận hay chắc chắn trúng. Theo source ghim, client đọc chuột ở cả cập nhật hướng và local rotation; wrapper sender chỉnh gói khi có aim hợp lệ, còn transaction vector native tạm thời được hoàn nguyên ở flush. Nếu hiện tượng vẫn xảy ra, gửi Help → Copy diagnostics ngay sau khi tái hiện để phân biệt bỏ mục tiêu, input và render; kết quả unit/source fixture không phải kiểm thử game live.

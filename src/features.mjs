@@ -707,8 +707,13 @@ export class Features {
       const target = this.sourcePos(p), screen = aimPoint(camera, target, pos); if (!screen) continue;
       const distance = melee ? Math.hypot(target.x - pos.x, target.y - pos.y) : Math.hypot(screen.x - inputCursor.x, screen.y - inputCursor.y);
       const stickyCurrent = !!cfg.sticky && p.__id === this.stickyId;
+      // Lock + Keep target retains the already-selected player for the active
+      // hold, even when physical cursor motion crosses the acquisition FOV.
+      // All live/team/layer, prediction and wall checks below still apply.
+      // Assist and initial acquisition continue to use the normal FOV.
+      const retainLock = !melee && mode === 'lock' && trigger && stickyCurrent;
       const radius = melee ? reach : cfg.fov * (stickyCurrent ? 1.25 : 1);
-      if (distance > radius) { reject('outsideFov'); continue; }
+      if (!retainLock && distance > radius) { reject('outsideFov'); continue; }
       if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical))) { reject('otherLayer'); continue; }
       // A real switch margin prevents two enemies on opposite sides of the FOV from
       // trading ownership every frame. The current target needs to be meaningfully
