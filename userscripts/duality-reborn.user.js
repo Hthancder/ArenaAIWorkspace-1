@@ -8524,11 +8524,14 @@ THE SOFTWARE.
             } else {
               const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
               const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
-              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.timedProcessAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && (!self.aimPlan || modeOf(self.config) !== "lock" && !self.meleeDirection || self.local?.data?.[self.local.slotKey] === 3 || self.mouseInput.owns(self.app.input)) && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.timedProcessAim(
-                intent,
-                true,
-                !!self.mouseInput.record?.captured || (modeOf(self.config) === "lock" || self.config.melee) && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady
-              );
+              const grenade = self.local?.data?.[self.local.slotKey] === 3 && ["preview", "assist", "lock"].includes(self.config.grenadeAimMode);
+              const reusable = !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && (!self.aimPlan || modeOf(self.config) !== "lock" && !self.meleeDirection || grenade || self.mouseInput.owns(self.app.input)) && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim;
+              const direct = !!self.mouseInput.record?.captured || (modeOf(self.config) === "lock" || self.config.melee) && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady;
+              if (grenade && (self.config.grenadeAutoThrow || reusable && self.aimPlan)) {
+                self.aimOutput = self.timedProcessAim(intent, true);
+              } else if (reusable && self.aimPlan && self.config.wallcheck) {
+                self.aimOutput = self.timedProcessAim(intent, true, direct, { target: self.target, dir: self.aimPlan.dir });
+              } else self.aimOutput = reusable ? self.aimPlan : self.timedProcessAim(intent, true, direct);
             }
             if (manualEquip) {
               self.weaponSwitch.reset();
@@ -9000,15 +9003,15 @@ THE SOFTWARE.
       }
       return fail(this.grenadeState === "off" ? "no-clear-solution" : this.grenadeState);
     }
-    timedProcessAim(native, advance2, applyDirect = false) {
+    timedProcessAim(native, advance2, applyDirect = false, recheck = null) {
       const start2 = this.win.performance.now();
       try {
-        return this.processAim(native, advance2, applyDirect);
+        return this.processAim(native, advance2, applyDirect, recheck);
       } finally {
         this.runtimePerf.add(native ? "aimSender" : "aimFrame", this.win.performance.now() - start2);
       }
     }
-    processAim(native, advance2, applyDirect = false) {
+    processAim(native, advance2, applyDirect = false, recheck = null) {
       const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
       this.grenadePlan = null;
       this.grenadeAutoPlan = null;
@@ -9121,6 +9124,7 @@ THE SOFTWARE.
       const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
       if (profile && muzzleObstacles.length > 1024) return fail("muzzle-obstacle-budget");
       for (const candidate of ordered.slice(0, 6)) {
+        if (recheck && (!recheck.target || candidate.p !== recheck.target || !vec(recheck.dir))) return fail("aim-state-changed");
         let shot, track = null;
         if (melee) shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos, distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: "melee" };
         else {
@@ -9196,7 +9200,7 @@ THE SOFTWARE.
         this.stickyId = candidate.p.__id;
         this.stats.predictionState = shot.state;
         this.stats.aimApproximate = !!shot.approximate;
-        const dir = advance2 ? this.aimController.step(physical, shot.dir, {
+        const dir = recheck ? recheck.dir : advance2 ? this.aimController.step(physical, shot.dir, {
           mode: melee ? "lock" : mode,
           strength: cfg.assistStrength ?? 35,
           smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth,
@@ -9207,6 +9211,7 @@ THE SOFTWARE.
           cursorRadius: Math.hypot(mouse.x - read(camera.camera, camera.widthKey) / 2, mouse.y - read(camera.camera, camera.heightKey) / 2),
           targetRadius: shot.distance * scale
         }) : !melee && mode === "assist" ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
+        if (recheck && melee && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) return fail("aim-state-changed");
         if (cfg.wallcheck && !melee && dir && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) {
           const actualLayer = layerFor(dir);
           if (actualLayer === null) {

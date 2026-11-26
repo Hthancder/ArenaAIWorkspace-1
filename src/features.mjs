@@ -277,14 +277,20 @@ export class Features {
             // native serialization. Revalidate instead of sending stale intent.
             const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
             const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
-            self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3
-            ? self.timedProcessAim(intent, true) // Revalidate at the actual sender, not a cached render plan.
-            : !data.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
-                && (!self.aimPlan || modeOf(self.config) !== 'lock' && !self.meleeDirection || self.local?.data?.[self.local.slotKey] === 3 || self.mouseInput.owns(self.app.input))
+            const grenade = self.local?.data?.[self.local.slotKey] === 3 && ['preview', 'assist', 'lock'].includes(self.config.grenadeAimMode);
+            const reusable = !data.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
+                && (!self.aimPlan || modeOf(self.config) !== 'lock' && !self.meleeDirection || grenade || self.mouseInput.owns(self.app.input))
                 && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0])
-                && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.timedProcessAim(intent, true,
-                  !!self.mouseInput.record?.captured || (modeOf(self.config) === 'lock' || self.config.melee)
-                    && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady);
+                && self.aimPlanHoldAim === self.holdAim;
+            const direct = !!self.mouseInput.record?.captured || (modeOf(self.config) === 'lock' || self.config.melee)
+              && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady;
+            if (grenade && (self.config.grenadeAutoThrow || reusable && self.aimPlan)) {
+              self.aimOutput = self.timedProcessAim(intent, true); // Grenade geometry/fuse must be current at sender.
+            } else if (reusable && self.aimPlan && self.config.wallcheck) {
+              // Recheck world state but keep this frame's controller output. A
+              // second smoothing step or a new target can cause a visible jump.
+              self.aimOutput = self.timedProcessAim(intent, true, direct, { target: self.target, dir: self.aimPlan.dir });
+            } else self.aimOutput = reusable ? self.aimPlan : self.timedProcessAim(intent, true, direct);
           }
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.aimOutputFrame = self.frameId;
@@ -663,12 +669,12 @@ export class Features {
     }
     return fail(this.grenadeState === 'off' ? 'no-clear-solution' : this.grenadeState);
   }
-  timedProcessAim(native, advance, applyDirect = false) {
+  timedProcessAim(native, advance, applyDirect = false, recheck = null) {
     const start = this.win.performance.now();
-    try { return this.processAim(native, advance, applyDirect); }
+    try { return this.processAim(native, advance, applyDirect, recheck); }
     finally { this.runtimePerf.add(native ? 'aimSender' : 'aimFrame', this.win.performance.now() - start); }
   }
-  processAim(native, advance, applyDirect = false) {
+  processAim(native, advance, applyDirect = false, recheck = null) {
     const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
     this.grenadePlan = null; this.grenadeAutoPlan = null; this.grenadeState = 'off';
     this.aimPreparation = null;
@@ -748,6 +754,7 @@ export class Features {
     const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
     if (profile && muzzleObstacles.length > 1024) return fail('muzzle-obstacle-budget');
     for (const candidate of ordered.slice(0, 6)) {
+      if (recheck && (!recheck.target || candidate.p !== recheck.target || !vec(recheck.dir))) return fail('aim-state-changed');
       let shot, track = null;
       if (melee) shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos, distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: 'melee' };
       else {
@@ -794,10 +801,11 @@ export class Features {
       this.target = candidate.p; this.targetId = candidate.p.__id; this.stickyId = candidate.p.__id;
       this.stats.predictionState = shot.state;
       this.stats.aimApproximate = !!shot.approximate;
-      const dir = advance ? this.aimController.step(physical, shot.dir, { mode: melee ? 'lock' : mode, strength: cfg.assistStrength ?? 35,
+      const dir = recheck ? recheck.dir : advance ? this.aimController.step(physical, shot.dir, { mode: melee ? 'lock' : mode, strength: cfg.assistStrength ?? 35,
         smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth, now, target: candidate.p, humanLike: !!cfg.humanLikeAim, profile: cfg.smoothProfile || 'responsive',
         cursorRadius: Math.hypot(mouse.x - read(camera.camera, camera.widthKey) / 2, mouse.y - read(camera.camera, camera.heightKey) / 2),
         targetRadius: shot.distance * scale }) : !melee && mode === 'assist' ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
+      if (recheck && melee && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) return fail('aim-state-changed');
       if (cfg.wallcheck && !melee && dir && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) {
         const actualLayer = layerFor(dir);
         if (actualLayer === null) { reject('aimLayer'); return fail('wall-blocked'); }

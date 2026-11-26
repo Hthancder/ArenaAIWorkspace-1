@@ -1423,6 +1423,37 @@ test('Wallcheck fails closed if a discovered registry disappears or cannot be sc
   } finally { f.close(); }
 });
 
+test('same-frame Wallcheck revalidates sender geometry without advancing smooth twice', () => {
+  for (const aimMode of ['lock', 'assist']) {
+    const f = coordinated({ wallcheck: true, aimMode, humanLikeAim: true, smooth: 50 });
+    try {
+      const enemy = f.app.game.barn.playerPool.list[1]; enemy.p = { x: 14, y: 21 };
+      const creator = f.app.game.creator = { table: {}, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+      f.engine.reconcile(true); f.engine.pre();
+      assert.ok(f.engine.aimPlan, f.engine.stats.aimState);
+      const initial = { ...f.engine.aimPlan.dir }, angle = f.engine.aimController.angle, time = f.engine.aimController.time;
+      const input = new InputMsg(); input.shootHold = true; input.toMouseLen = 1.25;
+      f.app.game.transmit(3, input); const clear = f.app.game.sent.at(-1).data;
+      assert.deepEqual(clear.toMouseDir, initial, 'clear path preserves the controller direction');
+      assert.equal(f.engine.aimController.angle, angle); assert.equal(f.engine.aimController.time, time);
+      f.advance(); f.engine.pre(); assert.ok(f.engine.aimPlan);
+      creator.table.wall = { __id: 99, __type: 2, active: true, dead: false, collidable: true, layer: 0, height: 1,
+        collider: { type: 0, pos: { x: 10, y: 20 }, rad: 1.2 } };
+      const held = new InputMsg(); held.shootHold = true; held.toMouseLen = 1.25;
+      f.app.game.transmit(3, held); const blocked = f.app.game.sent.at(-1).data;
+      assert.equal(f.engine.stats.aimState, 'wall-blocked'); assert.equal(f.engine.target, null);
+      assert.deepEqual(blocked.toMouseDir, held.toMouseDir); assert.equal(blocked.shootHold, true);
+      delete creator.table.wall; f.advance(); f.engine.pre(); assert.ok(f.engine.aimPlan, 'next clear frame recovers');
+      creator.table = null; f.app.game.transmit(3, held);
+      assert.equal(f.engine.stats.aimState, 'wallcheck-unavailable'); assert.equal(f.engine.target, null);
+      creator.table = {}; f.advance(); f.engine.pre(); assert.ok(f.engine.aimPlan);
+      f.app.game.barn.teamInfo[20].playerIds = [];
+      f.app.game.transmit(3, held);
+      assert.equal(f.engine.target, null); assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, held.toMouseDir);
+    } finally { f.close(); }
+  }
+});
+
 test('ally gun targeting is opt-in, independent of grenade, and excludes unknown teams', () => {
   const f = coordinated({ grenadeAimAllies: true });
   try {
@@ -1744,6 +1775,12 @@ test('grenade preview, assist and lock are isolated and preserve native Fire; mi
     assert.equal(f.engine.grenadeState, 'missing-geometry'); assert.equal(f.engine.grenadePlan, null);
     f.engine.mapping.creator.table = {}; f.cfg.grenadeAimMode = 'preview';
     assert.equal(f.engine.processAim(input, true), null); assert.ok(f.engine.grenadePlan, 'plan recovers with readable geometry');
+    f.cfg.grenadeAimMode = 'lock'; f.engine.pre(); assert.ok(f.engine.aimPlan);
+    f.engine.mapping.creator.table = null;
+    f.app.game.transmit(3, input);
+    assert.equal(f.engine.grenadeState, 'missing-geometry', 'sender rechecks geometry after frame planning');
+    assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, input.toMouseDir);
+    f.engine.mapping.creator.table = {}; f.cfg.grenadeAimMode = 'preview';
     // Same target is confirmed ally. Gun toggle alone must not enable grenade targeting.
     f.app.game.barn.teamInfo[10].playerIds.push(2); f.app.game.barn.teamInfo[20].playerIds = [];
     f.cfg.aimAllies = true; f.cfg.grenadeAimAllies = false;
