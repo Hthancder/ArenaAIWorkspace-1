@@ -187,7 +187,7 @@ export class Features {
   }
   restoreInput() { this.mouseInput.restore(); }
   releaseMatch() {
-    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
+    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.lastAimSent = null; this.aimOutput = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
     this.target = null; this.targetId = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.local = null; this.mapping = null; this.effects = [];
     this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.pickupPauseUntil = 0; this.lootBackoff.reset();
@@ -390,6 +390,10 @@ export class Features {
       this.reconcile();
       const m = this.mapping, fields = this.sourceFields, now = arrivedAt;
       this.timing.received(msg, now);
+      // Native processing already changed the world. Position, layer, death,
+      // collider and other object fields can all invalidate a cached plan. Do
+      // not send an extra packet or recompute inside the receiver.
+      if ((msg.fullObjects || []).length || (msg.partObjects || []).length || (msg.delObjIds || []).length) this.aimPlanFrame = -1;
       if (!m?.schema || !fields?.pos) return;
       for (const id of msg.delObjIds || []) {
         const old = this.observedEntities.get(id); if (old) this.tracker.forget(old);

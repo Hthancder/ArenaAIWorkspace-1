@@ -7890,6 +7890,9 @@ THE SOFTWARE.
       this.aimController.reset();
       this.lastAimSent = null;
       this.aimOutput = null;
+      this.aimPlan = null;
+      this.aimPlanFrame = -1;
+      this.aimPlanDirect = false;
       this.sourceFields = null;
       this.observedEntities.clear();
       this.timing.reset();
@@ -8180,6 +8183,7 @@ THE SOFTWARE.
         this.reconcile();
         const m = this.mapping, fields = this.sourceFields, now = arrivedAt;
         this.timing.received(msg, now);
+        if ((msg.fullObjects || []).length || (msg.partObjects || []).length || (msg.delObjIds || []).length) this.aimPlanFrame = -1;
         if (!m?.schema || !fields?.pos) return;
         for (const id of msg.delObjIds || []) {
           const old = this.observedEntities.get(id);

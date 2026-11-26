@@ -163,6 +163,13 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     context.result.nativeFrame(1/60);
     let wire=context.sent.at(-1).decoded;
     assert.ok(wire && Math.abs(wire.toMouseDir.x-1)<1e-4 && Math.abs(wire.toMouseDir.y)<.003, 'Actual source native diff/send and BitStream roundtrip');
+    // Exercise the interleaving directly: update arrives after a cached pre plan
+    // but before a native send. Force only the fixture scheduler, not production.
+    app.input.flush(); clock += 17; engine.pre();
+    context.result.receive({x:12,y:20.7}); assert.equal(engine.aimPlanFrame,-1,'Native world update invalidates cached aim');
+    app.game[engine.timeoutKey]=0; clock+=10; context.result.nativeFrame(1/60);
+    wire=context.sent.at(-1).decoded; assert.ok(wire.toMouseDir.y>.3,'Same-frame update reaches actual serialized direction');
+    app.input.flush(); clock+=17; context.result.receive({x:12,y:20}); engine.pre(); context.result.nativeFrame(1/60);
     const count=context.sent.length;
     clock += 34; context.result.receive({x:12,y:20.4});engine.pre();
     const mouseDirection=context.result.readInputAim().toMouseDir;

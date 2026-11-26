@@ -1308,3 +1308,72 @@ test('last prediction diagnostics expose bounded snapshot evidence without posit
     assert.ok(!JSON.stringify(evidence).includes('sourcePos'));
   } finally { f.close(); }
 });
+
+test('sender must recompute cached aim if a position snapshot arrives after pre-frame', () => {
+  const f = coordinated({ predict: false });
+  try {
+    f.engine.pre(); const enemy = f.app.game.barn.playerPool.list[1];
+    f.engine.sourceFields = { pos: 'sourcePos' }; enemy.n.sourcePos = { x: 12, y: 20 };
+    f.engine.pre(); assert.equal(f.engine.aimPlanFrame, f.engine.aimFrame);
+    enemy.n.sourcePos = { x: 12, y: 20.7 };
+    f.advance(10);
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [{ __id: 2, pos: enemy.n.sourcePos }], delObjIds: [] });
+    const native = new InputMsg(); native.toMouseLen = 2; f.app.game.transmit(3, native);
+    const wire = f.app.game.sent.at(-1).data;
+    assert.ok(wire.toMouseDir.y > .2, `expected fresh target direction, got ${JSON.stringify(wire.toMouseDir)}`);
+  } finally { f.close(); }
+});
+
+test('world updates invalidate cached plans without sending; control-only and match reset stay safe', () => {
+  const f = coordinated({ predict: false });
+  try {
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos' }; const sent = f.app.game.sent.length;
+    const previous = f.engine.aimPlanFrame;
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [], delObjIds: [] });
+    assert.equal(f.engine.aimPlanFrame, previous, 'control-only update does not invalidate');
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [{ __id: 2, layer: 1 }], delObjIds: [] });
+    assert.equal(f.engine.aimPlanFrame, -1, 'non-position state can affect selection or wallcheck');
+    assert.equal(f.app.game.sent.length, sent, 'snapshot must never emit a packet');
+    f.engine.pre(); assert.equal(f.engine.aimPlanFrame, f.engine.aimFrame);
+    f.engine.sourceFields = null;
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [], delObjIds: [2] });
+    assert.equal(f.engine.aimPlanFrame, -1, 'deletions invalidate even without snapshot contract');
+    f.engine.releaseMatch(); assert.equal(f.engine.aimPlan, null); assert.equal(f.engine.aimPlanDirect, false);
+  } finally { f.close(); }
+});
+
+test('same-frame A-D snapshot recomputes while retaining bounded-oscillation model', () => {
+  const f = coordinated({ predict: true, stabilizeStrafe: true });
+  try {
+    f.engine.pre(); const enemy = f.app.game.barn.playerPool.list[1];
+    f.engine.sourceFields = { pos: 'sourcePos' }; f.engine.capabilities.prediction = true;
+    for (let i = 0; i < 27; i++) {
+      enemy.n.sourcePos = { x: 12, y: 20 + .35 * Math.sin(i * 33 / 1000 * 2 * Math.PI * 1.4) };
+      f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [{ __id: 2, pos: enemy.n.sourcePos }], delObjIds: [] });
+      f.advance(33);
+    }
+    f.engine.pre(); assert.equal(f.engine.stats.predictionState, 'bounded-oscillation');
+    enemy.n.sourcePos = { x: 12, y: 20.1 };
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [{ __id: 2, pos: enemy.n.sourcePos }], delObjIds: [] });
+    const input = new InputMsg(); input.toMouseLen = 2; f.app.game.transmit(3, input);
+    assert.equal(f.engine.stats.predictionState, 'bounded-oscillation');
+    assert.ok(Math.abs(f.app.game.sent.at(-1).data.toMouseDir.y) < .1, 'retains center rather than chasing the last sample');
+  } finally { f.close(); }
+});
+
+test('same-frame obstacle update rechecks Wallcheck and preserves manual Fire', () => {
+  const f = coordinated({ wallcheck: true, predict: false });
+  try {
+    f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.4 };
+    const wall = { __id: 999, __type: 2, active: true, collidable: true, dead: true, layer: 0, height: 1,
+      collider: { type: 0, pos: { x: 10.6, y: 20.12 }, rad: .15 } };
+    const table = { 999: wall };
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true); f.engine.pre(); assert.equal(f.engine.stats.aimState, 'input-applied');
+    wall.dead = false; f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [{ __id: 999, dead: false }], delObjIds: [] });
+    const input = new InputMsg(); input.shootHold = true; input.toMouseLen = 2; f.app.game.transmit(3, input);
+    const wire = f.app.game.sent.at(-1).data;
+    assert.equal(f.engine.stats.aimState, 'wall-blocked'); assert.equal(wire.shootHold, true);
+    assert.ok(Math.abs(wire.toMouseDir.y) < .001, 'no stale aim through the new obstacle');
+  } finally { f.close(); }
+});
