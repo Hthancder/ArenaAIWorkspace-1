@@ -903,8 +903,26 @@ export class Features {
     visit(m.map, 4);
     this.effects = out;
   }
+  // Upstream defaults localRotation to false: native render then overwrites the
+  // local body with interpolated server direction even while our mouse and wire
+  // agree. Like Duality, correct only the active body's visual rotation after
+  // native update, and only while gun Lock actually owns the mouse.
+  syncLockRotation() {
+    const m = this.mapping, record = this.mouseInput.record;
+    if (!this.config.aim || modeOf(this.config) !== 'lock' || !this.inputReady()
+        || this.local?.data?.[this.local.slotKey] === 3 || !this.mouseInput.owns(this.app.input)) return;
+    const firing = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+    const active = this.config.aimActivation === 'key' ? this.holdAim : this.config.aimActivation === 'both' ? this.holdAim && firing : firing;
+    if (!active || !m?.camera) return;
+    const body = read(m.active, 'bodyContainer'), width = read(m.camera.camera, m.camera.widthKey), height = read(m.camera.camera, m.camera.heightKey);
+    if (!body || !finite(width) || !finite(height) || !vec(record?.applied)) return;
+    const dx = record.applied.x - width / 2, dy = record.applied.y - height / 2;
+    if (!finite(dx) || !finite(dy) || Math.hypot(dx, dy) < 1e-8) return;
+    try { if (finite(body.rotation)) body.rotation = Math.atan2(dy, dx); } catch { /* Unsupported PIXI body: never affect input. */ }
+  }
   post() {
     if (!this.mouseInput.record?.captured) this.restoreInput();
+    this.syncLockRotation();
     this.aimPlanFrame = -1; this.aimPlanDirect = false;
     const now = this.win.performance.now(); this.stats.frames++;
     if (now - this.lastVisual < 1000 / 30) return;

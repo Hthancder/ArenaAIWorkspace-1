@@ -1006,6 +1006,26 @@ test('direct fire Lock follows a stationary target as the shooter moves laterall
   } finally { f.close(); }
 });
 
+test('Lock aligns the native body after game render and yields on release, Assist and a wall', () => {
+  const f = coordinated({ aimMode: 'lock', humanLikeAim: false, wallcheck: false, fov: 400 });
+  try {
+    const hero = f.app.game.hero, target = f.app.game.barn.playerPool.list[1];
+    hero.bodyContainer = { rotation: 0 }; target.p = { x: 12, y: 20.5 };
+    f.engine.pre(); const dir = f.engine.aimPlan.dir;
+    for (let i=0; i<5; i++) {
+      hero.bodyContainer.rotation = 0; f.app.input.flush(); f.engine.post();
+      assert.ok(Math.abs(hero.bodyContainer.rotation + Math.atan2(dir.y, dir.x)) < 1e-8);
+    }
+    f.app.input.mouseButtons[0] = false; hero.bodyContainer.rotation = .75; f.engine.post();
+    assert.equal(hero.bodyContainer.rotation, .75, 'release never overrides native render');
+    f.app.input.mouseButtons[0] = true; f.cfg.aimMode = 'assist'; f.advance(); f.engine.pre();
+    hero.bodyContainer.rotation = .5; f.engine.post(); assert.equal(hero.bodyContainer.rotation, .5, 'Assist is not forced');
+    f.cfg.aimMode = 'lock'; f.cfg.wallcheck = true; f.engine.capabilities.wallcheck = true; f.engine.blocked = () => true;
+    f.advance(); f.engine.pre(); hero.bodyContainer.rotation = .3; f.engine.post();
+    assert.equal(f.engine.stats.aimState, 'wall-blocked'); assert.equal(hero.bodyContainer.rotation, .3, 'blocked aim yields visual control');
+  } finally { f.close(); }
+});
+
 test('Lock Keep target stays authoritative while physical cursor crosses FOV, releases on Fire up', () => {
   const f = coordinated({ sticky: true, aimMode: 'lock', humanLikeAim: false, fov: 100 });
   try {

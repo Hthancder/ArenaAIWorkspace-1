@@ -1,0 +1,9 @@
+# Hướng súng khi Lock — đối chiếu Duality
+
+Đã rà luồng của bundle Duality 4.1 được cung cấp: khởi tạo và discovery, ticker chọn mục tiêu/FOV/team/layer/wallcheck/prediction, accessor chuột, interpolation/idle, cập nhật body, hook sender và Fire, cùng các feature khác trong entry client. Các thư viện UI đóng gói không phải logic điều khiển game. Mã tham khảo chỉ phân tích tĩnh, không chạy. Không sao chép việc chặn/phát lại Fire vì không tương đương Fire vật lý và có thể làm đổi thời điểm bắn.
+
+Chi tiết quan trọng trước đây bị bỏ sót: Duality còn gán `bodyContainer.rotation` từ hướng aim sau khi game đã update; không chỉ thay getter chuột. Trong source Survev được ghim, `localRotation` mặc định **false**: `Player.updateRotation` lấy hướng nội suy từ server, không lấy chuột native. Do đó hướng Lock ở mouse/input có thể đúng trong khi hướng súng được render trở về hướng cũ. Source và Duality cho thấy một cơ chế có thể tạo hiện tượng đã báo; chưa chứng minh đây là nguyên nhân duy nhất trên live.
+
+Bản này cập nhật rotation body của local player tại post-frame sau native update, mỗi frame ngay cả khi visual overlay bị giới hạn 30 Hz, chỉ khi gun Lock thực sự giữ vector chuột, đang activation và input hợp lệ. Không sửa vị trí chuột vật lý, Fire, prediction, va chạm hoặc network; nhả Fire, mất target/quyền chuột, wallcheck, Assist, grenade, spectate, blur, tắt aim đều để native điều khiển. Rotation bị game tính lại ở frame sau; không thay descriptor PIXI.
+
+Fixture trích chính `Player.updateRotation` của source: mô phỏng mặc định localRotation=false, native ghi hướng server cũ, sau post body khớp hướng Lock; nhả Fire native lấy lại quyền. Kiểm tra cả source thường và minified/renamed, hai chế độ loot; unit test thêm Assist, blocker và nhiều frame. Không thay thế test trận live; CSS/OS cursor không được di chuyển thật và client/extension khác vẫn có thể can thiệp.
