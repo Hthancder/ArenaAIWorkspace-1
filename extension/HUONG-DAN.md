@@ -1,4 +1,4 @@
-# Tabspace 0.113 — bản thử nghiệm
+# Tabspace 0.114 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -238,3 +238,10 @@ Dữ liệu chuyển lựa chọn sang trang quản lý được xóa khi nhận
 Trong Tab đang mở, chọn tab rồi bấm **Lưu thành phiên…** để xem trước, kể cả lựa chọn đang bị lọc ẩn. Cũng có thể chọn tab theo cửa sổ khi lưu phiên hiện tại. Chỉ lưu URL/metadata tab thường http/https, không đóng tab; tab đổi URL, cửa sổ, vị trí, ghim hoặc nhóm trong lúc kiểm tra bị bỏ qua. Khi đọc được metadata nhóm, thay đổi tên/màu/thu gọn nhóm khiến tab liên quan bị bỏ qua; nếu không đọc được nhóm, phiên được lưu không có metadata nhóm và có thông báo. Chrome vẫn có thể thay đổi sau lần kiểm tra cuối, nên đây không phải thao tác nguyên tử. Kiểm tra danh sách phiên trước khi thử lại nếu không xác nhận được ghi.
 
 Trong **Phiên đã lưu → Chỉnh phiên…**, đổi tên hoặc chọn giữ/bỏ tab của phiên thủ công; bỏ tab cần xác nhận, không ảnh hưởng tab Chrome và không thể hoàn tác từng tab qua thùng rác. Xuất sao lưu trước nếu cần; xóa cả phiên bằng nút xóa để chuyển vào thùng rác. Snapshot tự động và điểm khôi phục không cho chỉnh. Nếu phiên thay đổi trong lúc mở hộp thoại, thao tác dừng; kiểm tra lại trước khi thử. Không khôi phục nội dung trang hoặc form chưa lưu.
+
+### Thao tác nhanh nhiều tab (0.114)
+Trong popup mở **Thao tác nhanh nhiều tab**: chọn cửa sổ hiện tại hoặc mọi cửa sổ thường, lưu bản sao tất cả hoặc trừ tab hiện tại vào Hộp để sau, nhóm hiện có, nhóm mới hoặc nhóm đích của preset. Chọn preset chỉ lấy nhóm đích, không chạy quy tắc preset, không tự đóng/nghỉ; bản sao trùng URL vẫn được lưu. Nút **Cho tab khác nghỉ** luôn loại tab hiện tại và bỏ qua tab active ở các cửa sổ khác, tab ghim, âm thanh, đã nghỉ và website được bảo vệ. Trang nghỉ có thể tải lại và mất nội dung chưa lưu hoặc tác vụ nền.
+
+Mặc định hỏi trước bằng hộp xác nhận tổng số; trong phần thu gọn **Tùy chọn thao tác nhanh**, bật riêng lưu ngay hoặc nghỉ ngay nếu muốn bỏ bước hỏi. Đổi mỗi lựa chọn cần xác nhận rủi ro. Mỗi lượt tối đa 100 tab web; nếu vượt giới hạn không xử lý một phần, hãy chọn từng nhóm tab. Không phụ thuộc số tab hiển thị trong popup; tab ẩn danh không xử lý. Giữ popup mở đến khi xong; nếu đóng popup hoặc kết quả không rõ, kiểm tra nhóm đích/Chrome trước khi thử lại. Không đảm bảo nguyên tử với Chrome hoặc extension khác.
+
+**Tự động nghỉ theo RAM/CPU chưa triển khai**: không có nguồn đo riêng từng tab đã được kiểm chứng cho bản extension này, nên mục giải thích trong popup chỉ báo chưa khả dụng, không giả số liệu và không tự nghỉ. Cần kiểm chứng API, quyền và bảo vệ trước khi hỗ trợ.

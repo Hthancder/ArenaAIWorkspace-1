@@ -2,7 +2,7 @@
 const DiscardTools=(()=>{
  async function request(api,original){
   const current=await api.tabs.get(original.id);
-  if(current.incognito||current.active||current.pinned||current.audible||current.discarded||current.url!==original.url||current.windowId!==original.windowId)return {status:'skipped'};
+  if(current.incognito||current.active||current.pinned||current.audible||current.discarded||current.url!==original.url||current.windowId!==original.windowId||(current.pendingUrl&&current.pendingUrl!==original.url))return {status:'skipped'};
   // Chrome may replace a tab during discard: trust the returned tab, not the old ID.
   const result=await api.tabs.discard(original.id);
   if(result?.discarded===true)return {status:'discarded'};
