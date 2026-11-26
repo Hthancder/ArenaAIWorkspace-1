@@ -87,8 +87,22 @@ test('unsupported input descriptor and invalid projection fail without partial m
   assert.deepEqual(frame.snapshot(), { active: false, appliedFrames: 0, skippedFrames: 2 });
 });
 
-test('direct mouse config defaults on, accepts a persisted opt-out, rejects non-boolean', () => {
+test('legacy sender-only opt-out migrates to native mouse ownership', () => {
   assert.equal(normalizeConfig({}).directMouseInput, true);
-  assert.equal(normalizeConfig({ directMouseInput: false }).directMouseInput, false);
+  assert.equal(normalizeConfig({ directMouseInput: false }).directMouseInput, true);
   assert.equal(normalizeConfig({ directMouseInput: 'false' }).directMouseInput, true);
+});
+
+test('strict ownership refuses nonconfigurable properties and handles a centered cursor', () => {
+  const input = { mousePos: { x: 400, y: 300 } }, frame = new MouseInputFrame(), c = camera();
+  Object.defineProperty(input.mousePos, 'x', { configurable: false, writable: true, enumerable: true, value: 400 });
+  assert.equal(frame.apply(input, c, plan, true, true), false);
+  assert.deepEqual(input.mousePos, { x: 400, y: 300 });
+  input.mousePos = { x: 400, y: 300 };
+  assert.equal(frame.apply(input, c, plan, true, true), true);
+  assert.equal(frame.owns(input), true);
+  const x = input.mousePos.x - 400, y = 300 - input.mousePos.y;
+  assert.ok(Math.hypot(x,y) / 32 > .00001);
+  assert.ok(Math.abs(Math.atan2(y,x) - Math.atan2(.8,.6)) < 1e-9);
+  frame.restore(); assert.deepEqual(input.mousePos, { x: 400, y: 300 });
 });

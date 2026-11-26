@@ -614,14 +614,13 @@ test('captured Lock restores latest physical intent on blur and dispose', () => 
   } finally { f.close(); }
 });
 
-test('Direct native mouse input can be opted out without disabling sender correction', () => {
+test('Lock refuses sender-only correction when native mouse ownership is unavailable', () => {
   const f = coordinated({ directMouseInput: false });
   try {
-    f.app.game.transmit(1, new JoinMsg());
-    f.engine.pre(); assert.deepEqual(f.app.input.mousePos, { x: 440, y: 300 }); assert.equal(f.engine.stats.aimState, 'ready-to-send');
-    f.app.game.transmit(3, (() => { const m = new InputMsg(); m.shootHold = true; m.toMouseLen = 1.25; return m; })());
-    assert.equal(f.engine.stats.aimState, 'input-applied'); assert.deepEqual(f.app.input.mousePos, { x: 440, y: 300 });
-    assert.equal(f.engine.diagnostics().mouseInput.enabled, false);
+    f.engine.pre(); assert.deepEqual(f.app.input.mousePos, { x: 440, y: 300 }); assert.equal(f.engine.stats.aimState, 'lock-mouse-unavailable');
+    const m = new InputMsg(); m.shootHold = true; m.toMouseLen = 1.25; f.app.game.transmit(3, m);
+    assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, m.toMouseDir);
+    assert.equal(f.engine.stats.aimState, 'lock-mouse-unavailable');
   } finally { f.close(); }
 });
 
@@ -1778,14 +1777,16 @@ test('grenade stationary inference uses complete recent world updates and is iso
   } finally { f.close(); }
 });
 
-test('aim prepares in FOV before Fire without steering or firing and revalidates after activation', () => {
+test('aim does not prepare in FOV before Fire and checks blocking after activation', () => {
   const f = coordinated({ aim: true, aimMode: 'lock', aimActivation: 'fire', humanLikeAim: false, predict: false, wallcheck: false });
   try {
     f.app.input.mouseButtons[0] = false;
     const before = { ...f.app.input.mousePos }, sent = f.app.game.sent.length;
+    const originalPlayers = f.engine.mapping.players; let scans = 0;
+    f.engine.mapping.players = () => { scans++; return originalPlayers(); };
     f.engine.pre();
     assert.equal(f.engine.stats.aimState, 'waiting-activation');
-    assert.equal(f.engine.diagnostics().aimPreparation.state, 'ready');
+    assert.equal(f.engine.diagnostics().aimPreparation, null); assert.equal(scans, 0, 'no target scan before activation');
     assert.equal(f.app.game.sent.length, sent, 'preparation does not send packets');
     assert.deepEqual(f.app.input.mousePos, before, 'preparation does not move mouse');
     assert.equal(f.engine.aimPlan, null); assert.equal(f.engine.target, null);
@@ -1802,10 +1803,65 @@ test('aim prepares in FOV before Fire without steering or firing and revalidates
   } finally { f.close(); }
 });
 
+test('gun Lock matches owned mouse and outgoing input even on a same-frame Fire edge', () => {
+  const f = coordinated({ aimActivation: 'fire', humanLikeAim: false, fov: 400 });
+  try {
+    f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.5 };
+    f.app.input.mouseButtons[0] = false; f.engine.pre();
+    assert.equal(f.engine.mouseInput.record, null);
+    f.app.input.mouseButtons[0] = true;
+    const msg = new InputMsg(); msg.shootStart = true; msg.shootHold = true; msg.toMouseLen = 1.25;
+    f.app.game.transmit(3, msg); const wire = f.app.game.sent.at(-1).data;
+    assert.equal(f.engine.mouseInput.owns(f.app.input), true, 'first sender owns the native vector');
+    const x = f.app.input.mousePos.x - 400, y = 300 - f.app.input.mousePos.y;
+    assert.ok(Math.abs(Math.atan2(y,x) - Math.atan2(wire.toMouseDir.y,wire.toMouseDir.x)) < 1e-8);
+    f.app.input.mouseButtons[0] = false; f.dom.window.dispatchEvent(new f.dom.window.MouseEvent('mouseup', { button: 0 }));
+    assert.deepEqual(f.app.input.mousePos, { x: 440, y: 300 });
+  } finally { f.close(); }
+});
+
+test('cached Lock must reacquire ownership if native replaces the mouse vector', () => {
+  const f = coordinated({ humanLikeAim: false, fov: 400 });
+  try {
+    f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.5 };
+    f.engine.pre(); assert.equal(f.engine.mouseInput.owns(f.app.input), true);
+    f.app.input.mousePos = { x: 440, y: 300 };
+    const msg = new InputMsg(); msg.shootHold = true; msg.toMouseLen = 1.25; f.app.game.transmit(3, msg);
+    assert.equal(f.engine.mouseInput.owns(f.app.input), true);
+    const wire = f.app.game.sent.at(-1).data;
+    assert.ok(Math.abs(Math.atan2(300 - f.app.input.mousePos.y, f.app.input.mousePos.x - 400) - Math.atan2(wire.toMouseDir.y, wire.toMouseDir.x)) < 1e-8);
+  } finally { f.close(); }
+});
+
+test('gun Lock never sends a correction when stable native ownership cannot be installed', () => {
+  const f = coordinated({ humanLikeAim: false, fov: 400 });
+  try {
+    f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.5 };
+    Object.defineProperty(f.app.input.mousePos, 'x', { value: 440, configurable: false, writable: true, enumerable: true });
+    f.engine.pre(); assert.equal(f.engine.stats.aimState, 'lock-mouse-unavailable');
+    const msg = new InputMsg(); msg.shootStart = true; msg.shootHold = true; msg.toMouseLen = 1.25;
+    f.app.game.transmit(3, msg);
+    assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, msg.toMouseDir);
+    assert.equal(f.engine.mouseInput.record, null); assert.equal(f.engine.stats.aimState, 'lock-mouse-unavailable');
+  } finally { f.close(); }
+});
+
+test('gun Lock at screen center keeps native mouse and sent direction aligned', () => {
+  const f = coordinated({ humanLikeAim: false, fov: 400 });
+  try {
+    f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.5 };
+    f.app.input.mousePos.x = 400; f.app.input.mousePos.y = 300;
+    const { wire } = f.send();
+    const x = f.app.input.mousePos.x - 400, y = 300 - f.app.input.mousePos.y;
+    assert.ok(Math.hypot(x,y) / 32 > .00001);
+    assert.ok(Math.abs(Math.atan2(y,x) - Math.atan2(wire.toMouseDir.y, wire.toMouseDir.x)) < 1e-8);
+  } finally { f.close(); }
+});
+
 test('activation transitions invalidate cached aim in the same frame', () => {
   const f = coordinated({ aim: true, aimMode: 'lock', aimActivation: 'fire', humanLikeAim: false, predict: false, wallcheck: false });
   try {
-    f.app.input.mouseButtons[0] = false; f.engine.pre(); assert.equal(f.engine.aimPreparation.state, 'ready');
+    f.app.input.mouseButtons[0] = false; f.engine.pre(); assert.equal(f.engine.aimPreparation, null);
     f.app.input.mouseButtons[0] = true;
     const down = new InputMsg(); down.shootStart = true; down.shootHold = true; down.toMouseLen = 1.25; down.toMouseDir = { x: .995, y: .1 };
     f.app.game.transmit(3, down); assert.equal(f.engine.stats.aimState, 'input-applied');

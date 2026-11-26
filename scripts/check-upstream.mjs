@@ -199,6 +199,35 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.ok(Math.abs(context.result.localRotation()+Math.atan2(mouseDirection.y,mouseDirection.x))<1e-8, 'Local rotation stays aligned with locked vector');
     engine.restoreInput(); assert.equal(app.input.mousePos.x,430); assert.equal(app.input.mousePos.y,280);
     app.input.mousePos.x = 440; app.input.mousePos.y = 300;
+    // Fire arrives after our pre-frame: sender must take ownership immediately,
+    // then native rotation, native construction and serialized aim agree.
+    const savedPredict = engine.config.predict; engine.config.predict = false;
+    app.input.mouseButtons[0] = false; app.input.flush(); clock += 17; engine.pre();
+    assert.equal(engine.aimPreparation, null); assert.equal(engine.mouseInput.record, null);
+    app.input.mouseButtons[0] = true; clock += 1; context.result.nativeFrame(1/60);
+    wire = context.sent.at(-1).decoded;
+    assert.ok(engine.mouseInput.owns(app.input), 'Fire edge acquires mouse even between pre and sender');
+    let capturedAim = context.result.readInputAim().toMouseDir;
+    assert.ok(Math.abs(context.result.localRotation()+Math.atan2(capturedAim.y,capturedAim.x)) < 1e-8);
+    assert.ok(Math.abs(Math.atan2(wire.toMouseDir.y,wire.toMouseDir.x)-Math.atan2(capturedAim.y,capturedAim.x)) < .005);
+    app.input.flush();
+    for (let i=0; i<90; i++) {
+      app.input.mousePos.x = 440 + 15*Math.sin(i/10); app.input.mousePos.y = 300 + 10*Math.cos(i/10);
+      clock += 1000/60; engine.pre();
+      const a = context.result.readInputAim().toMouseDir;
+      assert.ok(engine.mouseInput.owns(app.input));
+      assert.ok(Math.abs(context.result.localRotation()+Math.atan2(a.y,a.x)) < 1e-8, 'no native rotation fight');
+      const sentBefore = context.sent.length;
+      context.result.nativeFrame(1/60);
+      if (context.sent.length > sentBefore) {
+        const sent = context.sent.at(-1).decoded.toMouseDir;
+        assert.ok(Math.abs(Math.atan2(sent.y,sent.x)-Math.atan2(a.y,a.x)) < .005, 'wire follows owned native vector');
+      }
+      app.input.flush();
+      const b = context.result.readInputAim().toMouseDir;
+      assert.ok(Math.abs(Math.atan2(a.y,a.x)-Math.atan2(b.y,b.x)) < 1e-8, 'flush keeps ownership');
+    }
+    engine.restoreInput(); app.input.mousePos.x = 440; app.input.mousePos.y = 300; engine.config.predict = savedPredict;
     const savedDefs=engine.definitions;
     engine.definitions=null;engine.config.esp=true;engine.config.nametags=false;engine.lastVisual=-Infinity;
     clock+=17;engine.pre();context.result.nativeFrame(1/60);engine.post();

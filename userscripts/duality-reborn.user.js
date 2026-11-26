@@ -7483,6 +7483,12 @@ THE SOFTWARE.
       this.appliedFrames = 0;
       this.skippedFrames = 0;
     }
+    owns(input) {
+      const r = this.record, mouse = read(input, "mousePos");
+      if (!r?.captured || mouse !== r.owner) return false;
+      const x = Object.getOwnPropertyDescriptor(mouse, "x"), y = Object.getOwnPropertyDescriptor(mouse, "y");
+      return x?.get === r.get.x && x?.set === r.set.x && y?.get === r.get.y && y?.set === r.set.y;
+    }
     physical(input) {
       const mouse = read(input, "mousePos"), r = this.record;
       if (r && mouse === r.owner && r.captured) {
@@ -7494,17 +7500,17 @@ THE SOFTWARE.
       if (!r || mouse !== r.owner) return point(mouse);
       return { x: mouse.x === r.applied.x ? r.raw.x : mouse.x, y: mouse.y === r.applied.y ? r.raw.y : mouse.y };
     }
-    apply(input, camera, plan, captureWrites = false) {
+    apply(input, camera, plan, captureWrites = false, requireCapture = false) {
       this.restore();
       const mouse = read(input, "mousePos"), raw = this.physical(input);
       const width = read(camera?.camera, camera?.widthKey), height = read(camera?.camera, camera?.heightKey);
       const scale = read(camera?.camera, camera?.scaleKeys?.[0]) * read(camera?.camera, camera?.scaleKeys?.[1]);
       const dx = mouse && Object.getOwnPropertyDescriptor(mouse, "x"), dy = mouse && Object.getOwnPropertyDescriptor(mouse, "y");
-      if (!raw || !vec(plan?.dir) || !dx || !dy || !("value" in dx) || !("value" in dy) || !dx.writable || !dy.writable || !finite(width) || !finite(height) || width <= 0 || height <= 0 || !finite(scale) || scale <= 0) {
+      if (!raw || !vec(plan?.dir) || !dx || !dy || !("value" in dx) || !("value" in dy) || !dx.writable || !dy.writable || !finite(width) || !finite(height) || width <= 0 || height <= 0 || !finite(scale) || scale <= 0 || requireCapture && (!captureWrites || !dx.configurable || !dy.configurable)) {
         this.skippedFrames++;
         return false;
       }
-      const length = plan.toMouseHit ? Math.min(64, Math.max(0, plan.distance)) * scale : Math.hypot(raw.x - width / 2, raw.y - height / 2);
+      const length = Math.max(scale * 2e-5, plan.toMouseHit ? Math.min(64, Math.max(0, plan.distance)) * scale : Math.hypot(raw.x - width / 2, raw.y - height / 2));
       const applied = { x: width / 2 + plan.dir.x * length, y: height / 2 - plan.dir.y * length };
       if (!vec(applied)) {
         this.skippedFrames++;
@@ -8473,7 +8479,11 @@ THE SOFTWARE.
             } else {
               const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
               const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
-              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.timedProcessAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.timedProcessAim(intent, true, !!self.mouseInput.record?.captured);
+              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.timedProcessAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && (!self.aimPlan || modeOf(self.config) !== "lock" || self.local?.data?.[self.local.slotKey] === 3 || self.mouseInput.owns(self.app.input)) && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.timedProcessAim(
+                intent,
+                true,
+                !!self.mouseInput.record?.captured || modeOf(self.config) === "lock" && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady
+              );
             }
             if (manualEquip) {
               self.weaponSwitch.reset();
@@ -8955,7 +8965,6 @@ THE SOFTWARE.
       this.grenadeAutoPlan = null;
       this.grenadeState = "off";
       this.aimPreparation = null;
-      let warming = false;
       this.target = null;
       this.targetId = null;
       this.dot = null;
@@ -8972,13 +8981,6 @@ THE SOFTWARE.
         predictionRequested: !!cfg.predict
       }, this.stats.aimRejections, now, !blockedInput), "note");
       const fail = /* @__PURE__ */ __name((state) => {
-        if (warming) {
-          this.aimPreparation = { state };
-          this.stats.aimState = "waiting-activation";
-          this.aimController.reset();
-          note("waiting-activation");
-          return null;
-        }
         this.stats.aimState = state;
         this.aimController.reset();
         if (state !== "wall-blocked" || !cfg.sticky) this.stickyId = null;
@@ -8991,7 +8993,7 @@ THE SOFTWARE.
       if (blockedInput) return fail(blockedInput);
       const pos = this.sourcePos(m.active), mouse = this.mouseInput.physical(this.app.input), camera = m.camera;
       if (!vec(pos) || !vec(mouse) || !camera) return fail("invalid-input-position");
-      const physical = native?.toMouseDir || unit({ x: mouse.x - read(camera.camera, camera.widthKey) / 2, y: read(camera.camera, camera.heightKey) / 2 - mouse.y });
+      const physical = native?.toMouseDir || unit({ x: mouse.x - read(camera.camera, camera.widthKey) / 2, y: read(camera.camera, camera.heightKey) / 2 - mouse.y }) || { x: 1, y: 0 };
       if (!unit(physical)) return fail("invalid-direction");
       const actualWeapon = localWeapon(m);
       if (actualWeapon !== this.actualWeapon) {
@@ -9012,11 +9014,8 @@ THE SOFTWARE.
       const meleeDef = gun?.type === "melee" ? gun : cfg.autoMelee && [0, 1].includes(slot) ? this.definitions?.[this.local?.data[this.local.weaponsKey]?.[2]?.type] : null;
       const reach = meleeReach(meleeDef), melee = !!(cfg.melee && !this.manualEquipHeld && this.capabilities.mobile && firing && reach);
       if ((mode === "off" || !this.capabilities.aim) && !melee) return fail(mode === "off" ? "disabled" : "missing-input-scheduler");
-      warming = !trigger && !melee;
-      if (warming) {
-        this.aimController.reset();
-        this.stickyId = null;
-      }
+      if (!melee && mode === "lock" && (cfg.directMouseInput === false || !this.flushReady)) return fail("lock-mouse-unavailable");
+      if (!trigger && !melee) return fail("waiting-activation");
       if (mode === "assist" && cfg.assistStrength === 0 && !melee) return fail("assist-zero");
       const relations = teamRelations(m.barn, m.active.__id);
       if (!relations.ready) return fail("missing-own-team");
@@ -9139,14 +9138,8 @@ THE SOFTWARE.
         const rayTo = { pos: pathToTarget(shot.muzzle, shot.world, hitRadius) };
         if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
           reject("wall");
-          if (cfg.sticky && !warming) this.stickyId = candidate.p.__id;
+          if (cfg.sticky) this.stickyId = candidate.p.__id;
           return fail("wall-blocked");
-        }
-        if (warming) {
-          this.aimPreparation = { state: "ready", prediction: shot.state, approximate: !!shot.approximate };
-          this.stats.aimState = "waiting-activation";
-          note("waiting-activation");
-          return null;
         }
         this.target = candidate.p;
         this.targetId = candidate.p.__id;
@@ -9208,7 +9201,9 @@ THE SOFTWARE.
         } else this.meleeEquip = null;
         const outputDistance = profile?.toMouseHit && !melee ? shot.mouseLen : shot.distance;
         const directInput = applyDirect && this.config.directMouseInput !== false && !!this.flushReady;
-        const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }, mode === "lock" && !melee) : false;
+        const lockOwnership = mode === "lock" && !melee;
+        const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }, lockOwnership, lockOwnership) : false;
+        if (lockOwnership && applyDirect && !directApplied) return fail("lock-mouse-unavailable");
         this.stats.aimState = directInput && !directApplied ? "ready-to-send" : advance2 ? "input-applied" : "ready-to-send";
         if (advance2) this.lastAimDistance = outputDistance;
         note(this.stats.aimState);
@@ -9774,6 +9769,7 @@ THE SOFTWARE.
     }
     result.humanLikeAim = typeof saved.humanLikeAim === "boolean" ? saved.humanLikeAim : typeof saved.smoothEnabled === "boolean" ? saved.smoothEnabled : true;
     if (result.aimMode === "off") result.aim = false;
+    result.directMouseInput = true;
     result.nametags = true;
     result.version = 3;
     return result;
@@ -9795,7 +9791,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 `;
   var GROUPS = {
     Main: [
-      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
+      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
       ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["aimAllies", "Nhắm đồng đội (debug; cả địch)", "aim"], ["wallcheck", "Wallcheck", "wallcheck"], [null, "Lock + Keep target: sau khi chọn trong FOV, giữ mục tiêu trong lần kích hoạt kể cả khi chuột ra ngoài FOV. Vật cản/người chắn vẫn khiến aim nhả. Assist vẫn theo FOV."]]],
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
       ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],

@@ -42,6 +42,8 @@ export function normalizeConfig(saved) {
   // but users can always disable it for immediate Lock.
   result.humanLikeAim = typeof saved.humanLikeAim === 'boolean' ? saved.humanLikeAim : typeof saved.smoothEnabled === 'boolean' ? saved.smoothEnabled : true;
   if (result.aimMode === 'off') result.aim = false;
+  // Sender-only Lock can disagree with native rotation; migrate old opt-outs.
+  result.directMouseInput = true;
   result.nametags = true; // obsolete hidden master switch: esp now owns native names
   result.version = 3;
   return result;
@@ -59,7 +61,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 `;
 const GROUPS = {
   Main: [
-    ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['directMouseInput', 'Direct native mouse input', 'aim'], ['assistStrength', 'Assist strength (%)', 'aim'], ['humanLikeAim', 'Human-like aim (Lock)', 'aim'], ['smoothProfile', 'Aim profile', 'aim'], ['smooth', 'Human-like amount (0–100)', 'aim']]],
+    ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['assistStrength', 'Assist strength (%)', 'aim'], ['humanLikeAim', 'Human-like aim (Lock)', 'aim'], ['smoothProfile', 'Aim profile', 'aim'], ['smooth', 'Human-like amount (0–100)', 'aim']]],
     ['Aim — Target selection', [['fov', 'FOV radius (input pixels)'], ['sticky', 'Keep target', 'aim'], ['knocked', 'Include downed', 'aim'], ['aimAllies', 'Nhắm đồng đội (debug; cả địch)', 'aim'], ['wallcheck', 'Wallcheck', 'wallcheck'], [null, 'Lock + Keep target: sau khi chọn trong FOV, giữ mục tiêu trong lần kích hoạt kể cả khi chuột ra ngoài FOV. Vật cản/người chắn vẫn khiến aim nhả. Assist vẫn theo FOV.']]],
     ['Aim — Hỗ trợ ngắm', [['showFov', 'FOV circle'], ['showDot', 'Predicted point (optional)'], ['showTarget', 'Hiển thị mục tiêu đang ngắm'], ['targetStyle', 'Kiểu mục tiêu'], [null, 'Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ.']]],
     ['Aim — Prediction', [['predict', 'Auto prediction', 'prediction'], ['stabilizeStrafe', 'Ổn định dao động A–D (Lock)', 'prediction'], [null, 'Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này.']]],
