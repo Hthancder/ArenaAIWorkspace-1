@@ -161,3 +161,11 @@ dialog{border-color:#d8e4db;color:#203d30;box-shadow:0 18px 55px #183e2b26}dialo
 .overview-stat span,.sectionhead p,.sectioncount,.rowurl{color:#5d7466}.quick-caption,.current-url,.popup-tab-info small{color:#5d7466}
 :root[data-theme="dark"] .primary{background:#26745b;color:#fff}:root[data-theme="dark"] .primary:hover{background:#1d624d}:root[data-theme="dark"] .side-label,:root[data-theme="dark"] .breadcrumb,:root[data-theme="dark"] .local{color:#a8c0af}
 :root[data-theme="dark"] .selection span,:root[data-theme="dark"] .pop-label{color:#c4e3cc}:root[data-theme="dark"] .popup-tab-info b{color:#e3efe8}:root[data-theme="dark"] .sidebottom .privacy small{color:#b6cbbb}
+
+/* Keep the popup canvas and its scrollable list on the same surface in both themes. */
+:root.popup-page{background:#fff}
+.popup .popwrap,.popup .popup-list{background:#fff}
+:root.popup-page[data-theme="dark"]{background:#203027}
+:root[data-theme="dark"] .popup .popwrap,:root[data-theme="dark"] .popup .popup-list{background:#203027}
+.popup,.popup .popup-list{scrollbar-color:#a6bbae #fff}
+:root[data-theme="dark"] .popup,:root[data-theme="dark"] .popup .popup-list{scrollbar-color:#688b75 #203027}

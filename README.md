@@ -145,3 +145,6 @@ Trong trang quản lý **Tab đang mở → Chọn nhanh nhiều tab…**, ngu�
 Trang quản lý và popup dùng bảng màu xanh trầm, hệ thống nút và bề mặt thống nhất hơn; thông tin tổng quan gọn để dành chỗ cho danh sách tab, bộ lọc và thao tác. Các trạng thái sáng/tối, mật độ và giảm chuyển động vẫn dùng lựa chọn đã lưu. Thêm lối tắt bàn phím đến nội dung chính; bố cục hẹp giữ điều hướng có tên và cuộn ngang. Không thay đổi dữ liệu hay hành vi lưu, đóng, nghỉ.
 
 Tham khảo các nguyên tắc từ [taste-skill](https://github.com/Leonxlnx/taste-skill/blob/main/skills/taste-skill/SKILL.md), điều chỉnh cho giao diện công cụ thay vì áp dụng cấu trúc trang quảng bá. Đã xem giao diện bằng Chromium headless với dữ liệu và Chrome API giả lập ở kích thước rộng/hẹp, sáng/tối; điều này không thay thế kiểm thử extension trên Chrome thực tế.
+
+### Sửa nền popup khi cuộn (0.118.1)
+Đồng bộ nền của trang popup, vùng nội dung và danh sách tab trong cả chế độ sáng và tối; chỉnh màu thanh cuộn theo nền. Đã kiểm tra màu thực tế khi cuộn bằng Chromium headless với Chrome API giả lập; vẫn cần kiểm tra bản extension trong Chrome.
