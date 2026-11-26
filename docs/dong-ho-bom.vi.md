@@ -1,0 +1,13 @@
+# Đồng hồ bom đang giữ
+
+Bật **Visuals → Grenades → Timer bom đang giữ (ước lượng)**; mặc định tắt, độc lập với đường ném/vùng nổ. Khi script bắt được lệnh native `shootStart + shootHold` đã chuyển cho sender trong lúc đang cầm lựu đạn có `cookable: true`, màn hình hiện `Bom ~…s` và **chưa xác nhận** phía trên người chơi; dưới 1 giây chữ chuyển đỏ. Nhả Fire ẩn timer. Script không giữ/nhả Fire, không tự ném, không thay input, không tự ngắm và không gửi thêm gói.
+
+Timer dùng `fuseTime` của loại đang cầm trong định nghĩa được capture, trừ thời gian từ **lúc client chuyển lệnh cho sender**. Chỉ chạy nếu nhận diện được slot lựu đạn, vũ khí local và định nghĩa khớp, giao thức đã kiểm chứng, và fuse hữu hạn 0–30 giây. Vật không cookable, fuse bất thường, thiếu định nghĩa, thiếu hợp đồng hoặc không quan sát được cạnh bấm thì không bịa timer. Lệnh đổi súng đi cùng cạnh bấm bị bỏ qua. Bật giữa lúc đã giữ không dựng lại thời điểm bắt đầu; phải bắt đầu lần giữ mới. Đổi vũ khí/đối tượng, nhả Fire, tắt toggle, mất focus, tab ẩn, rời trận và Stop đều xóa timer. Đến 0 vẫn chỉ hiển thị 0 cho tới khi nhả; không khẳng định server đã nổ.
+
+## Giới hạn an toàn quan trọng
+
+Đây là **ước lượng chưa xác nhận**: input chuyển cho sender không phải ACK, không chứng minh server nhận/đã bắt đầu giữ. Server có thể đang cooldown hoặc bỏ qua lệnh; có thể đã có cook từ trước, mạng hoặc tick không đồng bộ, tab bị treo, thông tin client cũ, hoặc game live khác source. Timer có thể sai cả hai chiều, **không dùng làm thời điểm an toàn để giữ/nhả**, và không đảm bảo nổ trúng hay không tự nổ. Không có countdown cho bom của địch hoặc bom đã ném, không dự đoán va chạm, điểm nổ hoặc vị trí địch.
+
+Source Survev `08346fb6ea74c5a8b961a153d2d7d0411e31c8ff`: `shared/defs/gameObjects/throwableDefs.ts` chứa `cookable` và `fuseTime`; frag có 4 giây, các loại khác khác nhau. `server/src/game/weaponManager.ts` chỉ bắt đầu cook nếu hợp lệ/cooldown cho phép và tính fuse còn lại dựa trên cookTicker; `server/src/game/objects/projectile.ts` có thể cộng fuseVariance. Đây không phải khẳng định mọi deployment dùng cùng source.
+
+Kiểm thử đơn vị và fixture bao gồm fuse theo loại, hold trùng, thiếu/sai contract, non-cookable, chuyển vũ khí, nhả, focus, tắt, reset và render độc lập; `scripts/check-upstream.mjs .cache/survev` dùng source ghim `3edee7e8…`, đọc frag definition thật và serialize InputMsg native, cả unminified và minify/rename. Kiểm thử này không mở trận, không kiểm tra timing server thực hoặc gameplay live.

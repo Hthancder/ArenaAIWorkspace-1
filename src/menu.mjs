@@ -12,7 +12,7 @@ export const DEFAULTS = Object.freeze({
   espMaxDistance: 500, espFontSize: 12, espOpacity: 85, espLineWidth: 1.5,
   espEnemyColor: ESP_PALETTE.enemy, espAllyColor: ESP_PALETTE.ally,
   espUnknownColor: ESP_PALETTE.unknown, espTargetColor: ESP_PALETTE.target,
-  ownFlashlight: false, othersFlashlight: false, bulletTrajectory: false, grenadeTrajectory: false, grenadeZones: false, zoom: false, zoomFactor: 1.5,
+  ownFlashlight: false, othersFlashlight: false, bulletTrajectory: false, grenadeTrajectory: false, grenadeZones: false, grenadeTimer: false, zoom: false, zoomFactor: 1.5,
   autoLoot: false, lootMode: 'nearby', mobileMovement: false, movementSmooth: 50, menuKey: 'ShiftRight', aimKey: 'KeyB', stickyKey: 'KeyN', holdAim: false,
 });
 export const STORAGE_KEY = 'duality-reborn.config.v1';
@@ -71,7 +71,7 @@ const GROUPS = {
     ['Layer Spoofer', [['layerSpoofer', 'Hold layer key to preview other floor', 'layer'], [null, 'Chỉ đổi layer client 0/1, không đổi tầng server hoặc cho bắn xuyên tầng. Thả phím/blur khôi phục giá trị mới nhất.']]],
     ['Player names', [['esp', 'ESP — Native names', 'names'], ['espShowEnemies', 'Enemies (red)', 'names'], ['espShowAllies', 'Allies (blue)', 'names'], [null, 'Chỉ đổi màu tên native. Không tag, bảng nền, HUD squad hoặc màu vàng cho target; unknown giữ native.']]],
     ['Player lines', [['lines', 'Player lines (optional)', 'visuals'], ['espOpacity', 'Line opacity', 'visuals'], ['espLineWidth', 'Line width', 'visuals'], [null, 'Phạm vi tối đa thực tế do máy chủ quyết định (vùng interest theo zoom scope): càng zoom scope xa thì càng được gửi nhiều entity; trong công trình bị kẹp theo zoom region. Client không thể nới thêm.']]],
-    ['Grenades', [['grenadeZones', 'Nominal Explosion Radius', 'grenadeZones'], ['grenadeTrajectory', 'Throw preview (open-air estimate)', 'grenadeZones'], [null, 'Nét đứt = ước lượng vật lý không khí/drag; không biết fuse còn lại, perk, va chạm tương lai hoặc điểm nổ chắc chắn.']]],
+    ['Grenades', [['grenadeTimer', 'Timer bom đang giữ (ước lượng)', 'grenadeTimer'], ['grenadeZones', 'Nominal Explosion Radius', 'grenadeZones'], ['grenadeTrajectory', 'Throw preview (open-air estimate)', 'grenadeZones'], [null, 'Timer chỉ dựa trên input đã gửi, không xác nhận server; không dùng làm thời điểm an toàn. Nét đứt = ước lượng quỹ đạo, không biết va chạm hay điểm nổ chắc chắn.']]],
     ['Flashlights', [['ownFlashlight', 'Own spread cone', 'previews'], ['othersFlashlight', 'Enemy spread cones', 'previews'], ['bulletTrajectory', 'Bullet path + nominal ricochets', 'previews'], [null, 'Circle/AABB; tối đa 3 phản xạ khi bắt được map defs, 8 cone / 256 obstacles. Không biết kết quả server hoặc mọi perk; thiếu collider hiển thị nét đứt.']]],
     ['Infinite Zoom', [['zoom', 'Enabled (bounded 1–3×)', 'zoom'], ['zoomFactor', 'Zoom Out', 'zoom']]],
   ],

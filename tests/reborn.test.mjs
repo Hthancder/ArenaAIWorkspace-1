@@ -1377,3 +1377,54 @@ test('same-frame obstacle update rechecks Wallcheck and preserves manual Fire', 
     assert.ok(Math.abs(wire.toMouseDir.y) < .001, 'no stale aim through the new obstacle');
   } finally { f.close(); }
 });
+
+test('grenade timer observes forwarded Fire edge, draws independently, and never edits input', () => {
+  const f = coordinated({ grenadeTimer: true, aim: false });
+  try {
+    f.engine.definitions = { ...defs, frag: { type: 'throwable', cookable: true, fuseTime: 4 } };
+    const hero = f.app.game.hero; hero.l.index = 3; hero.n.weapon = 'frag';
+    f.engine.reconcile(true); f.engine.pre();
+    assert.equal(f.engine.capabilities.grenadeTimer, true);
+    const held = new InputMsg(); held.shootStart = true; held.shootHold = true;
+    f.app.game.transmit(3, held); const wire = f.app.game.sent.at(-1).data;
+    assert.equal(wire.shootStart, true); assert.equal(wire.shootHold, true); assert.deepEqual(wire, held, 'timer does not change input values');
+    f.advance(500);
+    const timer = f.engine.grenadeTimer.sample(f.engine.grenadeContext(), f.dom.window.performance.now());
+    assert.equal(timer.seconds, 3.5);
+    const labels = []; f.engine.attachCanvas(f.dom.window.document.createElement('canvas'));
+    f.engine.ctx.fillText = text => labels.push(text); f.engine.lastVisual = -Infinity; f.engine.post();
+    assert.ok(labels.includes('Bom ~3.5s'), 'timer renders even when aim and other visuals are off');
+    const released = new InputMsg(); released.shootHold = false; f.app.game.transmit(3, released);
+    assert.equal(f.engine.grenadeTimer.active, null);
+    f.engine.lastVisual = -Infinity; labels.length = 0; f.engine.post(); assert.deepEqual(labels, []);
+  } finally { f.close(); }
+});
+
+test('grenade timer is opt-in, clears on switch, blur and disabled setting', () => {
+  const f = coordinated({ grenadeTimer: false });
+  try {
+    f.engine.definitions = { ...defs, frag: { type: 'throwable', cookable: true, fuseTime: 4 } };
+    const hero = f.app.game.hero; hero.l.index = 3; hero.n.weapon = 'frag'; f.engine.reconcile(true); f.engine.pre();
+    const input = new InputMsg(); input.shootStart = true; input.shootHold = true;
+    f.app.game.transmit(3, input); assert.equal(f.engine.grenadeTimer.active, null);
+    f.cfg.grenadeTimer = true; f.engine.configurationChanged('grenadeTimer'); f.app.game.transmit(3, input); assert.ok(f.engine.grenadeTimer.active);
+    hero.l.index = 0; hero.n.weapon = 'mp5'; f.engine.pre(); assert.equal(f.engine.grenadeTimer.active, null);
+    hero.l.index = 3; hero.n.weapon = 'frag'; f.engine.pre(); f.app.game.transmit(3, input); assert.ok(f.engine.grenadeTimer.active);
+    f.dom.window.dispatchEvent(new f.dom.window.Event('blur')); assert.equal(f.engine.grenadeTimer.active, null);
+    f.dom.window.dispatchEvent(new f.dom.window.Event('focus')); f.engine.pre(); f.app.game.transmit(3, input); assert.ok(f.engine.grenadeTimer.active);
+    f.cfg.grenadeTimer = false; f.engine.configurationChanged('grenadeTimer'); assert.equal(f.engine.grenadeTimer.active, null);
+  } finally { f.close(); }
+});
+
+test('grenade timer menu toggle persists off by default and does not require trajectory', () => {
+  const dom = env(), config = { ...DEFAULTS }, menu = createMenu(dom.window, config, {});
+  try {
+    assert.equal(config.grenadeTimer, false); menu.capabilities({ grenadeTimer: true, grenadeZones: false });
+    const visuals = [...menu.root.querySelectorAll('button')].find(b => b.textContent === 'Visuals');
+    assert.ok(visuals); visuals.click();
+    const toggle = menu.root.querySelector('[data-config=grenadeTimer]'); assert.ok(toggle); assert.equal(toggle.checked, false);
+    toggle.click(); assert.equal(config.grenadeTimer, true); assert.equal(config.grenadeTrajectory, false);
+    assert.equal(normalizeConfig({ version: 3, grenadeTimer: true }).grenadeTimer, true);
+    assert.equal(normalizeConfig({ version: 3, grenadeTimer: 'true' }).grenadeTimer, false);
+  } finally { menu.dispose(); dom.window.close(); }
+});

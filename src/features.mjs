@@ -17,6 +17,7 @@ import { MouseInputFrame } from './mouse-input.mjs';
 import { NativeNames } from './native-names.mjs';
 import { drawTargetIndicator } from './target-indicator.mjs';
 import { LootBackoff } from './loot-backoff.mjs';
+import { GrenadeTimer, drawGrenadeTimer } from './grenade-timer.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
 export const isManualEquip = code => code >= 11 && code <= 20 || code === 27 || code === 28;
@@ -128,7 +129,7 @@ export class Features {
   constructor(win, app, config, report, definitions = null) {
     this.win = win; this.app = app; this.config = config; this.report = report; this.definitions = definitions;
     this.hooks = new Disposables(); this.matchHooks = new Disposables(); this.overrides = new Overrides();
-    this.tracker = new SnapshotTracker(); this.aimController = new AimController(); this.timing = new NetworkTiming(); this.names = new NativeNames(); this.aimEvidence = new AimEvidence(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities = new Map(); this.focusBlocked = false; this.protocol = null; this.mapping = null; this.local = null;
+    this.tracker = new SnapshotTracker(); this.aimController = new AimController(); this.timing = new NetworkTiming(); this.grenadeTimer = new GrenadeTimer(); this.names = new NativeNames(); this.aimEvidence = new AimEvidence(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities = new Map(); this.focusBlocked = false; this.protocol = null; this.mapping = null; this.local = null;
     this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null; this.lastPredictionEvidence = null;
     this.target = null; this.targetId = null; this.dot = null; this.mouseInput = new MouseInputFrame(); this.aimFrame = 0; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.lastMap = -Infinity;
     this.lastVisual = -Infinity; this.lastInput = -Infinity; this.lastScan = -Infinity;
@@ -158,9 +159,9 @@ export class Features {
       if (event.code === this.config.aimKey) this.holdAim = true;
     }, { signal: controller.signal });
     win.addEventListener('keyup', event => { if (event.code === this.config.layerKey) releaseLayer(); if (event.code === this.config.aimKey) this.holdAim = false; }, { signal: controller.signal });
-    win.addEventListener('blur', () => { releaseLayer(); this.restoreInput(); this.focusBlocked = true; this.holdAim = false; this.aimController.reset(); }, { signal: controller.signal });
+    win.addEventListener('blur', () => { releaseLayer(); this.restoreInput(); this.focusBlocked = true; this.holdAim = false; this.aimController.reset(); this.grenadeTimer.reset(); }, { signal: controller.signal });
     win.addEventListener('focus', () => { this.focusBlocked = false; }, { signal: controller.signal });
-    win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) { releaseLayer(); this.restoreInput(); } }, { signal: controller.signal });
+    win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) { releaseLayer(); this.restoreInput(); this.grenadeTimer.reset(); } }, { signal: controller.signal });
     this.reconcile(true);
   }
   guard(name, fn) {
@@ -187,7 +188,7 @@ export class Features {
   }
   restoreInput() { this.mouseInput.restore(); }
   releaseMatch() {
-    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.lastAimSent = null; this.aimOutput = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
+    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.grenadeTimer.reset(); this.lastAimSent = null; this.aimOutput = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
     this.target = null; this.targetId = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.local = null; this.mapping = null; this.effects = [];
     this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.pickupPauseUntil = 0; this.lootBackoff.reset();
@@ -217,7 +218,7 @@ export class Features {
         if (type === 1 && Number.isInteger(data?.protocol) && typeof data.name === 'string'
           && typeof data.joinToken === 'string' && (typeof data.isMobile === 'boolean' || data.isMobile === undefined)
           && typeof data.useTouch === 'boolean' && typeof data.serialize === 'function') {
-          self.aimEvidence.reset(); self.protocol = data.protocol; self.lastMap = -Infinity;
+          self.aimEvidence.reset(); self.grenadeTimer.reset(); self.protocol = data.protocol; self.lastMap = -Infinity;
           if (self.protocol === VERIFIED_PROTOCOL && self.config.autoLoot && self.config.lootMode === 'mobile') {
             outgoing = Object.assign(Object.create(Object.getPrototypeOf(data)), data, { isMobile: true });
           }
@@ -250,7 +251,11 @@ export class Features {
         }
       } catch (e) { self.report('warning', `Input bypassed: ${e.message}`); self.aimOutput = null; self.restoreInput(); outgoing = intent; }
       const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
-      if (type === 3 && inputShape(outgoing)) { self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, self.win.performance.now(), self.inputReady()); self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null; self.timing.sent(outgoing, self.win.performance.now()); }
+      if (type === 3 && inputShape(outgoing)) {
+        const now = self.win.performance.now();
+        self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, now, self.inputReady()); self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null; self.timing.sent(outgoing, now);
+        if (self.config.grenadeTimer || self.grenadeTimer.active) self.guard('grenade-timer', () => self.grenadeTimer.forwarded(self.grenadeContext(), outgoing, now, outgoing.inputs.some(isManualEquip)));
+      }
       if (joinRecord) joinRecord.forwarded = true; // Forwarded to native sender; not a server acknowledgement.
       return result;
     }, this.gameHooks);
@@ -260,6 +265,7 @@ export class Features {
     this.lastVisual = -Infinity;
     if (key === 'layerKey' || key === 'layerSpoofer') { this.layerHeld = false; this.layerOverrides.clear(); }
     if (['aim', 'aimMode', 'aimActivation'].includes(key)) { this.aimController.reset(); this.stickyId = null; }
+    if (key === 'grenadeTimer') this.grenadeTimer.reset();
     if (['autoSwitch', 'useOneGun', 'autoMelee', 'melee'].includes(key)) { this.weaponSwitch.reset(); this.meleeEquip = null; }
     if (key === 'autoLoot' || key === 'lootMode') this.pickupPulse = false;
     if (['mapHighlights', 'smallerTrees'].includes(key)) this.mapHighlights.sync(this.app.game, this.mapping?.map);
@@ -302,7 +308,9 @@ export class Features {
     this.capabilities = {
       names: !!(next.barn && next.pool && next.active?.active),
       visuals: ready, interpolatedOverlay: ready && !!next.visualPosKey,
-      grenadeZones: ready && !!this.definitions && !!next.registryKey && this.protocol === VERIFIED_PROTOCOL, aim: ready && this.senderReady && !!this.timeoutKey && !!next.ui && this.protocol === VERIFIED_PROTOCOL,
+      grenadeZones: ready && !!this.definitions && !!next.registryKey && this.protocol === VERIFIED_PROTOCOL,
+      grenadeTimer: ready && !!this.local && !!this.definitions && this.senderReady && !!next.ui && this.protocol === VERIFIED_PROTOCOL,
+      aim: ready && this.senderReady && !!this.timeoutKey && !!next.ui && this.protocol === VERIFIED_PROTOCOL,
       autoPickup: ready && !!next.ui && !!this.lootSource && !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
       previews: ready && !!this.definitions && this.protocol === VERIFIED_PROTOCOL, prediction: ready && !!this.definitions && !!this.receiverKey && !!this.sourceFields?.pos, wallcheck: !!next.creator && !!next.registryKey,
       xray: !!next.map || this.smokeSources.length > 0, mapHighlights: this.mapHighlights.available, layer: ready && [0, 1].includes(this.layerOverrides.getRaw(next.active, 'layer')),
@@ -360,6 +368,11 @@ export class Features {
       return segmentBlocked(from.pos, to.pos, { type: 0, pos, rad: finite(scale) && scale > 0 ? scale : 1 });
     });
   }
+  grenadeContext() {
+    const slot = this.local?.data?.[this.local.slotKey], type = this.local?.data?.[this.local.weaponsKey]?.[3]?.type;
+    return { enabled: !!this.config.grenadeTimer, ready: this.inputReady(), owner: this.mapping?.active, slot, type,
+      activeType: this.mapping ? localWeapon(this.mapping) : null, definitions: this.definitions };
+  }
   pre() {
     this.frameId++;
     this.restoreInput();
@@ -370,6 +383,7 @@ export class Features {
       || (this.local && this.mapping.active[this.local.dataKey] !== this.local.data));
     if (staleIdentity) { this.releaseMatch(); this.lastActive = null; }
     this.reconcile(!!staleIdentity);
+    if (this.config.grenadeTimer || this.grenadeTimer.active) this.guard('grenade-timer', () => this.grenadeTimer.validate(this.grenadeContext()));
     this.updateLayer();
     this.switchSlot = null;
     if (this.inputReady()) this.updateSwitch(); else this.weaponSwitch.reset();
@@ -642,7 +656,7 @@ export class Features {
     this.stats.xray = emptyXrayStats(cfg.xray ? 'waiting-contract' : 'disabled');
     if (!this.app.game?.initialized || this.win.document.hidden) { this.overrides.clear(); this.names.clear(); return; }
     const playerReady = !!(m?.schema && m.active?.active && this.capabilities.visuals);
-    if (!(cfg.esp || cfg.lines || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones)) {
+    if (!(cfg.esp || cfg.lines || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones || cfg.grenadeTimer)) {
       if (this.overrides.records.size) this.overrides.clear();
       this.names.clear(); return;
     }
@@ -706,6 +720,10 @@ export class Features {
     }
     const selfPos = overlayPosition(m.active, m), origin = project(m.camera, selfPos);
     if (!origin) { if (cfg.esp) this.stats.esp = emptyEspStats('invalid-projection'); return; }
+    if (cfg.grenadeTimer && this.capabilities.grenadeTimer) {
+      const timer = this.grenadeTimer.sample(this.grenadeContext(), this.win.performance.now());
+      if (timer) drawGrenadeTimer(ctx, origin, timer.seconds);
+    }
     if (cfg.esp || cfg.lines) {
       espFrame ||= buildEspFrame(m, players, cfg, width, height, this.target);
       this.stats.esp = this.espRenderer.draw(ctx, espFrame, cfg, width, height);
@@ -831,6 +849,7 @@ export class Features {
     return { version: '0.5.0-preview.8', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
       initialized: checks.initialized, checks,
       autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
+      grenadeTimer: { enabled: !!this.config.grenadeTimer, state: this.grenadeTimer.active ? 'forwarded-edge-unconfirmed' : this.config.grenadeTimer ? 'waiting-for-edge' : 'disabled' },
       mapHighlights: { ...this.mapHighlights.stats },
       nativeNames: { ...this.names.stats },
       inputBlockReason: this.inputBlockReason(),

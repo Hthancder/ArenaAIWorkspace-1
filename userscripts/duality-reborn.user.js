@@ -7600,6 +7600,61 @@ THE SOFTWARE.
     }
   };
 
+  // src/grenade-timer.mjs
+  var GrenadeTimer = class {
+    static {
+      __name(this, "GrenadeTimer");
+    }
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.active = null;
+    }
+    valid({ enabled, ready, owner, slot, type, activeType, definitions }) {
+      const def = definitions?.[type];
+      return !!(enabled && ready && owner && slot === 3 && typeof type === "string" && type === activeType && def?.type === "throwable" && def.cookable === true && finite(def.fuseTime) && def.fuseTime > 0 && def.fuseTime <= 30);
+    }
+    validate(context) {
+      if (this.active && (!this.valid(context) || this.active.owner !== context.owner || this.active.type !== context.type || this.active.fuse !== context.definitions[context.type].fuseTime)) this.reset();
+    }
+    forwarded(context, input, now, switchesWeapon = false) {
+      this.validate(context);
+      if (!this.valid(context) || switchesWeapon || !input?.shootHold || !finite(now)) {
+        this.reset();
+        return;
+      }
+      if (!this.active && input.shootStart === true) this.active = { owner: context.owner, type: context.type, fuse: context.definitions[context.type].fuseTime, start: now };
+    }
+    sample(context, now) {
+      this.validate(context);
+      if (!this.active || !finite(now)) return null;
+      if (now < this.active.start) {
+        this.reset();
+        return null;
+      }
+      return { seconds: Math.max(0, this.active.fuse - (now - this.active.start) / 1e3) };
+    }
+  };
+  function drawGrenadeTimer(ctx, screen, seconds) {
+    if (!ctx || !screen || !finite(screen.x) || !finite(screen.y) || !finite(seconds)) return;
+    const value = Math.max(0, seconds);
+    ctx.save();
+    ctx.font = "bold 14px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const label = `Bom ~${value.toFixed(1)}s`;
+    ctx.fillStyle = "rgba(0,0,0,.75)";
+    ctx.fillRect(screen.x - 61, screen.y - 90, 122, 40);
+    ctx.fillStyle = value <= 1 ? "#ff6b6b" : "#fff0b0";
+    ctx.fillText(label, screen.x, screen.y - 78);
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("chưa xác nhận", screen.x, screen.y - 62);
+    ctx.restore();
+  }
+  __name(drawGrenadeTimer, "drawGrenadeTimer");
+
   // src/features.mjs
   var VERIFIED_PROTOCOL = 1028;
   var isManualEquip = /* @__PURE__ */ __name((code) => code >= 11 && code <= 20 || code === 27 || code === 28, "isManualEquip");
@@ -7746,6 +7801,7 @@ THE SOFTWARE.
       this.tracker = new SnapshotTracker();
       this.aimController = new AimController();
       this.timing = new NetworkTiming();
+      this.grenadeTimer = new GrenadeTimer();
       this.names = new NativeNames();
       this.aimEvidence = new AimEvidence();
       this.lastAimSent = null;
@@ -7833,6 +7889,7 @@ THE SOFTWARE.
         this.focusBlocked = true;
         this.holdAim = false;
         this.aimController.reset();
+        this.grenadeTimer.reset();
       }, { signal: controller.signal });
       win.addEventListener("focus", () => {
         this.focusBlocked = false;
@@ -7841,6 +7898,7 @@ THE SOFTWARE.
         if (win.document.hidden) {
           releaseLayer();
           this.restoreInput();
+          this.grenadeTimer.reset();
         }
       }, { signal: controller.signal });
       this.reconcile(true);
@@ -7888,6 +7946,7 @@ THE SOFTWARE.
       this.names.clear();
       this.tracker.reset();
       this.aimController.reset();
+      this.grenadeTimer.reset();
       this.lastAimSent = null;
       this.aimOutput = null;
       this.aimPlan = null;
@@ -7954,6 +8013,7 @@ THE SOFTWARE.
         try {
           if (type === 1 && Number.isInteger(data2?.protocol) && typeof data2.name === "string" && typeof data2.joinToken === "string" && (typeof data2.isMobile === "boolean" || data2.isMobile === void 0) && typeof data2.useTouch === "boolean" && typeof data2.serialize === "function") {
             self.aimEvidence.reset();
+            self.grenadeTimer.reset();
             self.protocol = data2.protocol;
             self.lastMap = -Infinity;
             if (self.protocol === VERIFIED_PROTOCOL && self.config.autoLoot && self.config.lootMode === "mobile") {
@@ -8006,9 +8066,11 @@ THE SOFTWARE.
         }
         const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
         if (type === 3 && inputShape(outgoing)) {
-          self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, self.win.performance.now(), self.inputReady());
+          const now = self.win.performance.now();
+          self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, now, self.inputReady());
           self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null;
-          self.timing.sent(outgoing, self.win.performance.now());
+          self.timing.sent(outgoing, now);
+          if (self.config.grenadeTimer || self.grenadeTimer.active) self.guard("grenade-timer", () => self.grenadeTimer.forwarded(self.grenadeContext(), outgoing, now, outgoing.inputs.some(isManualEquip)));
         }
         if (joinRecord) joinRecord.forwarded = true;
         return result;
@@ -8027,6 +8089,7 @@ THE SOFTWARE.
         this.aimController.reset();
         this.stickyId = null;
       }
+      if (key === "grenadeTimer") this.grenadeTimer.reset();
       if (["autoSwitch", "useOneGun", "autoMelee", "melee"].includes(key)) {
         this.weaponSwitch.reset();
         this.meleeEquip = null;
@@ -8083,6 +8146,7 @@ THE SOFTWARE.
         visuals: ready,
         interpolatedOverlay: ready && !!next.visualPosKey,
         grenadeZones: ready && !!this.definitions && !!next.registryKey && this.protocol === VERIFIED_PROTOCOL,
+        grenadeTimer: ready && !!this.local && !!this.definitions && this.senderReady && !!next.ui && this.protocol === VERIFIED_PROTOCOL,
         aim: ready && this.senderReady && !!this.timeoutKey && !!next.ui && this.protocol === VERIFIED_PROTOCOL,
         autoPickup: ready && !!next.ui && !!this.lootSource && !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
         previews: ready && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
@@ -8149,6 +8213,18 @@ THE SOFTWARE.
         return segmentBlocked(from.pos, to.pos, { type: 0, pos, rad: finite(scale) && scale > 0 ? scale : 1 });
       });
     }
+    grenadeContext() {
+      const slot = this.local?.data?.[this.local.slotKey], type = this.local?.data?.[this.local.weaponsKey]?.[3]?.type;
+      return {
+        enabled: !!this.config.grenadeTimer,
+        ready: this.inputReady(),
+        owner: this.mapping?.active,
+        slot,
+        type,
+        activeType: this.mapping ? localWeapon(this.mapping) : null,
+        definitions: this.definitions
+      };
+    }
     pre() {
       this.frameId++;
       this.restoreInput();
@@ -8158,6 +8234,7 @@ THE SOFTWARE.
         this.lastActive = null;
       }
       this.reconcile(!!staleIdentity);
+      if (this.config.grenadeTimer || this.grenadeTimer.active) this.guard("grenade-timer", () => this.grenadeTimer.validate(this.grenadeContext()));
       this.updateLayer();
       this.switchSlot = null;
       if (this.inputReady()) this.updateSwitch();
@@ -8549,7 +8626,7 @@ THE SOFTWARE.
         return;
       }
       const playerReady = !!(m?.schema && m.active?.active && this.capabilities.visuals);
-      if (!(cfg.esp || cfg.lines || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones)) {
+      if (!(cfg.esp || cfg.lines || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones || cfg.grenadeTimer)) {
         if (this.overrides.records.size) this.overrides.clear();
         this.names.clear();
         return;
@@ -8656,6 +8733,10 @@ THE SOFTWARE.
       if (!origin) {
         if (cfg.esp) this.stats.esp = emptyEspStats("invalid-projection");
         return;
+      }
+      if (cfg.grenadeTimer && this.capabilities.grenadeTimer) {
+        const timer = this.grenadeTimer.sample(this.grenadeContext(), this.win.performance.now());
+        if (timer) drawGrenadeTimer(ctx, origin, timer.seconds);
       }
       if (cfg.esp || cfg.lines) {
         espFrame ||= buildEspFrame(m, players, cfg, width, height, this.target);
@@ -8836,6 +8917,7 @@ THE SOFTWARE.
         initialized: checks.initialized,
         checks,
         autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
+        grenadeTimer: { enabled: !!this.config.grenadeTimer, state: this.grenadeTimer.active ? "forwarded-edge-unconfirmed" : this.config.grenadeTimer ? "waiting-for-edge" : "disabled" },
         mapHighlights: { ...this.mapHighlights.stats },
         nativeNames: { ...this.names.stats },
         inputBlockReason: this.inputBlockReason(),
@@ -8931,6 +9013,7 @@ THE SOFTWARE.
     bulletTrajectory: false,
     grenadeTrajectory: false,
     grenadeZones: false,
+    grenadeTimer: false,
     zoom: false,
     zoomFactor: 1.5,
     autoLoot: false,
@@ -9000,7 +9083,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       ["Layer Spoofer", [["layerSpoofer", "Hold layer key to preview other floor", "layer"], [null, "Chỉ đổi layer client 0/1, không đổi tầng server hoặc cho bắn xuyên tầng. Thả phím/blur khôi phục giá trị mới nhất."]]],
       ["Player names", [["esp", "ESP — Native names", "names"], ["espShowEnemies", "Enemies (red)", "names"], ["espShowAllies", "Allies (blue)", "names"], [null, "Chỉ đổi màu tên native. Không tag, bảng nền, HUD squad hoặc màu vàng cho target; unknown giữ native."]]],
       ["Player lines", [["lines", "Player lines (optional)", "visuals"], ["espOpacity", "Line opacity", "visuals"], ["espLineWidth", "Line width", "visuals"], [null, "Phạm vi tối đa thực tế do máy chủ quyết định (vùng interest theo zoom scope): càng zoom scope xa thì càng được gửi nhiều entity; trong công trình bị kẹp theo zoom region. Client không thể nới thêm."]]],
-      ["Grenades", [["grenadeZones", "Nominal Explosion Radius", "grenadeZones"], ["grenadeTrajectory", "Throw preview (open-air estimate)", "grenadeZones"], [null, "Nét đứt = ước lượng vật lý không khí/drag; không biết fuse còn lại, perk, va chạm tương lai hoặc điểm nổ chắc chắn."]]],
+      ["Grenades", [["grenadeTimer", "Timer bom đang giữ (ước lượng)", "grenadeTimer"], ["grenadeZones", "Nominal Explosion Radius", "grenadeZones"], ["grenadeTrajectory", "Throw preview (open-air estimate)", "grenadeZones"], [null, "Timer chỉ dựa trên input đã gửi, không xác nhận server; không dùng làm thời điểm an toàn. Nét đứt = ước lượng quỹ đạo, không biết va chạm hay điểm nổ chắc chắn."]]],
       ["Flashlights", [["ownFlashlight", "Own spread cone", "previews"], ["othersFlashlight", "Enemy spread cones", "previews"], ["bulletTrajectory", "Bullet path + nominal ricochets", "previews"], [null, "Circle/AABB; tối đa 3 phản xạ khi bắt được map defs, 8 cone / 256 obstacles. Không biết kết quả server hoặc mọi perk; thiếu collider hiển thị nét đứt."]]],
       ["Infinite Zoom", [["zoom", "Enabled (bounded 1–3×)", "zoom"], ["zoomFactor", "Zoom Out", "zoom"]]]
     ],

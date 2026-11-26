@@ -48,6 +48,11 @@ const meleeTree = parse(meleeJS, { ecmaVersion: 'latest', sourceType: 'module' }
 const baseDefs = meleeTree.body.find(n => n.type === 'VariableDeclaration' && n.declarations[0].id.name === 'BaseDefs').declarations[0].init;
 const fistsNode = baseDefs.properties.find(n => n.key.name === 'fists').value;
 const fistsSource = meleeJS.slice(fistsNode.start, fistsNode.end);
+const throwJS = transformSync(readFileSync(resolve(root, 'shared/defs/gameObjects/throwableDefs.ts'), 'utf8'), { loader: 'ts', target: 'es2022' }).code;
+const throwTree = parse(throwJS, { ecmaVersion: 'latest', sourceType: 'module' });
+const throwDefs = throwTree.body.map(n => n.declaration || n).find(n => n.type === 'VariableDeclaration' && n.declarations[0].id.name === 'ThrowableDefs').declarations[0].init;
+const fragNode = throwDefs.properties.find(n => n.key.name === 'frag').value;
+const fragSource = throwJS.slice(fragNode.start, fragNode.end);
 const playerJS = transformSync(readFileSync(resolve(root, 'client/src/objects/player.ts'), 'utf8'), { loader: 'ts', target: 'es2022' }).code;
 const playerTree = parse(playerJS, { ecmaVersion: 'latest', sourceType: 'module' });
 const nativeNameFactory = playerTree.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === 'createPlayerNameText');
@@ -81,7 +86,7 @@ class Sprite { constructor(){this.alpha=1;this.visible=false;this._destroyed=fal
 class NativeText extends PixiContainer { constructor(text,style){super();this._text=text;this._style=new PixiTextStyle(style);this.anchor={set(){}};}get style(){return this._style;}get text(){return this._text;}set text(v){this._text=v;} }
 const PIXI={Text:NativeText,Sprite:{from(){return new Sprite()}}};
 ${nameFactorySource}
-const fistsDef=${fistsSource}; const GameObjectDefs={typeToId(){return 0},idToType(){return ''},typeToDef(){return fistsDef}};
+const fistsDef=${fistsSource}; const fragDef=${fragSource}; const GameObjectDefs={typeToId(){return 0},idToType(){return ''},typeToDef(){return fistsDef}};
 const sharedShapes=[{color:123,scale:3,collider:{type:0,pos:{x:0,y:0},rad:1}}];
 const MapObjectDefs={typeToDef(){return {type:'obstacle',img:{zIdx:1},map:{shapes:sharedShapes}}}}; const nativeMap=new Map();
 const device = {mobile:false,touch:false}; const window = {innerWidth:800,innerHeight:600};
@@ -122,6 +127,7 @@ const serverWeapon=Object.assign(new WeaponManager(),{player:serverPlayer,curWea
  meleeAttacks:[],meleeAnimCooldown:0,throwableCooldown:0,meleeDamage(){}});
 globalThis.result={localRotation:()=>{Player.prototype.updateRotation.call(rotationSubject,input,camera,true,false,false);return rotationSubject.bodyContainer.rotation;},setWall:on=>{if(on)game.m_objectCreator.m_idToObj[99]={__id:99,__type:2,active:true,collidable:true,dead:false,height:1,layer:0,collider:{type:0,pos:{x:10.85,y:20.17},rad:.2}};else delete game.m_objectCreator.m_idToObj[99];},setZoom:z=>{camera.m_zoom=z;camera.m_targetZoom=z;},nativePrevious:()=>game.m_prevInputMsg,nativeFrame:dt=>game.nativeInputFrame(dt),receive:pos=>game.m_processGameUpdate({ack:game.seq,playerInfos:[],deletedPlayerIds:[],delObjIds:[],fullObjects:[],partObjects:[{__id:2,__type:1,pos,dir:{x:1,y:0}}],activePlayerData:{},bullets:[],explosions:[],emotes:[],planes:[],airstrikeZones:[],mapIndicators:[]}),app,callbacks,fistsDef,nativeMap,readInputAim:()=>game.readInputAim(),
  frameInput:()=>{const msg=new InputMsg();msg.shootStart=!!binds.isBindPressed(4);msg.shootHold=!!binds.isBindDown(4);if(binds.isBindPressed(10))msg.addInput(10);return msg;},
+ fragDef, setGrenade:()=>{hero.m_netData.m_activeWeapon='frag';hero.m_localData.m_curWeapIdx=3;hero.m_localData.m_weapons[3].type='frag';input.mouseButtons[0]=true;input.mouseButtonsOld[0]=false;},
  setMelee:()=>{hero.m_netData.m_activeWeapon='fists';hero.m_localData.m_curWeapIdx=2;input.mouseButtonsOld[0]=true;},
  serverTick:(msg,dt)=>{serverPlayer.animTicker-=dt;if(serverPlayer.animTicker<=0)serverPlayer.animType=0;serverPlayer.shootStart=msg.shootStart;serverPlayer.shootHold=msg.shootHold;serverWeapon.update(dt);return serverPlayer.swings;},
  spawnSmoke:()=>{const p=game.m_smokeBarn.m_allocParticle();p.m_init({x:10,y:20},2,0,0);return p;},
@@ -229,6 +235,18 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.equal(particle.sprite.tint, 0x202020, 'Darker smoke uses native sprite tint setter through particle tint');
     engine.config.xray = false; engine.lastVisual = -Infinity; engine.post(); context.result.updateSmoke();
     assert.equal(particle.sprite.alpha, .9, 'Restore latest native alpha on disable'); assert.equal(particle.sprite.tint, 0xeeeeee);
+    // Observe a real source InputMsg Fire edge and actual source frag fuse.
+    engine.config.aim = false; engine.config.grenadeTimer = true; engine.definitions.frag = context.result.fragDef;
+    context.result.setGrenade(); clock += 17; engine.pre();
+    assert.equal(engine.capabilities.grenadeTimer, true);
+    const grenadeInput = frameInput(); assert.equal(grenadeInput.shootStart, true); assert.equal(grenadeInput.shootHold, true);
+    app.game[discoverSender(app.game)](3, grenadeInput, 128);
+    assert.equal(engine.grenadeTimer.sample(engine.grenadeContext(), clock)?.seconds, context.result.fragDef.fuseTime);
+    assert.equal(context.sent.at(-1).decoded.shootHold, true, 'Timer does not alter native Fire');
+    clock += 500; assert.equal(engine.grenadeTimer.sample(engine.grenadeContext(), clock)?.seconds, 3.5);
+    app.input.mouseButtons[0] = false; const release = frameInput(); app.game[discoverSender(app.game)](3, release, 128);
+    assert.equal(engine.grenadeTimer.active, null, 'Release hides timer');
+    engine.config.grenadeTimer = false; app.input.mouseButtons[0] = true;
     // An unchanged held mouse must create repeated fist edges, accepted only when
     // the native server WeaponManager.update/meleeUpdate cooldown and anim allow it.
     engine.config.semi = true; context.result.setMelee(); let swings = 0;

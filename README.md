@@ -64,6 +64,7 @@ Bản `0.5.0-preview.2` sửa những đường lỗi đã tái hiện: schedule
 | Mobile Movement | Một vector output; nhả phím dừng; melee movement thắng, không cộng vector |
 | Loot | Nearby có backoff từng object, nghỉ 3,5 giây sau lệnh vứt được nhận diện; server tự chọn loot nên có thể nhặt món khác. Mobile loot/doors cần Join mới. Xem [Auto Loot và dao động](docs/auto-loot-va-ngam-dao-dong.vi.md). |
 | Wallcheck / mục tiêu | Nhả aim khi đường bắn ước lượng bị chắn; có chỉ báo mục tiêu bật/tắt với bốn kiểu. Xem [Wallcheck và chỉ báo](docs/wallcheck-va-chi-bao-muc-tieu.vi.md). |
+| Grenade timer | Tùy chọn mặc định tắt: ước lượng fuse khi giữ bom từ input đã chuyển tới sender, **chưa xác nhận server**, không tự nhả/ném. Xem [Đồng hồ bom](docs/dong-ho-bom.vi.md). |
 | Layer Spoofer | Local render preview; gameplay aim/wallcheck/loot dùng layer chưa override |
 | ESP / X-Ray / Zoom / Map | Overrides riêng; đổi setting không clear toàn bộ; Canvas lỗi không gỡ names/zoom hoặc chặn input |
 
