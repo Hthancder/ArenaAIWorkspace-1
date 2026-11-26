@@ -50,6 +50,19 @@ export function traceShot(start, direction, distance, obstacles, layer, definiti
   }
   return { points, collisions, unsupported };
 }
+// Keep cursor direction and throw strength separate. Lock directions are unit
+// vectors, so their magnitude is not the player's toMouseLen.
+export function previewAim(mouse, center, scale, plan = null) {
+  if (!vec(mouse) || !vec(center) || !finite(scale) || scale <= 0) return null;
+  const dx = mouse.x - center.x, dy = center.y - mouse.y, pixels = Math.hypot(dx, dy);
+  const manual = pixels > .00001 * scale ? { x: dx / pixels, y: dy / pixels } : { x: 1, y: 0 };
+  const length = Math.hypot(plan?.dir?.x, plan?.dir?.y);
+  const direction = vec(plan?.dir) && finite(length) && length > 1e-8
+    ? { x: plan.dir.x / length, y: plan.dir.y / length } : manual;
+  const distance = plan?.toMouseHit && finite(plan.distance) ? clamp(plan.distance, 0, 64) : clamp(pixels / scale, 0, 64);
+  return { direction, distance };
+}
+
 // Open-air estimate from source WeaponManager.throwThrowable / Projectile.update:
 // max mouse distance=18, spawn z=.5, gravity=10.5, ground drag=2.3.
 // No hidden fuse, terrain, perks, player velocity or future collision claim.

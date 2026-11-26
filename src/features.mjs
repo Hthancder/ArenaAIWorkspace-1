@@ -8,7 +8,7 @@ import { discoverSmokeSources, emptyXrayStats, smokeAlpha, smokeParticles } from
 import { RepeatFire } from './repeat-fire.mjs';
 import { MapHighlights } from './map-highlights.mjs';
 import { WeaponSwitch } from './weapon-switch.mjs';
-import { MovementSmoother, throwPreview, traceShot } from './previews.mjs';
+import { MovementSmoother, previewAim, throwPreview, traceShot } from './previews.mjs';
 import { AimController, SnapshotTracker, modeOf, predictShot, unit, weaponProfile, angleDelta } from './aim.mjs';
 import { discoverInputTimeout, discoverUpdateReceiver, discoverSourceFields, NetworkTiming } from './aim-adapters.mjs';
 import { clippedMuzzle, shotLayer, segmentCandidates, pathToTarget, geometryObjects } from './aim-geometry.mjs';
@@ -138,7 +138,7 @@ export class Features {
     this.grenadeTracker = new SnapshotTracker(); this.grenadeUpdateAt = null;
     this.tracker = new SnapshotTracker(); this.aimController = new AimController(); this.grenadeAimTimer = new GrenadeTimer(); this.grenadePlan = null; this.grenadeState = 'off'; this.grenadeManualOverride = false; this.lastGrenadeEvidence = null; this.timing = new NetworkTiming(); this.grenadeTimer = new GrenadeTimer(); this.names = new NativeNames(); this.aimEvidence = new AimEvidence(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities = new Map(); this.focusBlocked = false; this.protocol = null; this.mapping = null; this.local = null;
     this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null; this.lastPredictionEvidence = null;
-    this.target = null; this.targetId = null; this.dot = null; this.mouseInput = new MouseInputFrame(); this.aimFrame = 0; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.lastMap = -Infinity;
+    this.target = null; this.targetId = null; this.dot = null; this.mouseInput = new MouseInputFrame(); this.aimFrame = 0; this.aimPlanFrame = -1; this.aimOutputFrame = -1; this.aimPlanDirect = false; this.lastMap = -Infinity;
     this.lastVisual = -Infinity; this.lastInput = -Infinity; this.lastScan = -Infinity;
     this.effects = []; this.lastGame = null; this.lastPool = null; this.lastActive = null; this.lastActiveId = null;
     this.stopped = false; this.keys = new Set(); this.holdAim = false;
@@ -216,7 +216,7 @@ export class Features {
     // post-death diagnostics can explain the prior attempt. Never retain targets.
     this.grenadeAuto.target = null; this.grenadeAutoPlan = null;
     this.grenadeTracker.reset(); this.grenadeUpdateAt = null;
-    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; this.grenadeState = 'off'; this.grenadeManualOverride = false; this.lastAimSent = null; this.aimOutput = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
+    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; this.grenadeState = 'off'; this.grenadeManualOverride = false; this.lastAimSent = null; this.aimOutput = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimOutputFrame = -1; this.previewAimPlan = null; this.aimPlanDirect = false; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
     this.target = null; this.targetId = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.local = null; this.mapping = null; this.effects = [];
     this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.pickupPauseUntil = 0; this.lootBackoff.reset();
@@ -287,6 +287,7 @@ export class Features {
                     && self.local?.data?.[self.local.slotKey] !== 3 && !!self.flushReady);
           }
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
+          self.aimOutputFrame = self.frameId;
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
           if (!self.config.mobileMovement) self.movement.reset();
           outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
@@ -344,7 +345,7 @@ export class Features {
     }, this.gameHooks);
   }
   configurationChanged(key) {
-    this.restoreInput(); this.aimPlanFrame = -1; this.aimPlanDirect = false;
+    this.restoreInput(); this.aimPlanFrame = -1; this.aimOutputFrame = -1; this.aimPlanDirect = false;
     this.lastVisual = -Infinity;
     if (key === 'layerKey' || key === 'layerSpoofer') { this.layerHeld = false; this.layerOverrides.clear(); }
     if (['aim', 'aimMode', 'aimActivation'].includes(key)) { this.aimController.reset(); this.stickyId = null; }
@@ -925,6 +926,10 @@ export class Features {
   post() {
     if (!this.mouseInput.record?.captured) this.restoreInput();
     this.syncLockRotation();
+    // The last send in this frame can revalidate and replace the frame plan.
+    // Never use last frame's unit direction as a distance for grenade preview.
+    this.previewAimPlan = this.aimOutputFrame === this.frameId ? this.aimOutput
+      : this.aimPlanFrame === this.aimFrame ? this.aimPlan : null;
     this.aimPlanFrame = -1; this.aimPlanDirect = false;
     const now = this.win.performance.now(); this.stats.frames++;
     if (now - this.lastVisual < 1000 / 30) return;
@@ -1038,11 +1043,11 @@ export class Features {
     const cfg = this.config, m = this.mapping, ctx = this.ctx, schema = m.schema;
     this.stats.previews = { cones: 0, bulletPaths: 0, throwPaths: 0, unsupportedColliders: 0, ricochetDefinitions: !!this.mapDefinitions };
     if (this.protocol !== VERIFIED_PROTOCOL || !this.definitions || !(cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory)) return;
-    const selfPos = this.sourcePos(m.active), inputOrigin = aimPoint(m.camera, selfPos, selfPos), aim = this.dot || this.app.input.mousePos;
-    if (!inputOrigin || !vec(aim)) return;
+    const selfPos = this.sourcePos(m.active), inputOrigin = aimPoint(m.camera, selfPos, selfPos);
     const scale = read(m.camera.camera, m.camera.scaleKeys[0]) * read(m.camera.camera, m.camera.scaleKeys[1]);
-    if (!(scale > 0)) return;
-    const ownDirection = this.lastAimSent || { x: this.app.input.mousePos.x - inputOrigin.x, y: inputOrigin.y - this.app.input.mousePos.y };
+    const input = previewAim(this.mouseInput.physical(this.app.input), inputOrigin, scale, this.previewAimPlan);
+    if (!input) return;
+    const ownDirection = input.direction;
     const allObstacles = m.obstacles(), truncated = allObstacles.length > 256;
     const obstacles = allObstacles.slice(0, 256), relations = teamRelations(m.barn, m.active.__id);
     this.stats.previews.truncatedObstacles = truncated;
@@ -1082,7 +1087,7 @@ export class Features {
     }
     if (cfg.grenadeTrajectory && this.protocol === VERIFIED_PROTOCOL && this.local?.data[this.local.slotKey] === 3) {
       const type = this.local.data[this.local.weaponsKey]?.[3]?.type, def = this.definitions[type];
-      const preview = throwPreview(def, selfPos, ownDirection, Math.hypot(ownDirection.x, ownDirection.y) / scale);
+      const preview = throwPreview(def, selfPos, ownDirection, input.distance);
       if (preview) {
         line(preview.points, '#80ffb5aa', true); this.stats.previews.throwPaths++;
         const center = project(m.camera, preview.end), explosion = this.definitions[def.explosionType];

@@ -7,6 +7,7 @@ import { ast, captureApplication, captureDefinitions, discover, discoverCamera, 
   discoverSender, discoverVisualPosition, discoverLootSource, aimPoint, overlayPosition, Disposables, entries, intercept, patchMethod, project, read, segmentBlocked,
   teamOf, Tracker } from '../src/core.mjs';
 import { Features, grenadeZone, inputShape, localDataSchema, modifyMessage, Overrides, VERIFIED_PROTOCOL } from '../src/features.mjs';
+import { throwPreview } from '../src/previews.mjs';
 import { createMenu, DEFAULTS, loadConfig, normalizeConfig, STORAGE_KEY } from '../src/menu.mjs';
 import { start } from '../src/main.mjs';
 
@@ -835,6 +836,44 @@ test('all preview controls execute through Canvas with enemy filtering and sourc
   assert.equal(engine.stats.previews.throwPaths, 1);
   engine.dispose(); dom.window.close();
 });
+test('grenade trajectory uses current cursor distance instead of stale unit aim direction', () => {
+  const f = coordinated({ aim: false, grenadeTrajectory: true, grenadeAimMode: 'off' });
+  try {
+    const hero = f.app.game.hero, def = { type: 'throwable', throwPhysics: { speed: 20, velZ: 5 } };
+    f.engine.definitions.frag = def; hero.n.weapon = 'frag'; hero.l.index = 3;
+    f.app.input.mousePos.x = 688; f.app.input.mousePos.y = 300;
+    f.engine.attachCanvas(f.dom.window.document.createElement('canvas'));
+    const lines = []; f.engine.ctx.lineTo = (x,y) => lines.push({x,y});
+    f.engine.lastAimSent = { x: 0, y: 1 }; // A previous gun Lock is not current grenade intent.
+    f.engine.pre(); f.engine.lastVisual = -Infinity; f.engine.post();
+    const expected = throwPreview(def, { x: 10, y: 20 }, { x: 1, y: 0 }, 9);
+    const endpoint = project(f.engine.mapping.camera, expected.points.at(-1));
+    assert.deepEqual(lines.at(-1), endpoint); assert.equal(f.engine.stats.previews.throwPaths, 1);
+  } finally { f.close(); }
+});
+
+test('grenade preview follows the same-frame sender correction, then drops it on config change', () => {
+  const f = coordinated({ aim: false, grenadeTrajectory: true, grenadeAimMode: 'off' });
+  try {
+    const hero = f.app.game.hero, def = { type: 'throwable', throwPhysics: { speed: 20, velZ: 5 } };
+    f.engine.definitions.frag = def; hero.n.weapon = 'frag'; hero.l.index = 3;
+    f.app.input.mousePos.x = 688; f.app.input.mousePos.y = 300;
+    f.engine.attachCanvas(f.dom.window.document.createElement('canvas'));
+    const lines = []; f.engine.ctx.lineTo = (x,y) => lines.push({x,y});
+    f.engine.pre();
+    f.engine.aimPlan = { dir: { x: 1, y: 0 }, toMouseHit: true, distance: 3 };
+    f.engine.aimPlanFrame = f.engine.aimFrame;
+    f.engine.aimOutput = { dir: { x: 0, y: 1 }, toMouseHit: true, distance: 15 };
+    f.engine.aimOutputFrame = f.engine.frameId;
+    f.engine.lastVisual = -Infinity; f.engine.post();
+    let expected = throwPreview(def, { x: 10, y: 20 }, { x: 0, y: 1 }, 15);
+    assert.deepEqual(lines.at(-1), project(f.engine.mapping.camera, expected.points.at(-1)), 'sender solution wins');
+    lines.length = 0; f.engine.configurationChanged('grenadeAimMode'); f.engine.lastVisual = -Infinity; f.engine.post();
+    expected = throwPreview(def, { x: 10, y: 20 }, { x: 1, y: 0 }, 9);
+    assert.deepEqual(lines.at(-1), project(f.engine.mapping.camera, expected.points.at(-1)), 'stale solution is discarded');
+  } finally { f.close(); }
+});
+
 test('captureDefinitions can collect game and map registers in either order and restores its global hook', async () => {
   const dom = env(), win = dom.window, original = win.Object.keys, game = { mp5: { type: 'gun' }, bullet_mp5: { type: 'bullet' }, frag: { type: 'throwable' }, explosion_frag: { type: 'explosion' } };
   const map = { tree_01: { type: 'obstacle', collision: {}, reflectBullets: false }, stone_01: { type: 'obstacle', collision: {}, reflectBullets: true } };

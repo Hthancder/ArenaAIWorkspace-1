@@ -6,7 +6,7 @@ import { discoverSmokeSources, smokeAlpha, smokeParticles } from '../src/effects
 import { Overrides, equipInput, meleeReach } from '../src/features.mjs';
 import { RepeatFire, repeatFirePolicy } from '../src/repeat-fire.mjs';
 import { discoverMapRedraw, highlightMinimap, MapHighlights, mapHighlightCompatible } from '../src/map-highlights.mjs';
-import { MovementSmoother, rayHit, throwPreview, traceShot } from '../src/previews.mjs';
+import { MovementSmoother, previewAim, rayHit, throwPreview, traceShot } from '../src/previews.mjs';
 import { WeaponSwitch } from '../src/weapon-switch.mjs';
 
 const fists = { type: 'melee', autoAttack: false, attack: { cooldownTime: .25, offset: { x: 1.35, y: 0 }, rad: .9 } };
@@ -119,6 +119,15 @@ test('shot preview respects layers, low/dead obstacles and bounds reflections', 
   assert.equal(traceShot(start, dir, 10, [{ ...wall, layer: 1 }, { ...wall, dead: true }, { ...wall, height: .1 }], 0, {}).points.at(-1).x, 10);
   assert.equal(traceShot(start, dir, 10, [{ ...wall, collider: { type: 9 } }], 0, {}).unsupported, 1);
 });
+test('preview separates corrected direction from physical or corrected throw strength', () => {
+  const mouse = { x: 688, y: 300 }, center = { x: 400, y: 300 }, scale = 32;
+  assert.deepEqual(previewAim(mouse, center, scale), { direction: { x: 1, y: 0 }, distance: 9 });
+  assert.deepEqual(previewAim(mouse, center, scale, { dir: { x: 0, y: 1 }, toMouseHit: false }), { direction: { x: 0, y: 1 }, distance: 9 });
+  assert.deepEqual(previewAim(mouse, center, scale, { dir: { x: 0, y: 1 }, toMouseHit: true, distance: 15 }), { direction: { x: 0, y: 1 }, distance: 15 });
+  assert.deepEqual(previewAim(center, center, scale), { direction: { x: 1, y: 0 }, distance: 0 });
+  assert.equal(previewAim(mouse, center, 0), null);
+});
+
 test('throw preview uses bounded source-strength/physics and is explicitly nominal', () => {
   const def = { type: 'throwable', throwPhysics: { speed: 20, velZ: 5 } };
   const near = throwPreview(def, { x: 0, y: 0 }, { x: 1, y: 0 }, 9), far = throwPreview(def, { x: 0, y: 0 }, { x: 1, y: 0 }, 18);

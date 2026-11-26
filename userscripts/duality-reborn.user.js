@@ -6824,6 +6824,16 @@ THE SOFTWARE.
     return { points, collisions, unsupported };
   }
   __name(traceShot, "traceShot");
+  function previewAim(mouse, center, scale, plan = null) {
+    if (!vec(mouse) || !vec(center) || !finite(scale) || scale <= 0) return null;
+    const dx = mouse.x - center.x, dy = center.y - mouse.y, pixels = Math.hypot(dx, dy);
+    const manual = pixels > 1e-5 * scale ? { x: dx / pixels, y: dy / pixels } : { x: 1, y: 0 };
+    const length = Math.hypot(plan?.dir?.x, plan?.dir?.y);
+    const direction = vec(plan?.dir) && finite(length) && length > 1e-8 ? { x: plan.dir.x / length, y: plan.dir.y / length } : manual;
+    const distance = plan?.toMouseHit && finite(plan.distance) ? clamp(plan.distance, 0, 64) : clamp(pixels / scale, 0, 64);
+    return { direction, distance };
+  }
+  __name(previewAim, "previewAim");
   function throwPreview(def, start2, direction, mouseDistance) {
     const physics = def?.throwPhysics, len = Math.hypot(direction?.x, direction?.y);
     if (def?.type !== "throwable" || !vec(start2) || !finite(len) || len < 1e-3 || !finite(mouseDistance) || !finite(physics?.speed) || !finite(physics?.velZ) || physics.speed < 0) return null;
@@ -8199,6 +8209,7 @@ THE SOFTWARE.
       this.mouseInput = new MouseInputFrame();
       this.aimFrame = 0;
       this.aimPlanFrame = -1;
+      this.aimOutputFrame = -1;
       this.aimPlanDirect = false;
       this.lastMap = -Infinity;
       this.lastVisual = -Infinity;
@@ -8368,6 +8379,8 @@ THE SOFTWARE.
       this.aimOutput = null;
       this.aimPlan = null;
       this.aimPlanFrame = -1;
+      this.aimOutputFrame = -1;
+      this.previewAimPlan = null;
       this.aimPlanDirect = false;
       this.sourceFields = null;
       this.observedEntities.clear();
@@ -8490,6 +8503,7 @@ THE SOFTWARE.
               self.switchSlot = null;
               self.manualEquipHeld = true;
             }
+            self.aimOutputFrame = self.frameId;
             self.moveDirection = self.config.mobileMovement && inputShape(data2) ? self.movement.sample(data2, self.config.movementSmooth, self.win.performance.now()) : null;
             if (!self.config.mobileMovement) self.movement.reset();
             outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
@@ -8566,6 +8580,7 @@ THE SOFTWARE.
     configurationChanged(key) {
       this.restoreInput();
       this.aimPlanFrame = -1;
+      this.aimOutputFrame = -1;
       this.aimPlanDirect = false;
       this.lastVisual = -Infinity;
       if (key === "layerKey" || key === "layerSpoofer") {
@@ -9306,6 +9321,7 @@ THE SOFTWARE.
     post() {
       if (!this.mouseInput.record?.captured) this.restoreInput();
       this.syncLockRotation();
+      this.previewAimPlan = this.aimOutputFrame === this.frameId ? this.aimOutput : this.aimPlanFrame === this.aimFrame ? this.aimPlan : null;
       this.aimPlanFrame = -1;
       this.aimPlanDirect = false;
       const now = this.win.performance.now();
@@ -9484,11 +9500,11 @@ THE SOFTWARE.
       const cfg = this.config, m = this.mapping, ctx = this.ctx, schema = m.schema;
       this.stats.previews = { cones: 0, bulletPaths: 0, throwPaths: 0, unsupportedColliders: 0, ricochetDefinitions: !!this.mapDefinitions };
       if (this.protocol !== VERIFIED_PROTOCOL || !this.definitions || !(cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory)) return;
-      const selfPos = this.sourcePos(m.active), inputOrigin = aimPoint(m.camera, selfPos, selfPos), aim = this.dot || this.app.input.mousePos;
-      if (!inputOrigin || !vec(aim)) return;
+      const selfPos = this.sourcePos(m.active), inputOrigin = aimPoint(m.camera, selfPos, selfPos);
       const scale = read(m.camera.camera, m.camera.scaleKeys[0]) * read(m.camera.camera, m.camera.scaleKeys[1]);
-      if (!(scale > 0)) return;
-      const ownDirection = this.lastAimSent || { x: this.app.input.mousePos.x - inputOrigin.x, y: inputOrigin.y - this.app.input.mousePos.y };
+      const input = previewAim(this.mouseInput.physical(this.app.input), inputOrigin, scale, this.previewAimPlan);
+      if (!input) return;
+      const ownDirection = input.direction;
       const allObstacles = m.obstacles(), truncated = allObstacles.length > 256;
       const obstacles = allObstacles.slice(0, 256), relations = teamRelations(m.barn, m.active.__id);
       this.stats.previews.truncatedObstacles = truncated;
@@ -9544,7 +9560,7 @@ THE SOFTWARE.
       }
       if (cfg.grenadeTrajectory && this.protocol === VERIFIED_PROTOCOL && this.local?.data[this.local.slotKey] === 3) {
         const type = this.local.data[this.local.weaponsKey]?.[3]?.type, def = this.definitions[type];
-        const preview = throwPreview(def, selfPos, ownDirection, Math.hypot(ownDirection.x, ownDirection.y) / scale);
+        const preview = throwPreview(def, selfPos, ownDirection, input.distance);
         if (preview) {
           line(preview.points, "#80ffb5aa", true);
           this.stats.previews.throwPaths++;
