@@ -1,4 +1,4 @@
-# Tabspace 0.114 — bản thử nghiệm
+# Tabspace 0.115 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -245,3 +245,6 @@ Trong popup mở **Thao tác nhanh nhiều tab**: chọn cửa sổ hiện tại
 Mặc định hỏi trước bằng hộp xác nhận tổng số; trong phần thu gọn **Tùy chọn thao tác nhanh**, bật riêng lưu ngay hoặc nghỉ ngay nếu muốn bỏ bước hỏi. Đổi mỗi lựa chọn cần xác nhận rủi ro. Mỗi lượt tối đa 100 tab web; nếu vượt giới hạn không xử lý một phần, hãy chọn từng nhóm tab. Không phụ thuộc số tab hiển thị trong popup; tab ẩn danh không xử lý. Giữ popup mở đến khi xong; nếu đóng popup hoặc kết quả không rõ, kiểm tra nhóm đích/Chrome trước khi thử lại. Không đảm bảo nguyên tử với Chrome hoặc extension khác.
 
 **Tự động nghỉ theo RAM/CPU chưa triển khai**: không có nguồn đo riêng từng tab đã được kiểm chứng cho bản extension này, nên mục giải thích trong popup chỉ báo chưa khả dụng, không giả số liệu và không tự nghỉ. Cần kiểm chứng API, quyền và bảo vệ trước khi hỗ trợ.
+
+### Xem trước thao tác nhanh và nhiều tab hơn (0.115)
+Thao tác nhanh mặc định mở danh sách xem trước: chọn/bỏ từng tab hoặc tất cả, tab không đủ điều kiện cho nghỉ bị vô hiệu hóa kèm lý do. Lưu và nghỉ kiểm tra lại ngay trước khi thực hiện. Người đã bật tùy chọn riêng lưu ngay/nghỉ ngay vẫn bỏ qua xem trước; nếu thiết lập thay đổi từ nơi khác, đóng và mở lại popup trước khi dùng. Phần thao tác nhanh hỗ trợ tối đa **500 tab web/lượt**, không âm thầm cắt danh sách; lựa chọn checkbox trong danh sách popup vẫn giới hạn 100. Giữ popup mở trong lúc xử lý, đặc biệt với nhiều tab. Đây là các hành động thủ công; tự động nghỉ theo RAM/CPU vẫn chưa khả dụng.
