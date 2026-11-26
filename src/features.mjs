@@ -205,9 +205,11 @@ export class Features {
     // Do not re-arm across a match transition while the button is still held;
     // preserve post-release suppression until a physical button-up packet.
     if (this.grenadeAuto.phase === 'armed') this.grenadeAuto.phase = 'manual';
-    this.grenadeAuto.target = null; this.grenadeAutoPlan = null; this.lastGrenadeAutoEvidence = null;
+    // Keep only anonymous timestamped evidence across a match transition so
+    // post-death diagnostics can explain the prior attempt. Never retain targets.
+    this.grenadeAuto.target = null; this.grenadeAutoPlan = null;
     this.grenadeTracker.reset(); this.grenadeUpdateAt = null;
-    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; this.grenadeState = 'off'; this.grenadeManualOverride = false; this.lastGrenadeEvidence = null; this.lastAimSent = null; this.aimOutput = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
+    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; this.grenadeState = 'off'; this.grenadeManualOverride = false; this.lastAimSent = null; this.aimOutput = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
     this.target = null; this.targetId = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.local = null; this.mapping = null; this.effects = [];
     this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.pickupPauseUntil = 0; this.lootBackoff.reset();
@@ -282,7 +284,12 @@ export class Features {
             const reason = !self.inputReady() ? self.inputBlockReason() : manualEquip || self.manualEquipHeld ? 'manual-equip'
               : self.grenadeManualOverride ? 'manual-override' : !self.timeoutKey ? 'missing-scheduler'
               : self.config.grenadeAimMode !== 'lock' ? 'requires-lock' : self.grenadeAutoPlan?.reason ?? self.grenadeState;
-            self.lastGrenadeAutoEvidence = { phase: self.grenadeAuto.phase, action: auto, reason, recordedAt: self.win.performance.now() };
+            const measuredAt = self.win.performance.now();
+            self.lastGrenadeAutoEvidence = { phase: self.grenadeAuto.phase, action: auto, reason,
+              rttMs: finite(self.timing.rtt) ? Math.round(self.timing.rtt) : null,
+              lastRttMs: finite(self.timing.lastRtt) ? Math.round(self.timing.lastRtt) : null,
+              rttAgeMs: finite(self.timing.rttAt) ? Math.max(0, Math.round(measuredAt - self.timing.rttAt)) : null,
+              recordedAt: measuredAt };
           }
           if (auto === 'cancel') {
             self.grenadeManualOverride = true; self.aimOutput = null; self.grenadePlan = null;
@@ -594,7 +601,8 @@ export class Features {
         const result = stable && timingKnown ? assessAutoThrow({ def, origin: pos, direction: solution.direction,
           mouseDistance: solution.mouseDistance, playerVelocity: myVelocity, target: c.target,
           targetVelocity: { x: c.track.vx, y: c.track.vy }, fuseRemaining: fuse,
-          releaseDelay: transit + c.track.age, layer, obstacles, groundAt, bounds: { width: read(map, 'width'), height: read(map, 'height') } }) : { ok: false, reason: 'uncertain-track-or-latency' };
+          releaseDelay: transit + c.track.age, layer, obstacles, groundAt, bounds: { width: read(map, 'width'), height: read(map, 'height') } })
+          : { ok: false, reason: !stable ? 'insufficient-track-samples' : 'latency-unavailable-or-high' };
         this.grenadeAutoPlan = { target: c.p, viable: result.ok, reason: result.reason };
       }
       record(timer ? 'estimate-unconfirmed' : 'estimate-before-throw');

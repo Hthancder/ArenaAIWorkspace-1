@@ -1534,6 +1534,10 @@ test('auto throw yields immediately on lost terrain and cannot retarget before p
     assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.reason, 'missing-terrain', 'keep the original cancellation reason');
     assert.equal(f.engine.diagnostics().grenadeAim.last.state, 'missing-terrain');
     f.app.input.mouseButtons[0] = false; f.app.game.transmit(3, new InputMsg()); assert.equal(f.engine.grenadeManualOverride, false);
+    f.advance(150); f.engine.releaseMatch();
+    assert.equal(f.engine.diagnostics().grenadeAim.last.state, 'missing-terrain', 'retain anonymous evidence across match cleanup');
+    assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.reason, 'missing-terrain');
+    assert.ok(f.engine.diagnostics().grenadeAim.autoThrow.last.ageMs >= 150);
   } finally { f.close(); }
 });
 
@@ -1599,5 +1603,22 @@ test('activation transitions invalidate cached aim in the same frame', () => {
     f.app.input.mouseButtons[0] = false;
     const up = new InputMsg(); up.toMouseLen = 1.25; f.app.game.transmit(3, up);
     assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, up.toMouseDir, 'cached Fire aim does not survive button-up');
+  } finally { f.close(); }
+});
+
+test('auto throw reports high latency instead of treating it as a mouse-hook failure', () => {
+  const f = coordinated({ aim: false, grenadeAimMode: 'lock', grenadeAimActivation: 'hold', grenadeAutoThrow: true, grenadeFov: 400 });
+  try {
+    const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+    f.engine.definitions.frag = { type: 'throwable', cookable: true, fuseTime: 4, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
+    hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = []; enemy.n.sourcePos = { x: 20, y: 20 };
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' }; f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true;
+    f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
+    const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
+    send(true);
+    for (let i = 0; i < 4; i++) { f.advance(33); const now = f.dom.window.performance.now(); f.engine.grenadeTracker.observe(hero, hero.n.sourcePos, now); f.engine.grenadeTracker.observe(enemy, enemy.n.sourcePos, now); Object.assign(f.engine.timing, { rtt: 259, lastRtt: 259, rttAt: now }); assert.equal(send(false).shootHold, true); }
+    assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.reason, 'latency-unavailable-or-high');
+    assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.rttMs, 259);
+    assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.lastRttMs, 259);
   } finally { f.close(); }
 });

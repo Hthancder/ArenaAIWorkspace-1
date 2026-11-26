@@ -8186,7 +8186,6 @@ THE SOFTWARE.
       if (this.grenadeAuto.phase === "armed") this.grenadeAuto.phase = "manual";
       this.grenadeAuto.target = null;
       this.grenadeAutoPlan = null;
-      this.lastGrenadeAutoEvidence = null;
       this.grenadeTracker.reset();
       this.grenadeUpdateAt = null;
       this.restoreInput();
@@ -8200,7 +8199,6 @@ THE SOFTWARE.
       this.grenadePlan = null;
       this.grenadeState = "off";
       this.grenadeManualOverride = false;
-      this.lastGrenadeEvidence = null;
       this.lastAimSent = null;
       this.aimOutput = null;
       this.aimPlan = null;
@@ -8326,7 +8324,16 @@ THE SOFTWARE.
             });
             if (self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 && physicalHeld && !(self.grenadeAuto.phase === "manual" && self.lastGrenadeAutoEvidence?.phase === "manual") && auto !== "suppress") {
               const reason = !self.inputReady() ? self.inputBlockReason() : manualEquip || self.manualEquipHeld ? "manual-equip" : self.grenadeManualOverride ? "manual-override" : !self.timeoutKey ? "missing-scheduler" : self.config.grenadeAimMode !== "lock" ? "requires-lock" : self.grenadeAutoPlan?.reason ?? self.grenadeState;
-              self.lastGrenadeAutoEvidence = { phase: self.grenadeAuto.phase, action: auto, reason, recordedAt: self.win.performance.now() };
+              const measuredAt = self.win.performance.now();
+              self.lastGrenadeAutoEvidence = {
+                phase: self.grenadeAuto.phase,
+                action: auto,
+                reason,
+                rttMs: finite(self.timing.rtt) ? Math.round(self.timing.rtt) : null,
+                lastRttMs: finite(self.timing.lastRtt) ? Math.round(self.timing.lastRtt) : null,
+                rttAgeMs: finite(self.timing.rttAt) ? Math.max(0, Math.round(measuredAt - self.timing.rttAt)) : null,
+                recordedAt: measuredAt
+              };
             }
             if (auto === "cancel") {
               self.grenadeManualOverride = true;
@@ -8725,7 +8732,7 @@ THE SOFTWARE.
             obstacles,
             groundAt,
             bounds: { width: read(map, "width"), height: read(map, "height") }
-          }) : { ok: false, reason: "uncertain-track-or-latency" };
+          }) : { ok: false, reason: !stable ? "insufficient-track-samples" : "latency-unavailable-or-high" };
           this.grenadeAutoPlan = { target: c.p, viable: result.ok, reason: result.reason };
         }
         record(timer ? "estimate-unconfirmed" : "estimate-before-throw");
