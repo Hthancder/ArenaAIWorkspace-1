@@ -116,6 +116,42 @@ test('map wrapper validates the native contract and redraws once per config chan
   config.mapHighlights = false; manager.sync(game, map); assert.equal(map.calls, 2); assert.equal(map.last[0].shapes[0].scale, 1);
   config.mapHighlights = true; manager.sync(game, map); manager.dispose(); assert.equal(map.last[0].shapes[0].scale, 1); assert.equal(map.getMinimapRender, original);
 });
+test('map redraw retries transient errors with backoff and restores after a partial draw', () => {
+  class FlakyMap extends MapFixture {
+    renderMap(renderer, mode) {
+      this.calls++; const records = [this.getMinimapRender({ type: 'stone_02' })];
+      records.sort((a, b) => a.zIdx - b.zIdx); this.last = records;
+      if (this.fail) throw new Error('renderer unavailable');
+    }
+  }
+  const map = new FlakyMap(), game = new GameFixture(map), config = { mapHighlights: true }, errors = [];
+  const manager = new MapHighlights(config, (_, text) => errors.push(text));
+  map.fail = true; manager.sync(game, map, 100);
+  assert.equal(manager.stats.state, 'redraw-error'); assert.equal(map.last[0].shapes[0].scale, 6);
+  manager.sync(game, map, 2099); assert.equal(map.calls, 1, 'bounded retry');
+  map.fail = false; manager.sync(game, map, 2100);
+  assert.equal(map.calls, 2); assert.equal(manager.stats.state, 'redrawn-markers');
+  config.mapHighlights = false; map.fail = true; manager.sync(game, map, 2200);
+  assert.equal(manager.stats.state, 'redraw-error'); assert.equal(manager.dirty, true);
+  map.fail = false; manager.sync(game, map, 4200);
+  assert.equal(manager.stats.state, 'disabled'); assert.equal(manager.dirty, false); assert.equal(map.last[0].shapes[0].scale, 1);
+  assert.equal(errors.length, 2); manager.dispose();
+});
+test('disabling a partially failed highlight render attempts restoration immediately', () => {
+  class FlakyMap extends MapFixture {
+    renderMap(renderer, mode) {
+      this.calls++; const records = [this.getMinimapRender({ type: 'stone_02' })];
+      records.sort((a, b) => a.zIdx - b.zIdx); this.last = records;
+      if (this.fail) throw new Error('partial render');
+    }
+  }
+  const map = new FlakyMap(), game = new GameFixture(map), config = { mapHighlights: true };
+  const manager = new MapHighlights(config, () => {});
+  map.fail = true; manager.sync(game, map, 0);
+  map.fail = false; config.mapHighlights = false; manager.sync(game, map, 1);
+  assert.equal(map.last[0].shapes[0].scale, 1); assert.equal(manager.stats.state, 'disabled');
+  manager.dispose();
+});
 test('ray clips circle/AABB, misses nonintersecting objects and handles origins inside a collider', () => {
   const box = { type: 1, min: { x: 3, y: -1 }, max: { x: 4, y: 1 } };
   assert.equal(rayHit({ x: 0, y: 0 }, { x: 1, y: 0 }, 10, box).distance, 3);

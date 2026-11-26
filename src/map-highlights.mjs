@@ -49,8 +49,8 @@ export function discoverMapRedraw(game, map) {
   return candidates[0];
 }
 export class MapHighlights {
-  constructor(config, report) { this.config = config; this.report = report; this.hooks = new Disposables(); this.map = null; this.enabled = false; this.dirty = false; this.signature = null; this.stats = { state: 'disabled', marked: 0, redraws: 0 }; }
-  sync(game, map) {
+  constructor(config, report) { this.config = config; this.report = report; this.hooks = new Disposables(); this.map = null; this.enabled = false; this.dirty = false; this.signature = null; this.failedSignature = null; this.retryAt = 0; this.stats = { state: 'disabled', marked: 0, redraws: 0 }; }
+  sync(game, map, now = globalThis.performance.now()) {
     if (map !== this.map) {
       this.dispose(); this.map = map; this.signature = null;
       if (map && mapHighlightCompatible(map)) {
@@ -70,22 +70,30 @@ export class MapHighlights {
     if (!this.available || !read(map, 'mapLoaded')) { this.stats.state = this.enabled ? 'waiting-map-contract' : 'disabled'; return; }
     const signature = JSON.stringify([this.enabled, !!this.config.smallerTrees]);
     if (signature === this.signature) return;
-    this.signature = signature;
-    if (this.enabled || this.dirty) this.redraw();
-    else this.stats.state = 'disabled';
+    // Failed draws are retried, but not on every reconciliation or UI event.
+    if (signature === this.failedSignature && now < this.retryAt) return;
+    if (!this.enabled && !this.dirty) {
+      this.signature = signature; this.failedSignature = null; this.stats.state = 'disabled'; return;
+    }
+    if (this.redraw()) { this.signature = signature; this.failedSignature = null; this.retryAt = 0; }
+    else { this.signature = null; this.failedSignature = signature; this.retryAt = now + 2000; }
   }
   redraw() {
-    if (!this.map || !this.redrawArgs || !read(this.map, 'mapLoaded')) return;
+    if (!this.map || !this.redrawArgs || !read(this.map, 'mapLoaded')) return false;
+    // A failed render may already have altered the texture. Retain the need to
+    // restore it even if the exception happened before all markers were seen.
+    if (this.enabled) this.dirty = true;
     try {
       this.stats.marked = 0;
       Reflect.apply(readMethod(this.map, 'renderMap'), this.map, [this.redrawArgs.renderer, this.redrawArgs.canvasMode]);
       this.stats.redraws++; this.dirty = this.enabled;
       this.stats.state = this.enabled ? this.stats.marked ? 'redrawn-markers' : 'no-matching-map-objects' : 'disabled';
-    } catch (error) { this.stats.state = 'redraw-error'; this.report('warning', `Map redraw: ${error.message}`); }
+      return true;
+    } catch (error) { this.stats.state = 'redraw-error'; this.report('warning', `Map redraw: ${error.message}`); return false; }
   }
   dispose() {
     this.enabled = false;
     if (this.dirty) this.redraw();
-    this.hooks.clear(); this.map = null; this.installed = false; this.available = false; this.dirty = false; this.signature = null; this.redrawArgs = null;
+    this.hooks.clear(); this.map = null; this.installed = false; this.available = false; this.dirty = false; this.signature = null; this.failedSignature = null; this.retryAt = 0; this.redrawArgs = null;
   }
 }

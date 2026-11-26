@@ -6629,9 +6629,11 @@ THE SOFTWARE.
       this.enabled = false;
       this.dirty = false;
       this.signature = null;
+      this.failedSignature = null;
+      this.retryAt = 0;
       this.stats = { state: "disabled", marked: 0, redraws: 0 };
     }
-    sync(game, map) {
+    sync(game, map, now = globalThis.performance.now()) {
       if (map !== this.map) {
         this.dispose();
         this.map = map;
@@ -6659,21 +6661,37 @@ THE SOFTWARE.
       }
       const signature = JSON.stringify([this.enabled, !!this.config.smallerTrees]);
       if (signature === this.signature) return;
-      this.signature = signature;
-      if (this.enabled || this.dirty) this.redraw();
-      else this.stats.state = "disabled";
+      if (signature === this.failedSignature && now < this.retryAt) return;
+      if (!this.enabled && !this.dirty) {
+        this.signature = signature;
+        this.failedSignature = null;
+        this.stats.state = "disabled";
+        return;
+      }
+      if (this.redraw()) {
+        this.signature = signature;
+        this.failedSignature = null;
+        this.retryAt = 0;
+      } else {
+        this.signature = null;
+        this.failedSignature = signature;
+        this.retryAt = now + 2e3;
+      }
     }
     redraw() {
-      if (!this.map || !this.redrawArgs || !read(this.map, "mapLoaded")) return;
+      if (!this.map || !this.redrawArgs || !read(this.map, "mapLoaded")) return false;
+      if (this.enabled) this.dirty = true;
       try {
         this.stats.marked = 0;
         Reflect.apply(readMethod(this.map, "renderMap"), this.map, [this.redrawArgs.renderer, this.redrawArgs.canvasMode]);
         this.stats.redraws++;
         this.dirty = this.enabled;
         this.stats.state = this.enabled ? this.stats.marked ? "redrawn-markers" : "no-matching-map-objects" : "disabled";
+        return true;
       } catch (error) {
         this.stats.state = "redraw-error";
         this.report("warning", `Map redraw: ${error.message}`);
+        return false;
       }
     }
     dispose() {
@@ -6685,6 +6703,8 @@ THE SOFTWARE.
       this.available = false;
       this.dirty = false;
       this.signature = null;
+      this.failedSignature = null;
+      this.retryAt = 0;
       this.redrawArgs = null;
     }
   };
