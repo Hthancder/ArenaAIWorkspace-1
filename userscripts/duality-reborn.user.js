@@ -8017,6 +8017,8 @@ THE SOFTWARE.
       this.grenadeAutoPlan = null;
       this.lastGrenadeAutoEvidence = null;
       this.lastGrenadeAutoSent = -Infinity;
+      this.grenadeTracker = new SnapshotTracker();
+      this.grenadeUpdateAt = null;
       this.tracker = new SnapshotTracker();
       this.aimController = new AimController();
       this.grenadeAimTimer = new GrenadeTimer();
@@ -8185,6 +8187,8 @@ THE SOFTWARE.
       this.grenadeAuto.target = null;
       this.grenadeAutoPlan = null;
       this.lastGrenadeAutoEvidence = null;
+      this.grenadeTracker.reset();
+      this.grenadeUpdateAt = null;
       this.restoreInput();
       this.matchHooks.clear();
       this.overrides.clear();
@@ -8310,6 +8314,7 @@ THE SOFTWARE.
             if (!self.config.mobileMovement) self.movement.reset();
             outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
             const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
+            if (physicalHeld && data2.shootStart && self.grenadeAuto.phase === "idle") self.lastGrenadeAutoEvidence = null;
             const auto = self.grenadeAuto.observe({
               held: physicalHeld,
               edge: data2.shootStart && data2.shootHold,
@@ -8319,8 +8324,10 @@ THE SOFTWARE.
               viable: !!self.grenadeAutoPlan?.viable && !!self.aimOutput,
               now: self.win.performance.now()
             });
-            if (self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 && physicalHeld)
-              self.lastGrenadeAutoEvidence = { phase: self.grenadeAuto.phase, action: auto, reason: self.grenadeAutoPlan?.reason ?? "no-plan", recordedAt: self.win.performance.now() };
+            if (self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 && physicalHeld && !(self.grenadeAuto.phase === "manual" && self.lastGrenadeAutoEvidence?.phase === "manual") && auto !== "suppress") {
+              const reason = !self.inputReady() ? self.inputBlockReason() : manualEquip || self.manualEquipHeld ? "manual-equip" : self.grenadeManualOverride ? "manual-override" : !self.timeoutKey ? "missing-scheduler" : self.config.grenadeAimMode !== "lock" ? "requires-lock" : self.grenadeAutoPlan?.reason ?? self.grenadeState;
+              self.lastGrenadeAutoEvidence = { phase: self.grenadeAuto.phase, action: auto, reason, recordedAt: self.win.performance.now() };
+            }
             if (auto === "cancel") {
               self.grenadeManualOverride = true;
               self.aimOutput = null;
@@ -8552,11 +8559,32 @@ THE SOFTWARE.
         if (!m?.schema || !fields?.pos) return;
         for (const id of msg.delObjIds || []) {
           const old = this.observedEntities.get(id);
-          if (old) this.tracker.forget(old);
+          if (old) {
+            this.tracker.forget(old);
+            this.grenadeTracker.forget(old);
+          }
           this.observedEntities.delete(id);
         }
-        const ids = /* @__PURE__ */ new Set();
-        for (const list of [msg.fullObjects || [], msg.partObjects || []]) for (const o of list) if (vec(o.pos)) ids.add(o.__id);
+        const ids = /* @__PURE__ */ new Set(), mentioned = /* @__PURE__ */ new Set();
+        for (const list of [msg.fullObjects || [], msg.partObjects || []]) for (const o of list) {
+          mentioned.add(o.__id);
+          if (vec(o.pos)) ids.add(o.__id);
+        }
+        const complete = this.config.grenadeAimMode && this.config.grenadeAimMode !== "off" && Array.isArray(msg.fullObjects) && Array.isArray(msg.partObjects) && Array.isArray(msg.delObjIds);
+        const cadence = complete && this.grenadeUpdateAt !== null && now > this.grenadeUpdateAt && now - this.grenadeUpdateAt <= 150;
+        if (!cadence) this.grenadeTracker.reset();
+        this.grenadeUpdateAt = complete ? now : null;
+        const visible = complete ? new Set(m.players()) : null;
+        if (complete) for (const [id, p] of this.observedEntities) {
+          if (!visible.has(p) || p.__id !== id || !p.active || mentioned.has(id) && !ids.has(id)) {
+            this.grenadeTracker.forget(p);
+            continue;
+          }
+          if (!mentioned.has(id) && cadence) {
+            const pos = at2(p, [m.schema.netKey, fields.pos]), layer = this.sourceLayer(p);
+            if (vec(pos) && Number.isInteger(layer)) this.grenadeTracker.observe(p, pos, now, layer);
+          }
+        }
         if (!ids.size) return;
         const players = m.players(), live = new Set(players);
         for (const [id, p] of this.observedEntities) if (!live.has(p) || p.__id !== id) {
@@ -8565,9 +8593,13 @@ THE SOFTWARE.
         }
         for (const p of players) if (ids.has(p.__id)) {
           const old = this.observedEntities.get(p.__id);
-          if (old && old !== p) this.tracker.forget(old);
+          if (old && old !== p) {
+            this.tracker.forget(old);
+            this.grenadeTracker.forget(old);
+          }
           this.observedEntities.set(p.__id, p);
           this.tracker.observe(p, at2(p, [m.schema.netKey, fields.pos]), now, this.sourceLayer(p));
+          if (complete && Number.isInteger(this.sourceLayer(p))) this.grenadeTracker.observe(p, at2(p, [m.schema.netKey, fields.pos]), now, this.sourceLayer(p));
         }
       });
     }
@@ -8618,10 +8650,15 @@ THE SOFTWARE.
           this.grenadeAuto.phase = "manual";
           this.grenadeManualOverride = true;
           this.restoreInput();
+          this.lastGrenadeAutoEvidence = { phase: "manual", action: "cancel", reason, recordedAt: now };
         }
         return null;
       }, "fail");
-      if (this.grenadeManualOverride) return fail("manual-override");
+      if (this.grenadeManualOverride) {
+        this.grenadeState = "manual-override";
+        this.grenadePlan = null;
+        return null;
+      }
       if (!this.capabilities.aim || !this.capabilities.prediction || !this.capabilities.wallcheck || !this.local || this.manualEquipHeld) return fail("missing-contract");
       const ctx = { ...this.grenadeContext(), enabled: true }, def = this.definitions?.[ctx.type];
       if (!def || ctx.type !== ctx.activeType) return fail("missing-throwable");
@@ -8629,7 +8666,7 @@ THE SOFTWARE.
       if (!Array.isArray(perks) || perks.some((p) => p?.type === "amped_explosives")) return fail("unknown-or-amped-perks");
       const map = m.map, surface = readMethod(map, "getGroundSurface");
       if (!surface) return fail("missing-terrain");
-      const playerTrack = this.tracker.estimate(m.active, now);
+      const playerTrack = this.grenadeTracker.estimate(m.active, now);
       if (!playerTrack || playerTrack.age > 0.15 || playerTrack.samples?.length < 2 || !finite(playerTrack.vx) || !finite(playerTrack.vy)) return fail("missing-own-velocity");
       const myVelocity = { x: playerTrack.vx, y: playerTrack.vy }, layer = this.sourceLayer(m.active);
       const timer = this.grenadeAimTimer.sample(ctx, now);
@@ -8644,7 +8681,7 @@ THE SOFTWARE.
       const candidates = [];
       for (const p of m.players().slice(0, 256)) {
         if (p === m.active || !p.active || at2(p, [m.schema.netKey, m.schema.deadKey]) || !cfg.knocked && p.downed || relations.classify(p.__id).kind !== "enemy" || !sameLayer(layer, this.sourceLayer(p))) continue;
-        const target = this.sourcePos(p), screen = aimPoint(camera, target, pos), track = this.tracker.estimate(p, now);
+        const target = this.sourcePos(p), screen = aimPoint(camera, target, pos), track = this.grenadeTracker.estimate(p, now);
         if (!screen || !track || track.age > 0.15 || track.samples?.length < 2 || !finite(track.vx) || !finite(track.vy)) continue;
         const distance = Math.hypot(screen.x - cursor.x, screen.y - cursor.y);
         if (distance <= (cfg.grenadeFov ?? cfg.fov)) candidates.push({ p, target, track, distance });

@@ -1441,7 +1441,7 @@ test('grenade preview, assist and lock are isolated and preserve native Fire; mi
     f.engine.mapping.map = { getGroundSurface() { return { type: 'grass' }; } };
     const now = f.dom.window.performance.now();
     for (const t of [now - 66, now - 33, now]) {
-      f.engine.tracker.observe(hero, hero.n.sourcePos, t); f.engine.tracker.observe(enemy, enemy.n.sourcePos, t);
+      f.engine.grenadeTracker.observe(hero, hero.n.sourcePos, t); f.engine.grenadeTracker.observe(enemy, enemy.n.sourcePos, t);
     }
     const input = new InputMsg(); input.toMouseLen = 2;
     assert.equal(f.engine.processAim(input, true), null); assert.ok(f.engine.grenadePlan, f.engine.grenadeState);
@@ -1494,16 +1494,19 @@ test('experimental auto throw releases only a verified live hold, then suppresse
     f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true;
     f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
     const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
+    const update = { fullObjects: [{ __id: hero.__id, pos: hero.n.sourcePos }, { __id: enemy.__id, pos: enemy.n.sourcePos }], partObjects: [], delObjIds: [], activePlayerData: {} };
+    f.engine.observeUpdate(update, f.dom.window.performance.now());
     const edge = send(true); assert.equal(edge.shootHold, true);
     let released = false;
     for (let i = 0; i < 110; i++) {
       f.advance(33); const now = f.dom.window.performance.now();
-      f.engine.tracker.observe(hero, hero.n.sourcePos, now); f.engine.tracker.observe(enemy, enemy.n.sourcePos, now);
+      f.engine.lastMap = now; // Keep the fixture's injected contracts during the test.
+      f.engine.observeUpdate({ ...update, fullObjects: [] }, now);
       Object.assign(f.engine.timing, { rtt: 40, lastRtt: 40, rttAt: now });
       const wire = send(false);
       if (!wire.shootHold) { released = true; assert.equal(wire.shootStart, false); break; }
     }
-    assert.equal(released, true, `${f.engine.grenadeState} ${JSON.stringify(f.engine.grenadeAutoPlan)} ${f.engine.grenadeAuto.phase}`);
+    assert.equal(released, true, `${f.engine.grenadeState} ${JSON.stringify(f.engine.grenadeAutoPlan)} ${f.engine.grenadeAuto.phase} ${JSON.stringify(f.engine.lastGrenadeAutoEvidence)}`);
     f.cfg.grenadeAutoThrow = false;
     const after = send(true); assert.equal(after.shootHold, false); assert.equal(after.shootStart, false);
     f.app.input.mouseButtons[0] = false; const up = new InputMsg(); f.app.game.transmit(3, up);
@@ -1521,13 +1524,41 @@ test('auto throw yields immediately on lost terrain and cannot retarget before p
     f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
     const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; input.toMouseDir = { x: 0, y: 1 }; input.toMouseLen = 4; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
     send(true);
-    for (let i = 0; i < 4; i++) { f.advance(33); const now = f.dom.window.performance.now(); f.engine.tracker.observe(hero, hero.n.sourcePos, now); f.engine.tracker.observe(enemy, enemy.n.sourcePos, now); Object.assign(f.engine.timing, { rtt: 40, lastRtt: 40, rttAt: now }); send(false); }
+    for (let i = 0; i < 4; i++) { f.advance(33); const now = f.dom.window.performance.now(); f.engine.grenadeTracker.observe(hero, hero.n.sourcePos, now); f.engine.grenadeTracker.observe(enemy, enemy.n.sourcePos, now); Object.assign(f.engine.timing, { rtt: 40, lastRtt: 40, rttAt: now }); send(false); }
     assert.equal(f.engine.grenadeAuto.phase, 'armed'); assert.equal(f.engine.grenadeAuto.target, enemy);
     f.engine.mapping.map = {};
     const wire = send(false); assert.deepEqual(wire.toMouseDir, { x: 0, y: 1 }); assert.equal(wire.shootHold, true);
     assert.equal(f.engine.grenadeManualOverride, true);
     f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
     assert.deepEqual(send(false).toMouseDir, { x: 0, y: 1 });
+    assert.equal(f.engine.diagnostics().grenadeAim.autoThrow.last.reason, 'missing-terrain', 'keep the original cancellation reason');
+    assert.equal(f.engine.diagnostics().grenadeAim.last.state, 'missing-terrain');
     f.app.input.mouseButtons[0] = false; f.app.game.transmit(3, new InputMsg()); assert.equal(f.engine.grenadeManualOverride, false);
+  } finally { f.close(); }
+});
+
+test('grenade stationary inference uses complete recent world updates and is isolated from gun tracking', () => {
+  const f = coordinated({ grenadeAimMode: 'lock' });
+  try {
+    const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+    hero.n.sourcePos = { x: 10, y: 20 }; enemy.n.sourcePos = { x: 12, y: 20 };
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' };
+    const full = { fullObjects: [{ __id: hero.__id, pos: hero.n.sourcePos }, { __id: enemy.__id, pos: enemy.n.sourcePos }], partObjects: [], delObjIds: [], activePlayerData: {} };
+    const empty = { fullObjects: [], partObjects: [], delObjIds: [], activePlayerData: {} };
+    f.engine.observeUpdate(full, f.dom.window.performance.now());
+    for (let i = 0; i < 3; i++) { f.advance(33); f.engine.observeUpdate(empty, f.dom.window.performance.now()); }
+    const now = f.dom.window.performance.now(), g = f.engine.grenadeTracker.estimate(enemy, now), gun = f.engine.tracker.estimate(enemy, now);
+    assert.ok(g && g.samples.length >= 3); assert.ok(Math.abs(g.vx) < 1e-9); assert.ok(Math.abs(g.vy) < 1e-9);
+    assert.equal(gun.samples.length, 1, 'absence inference never changes gun motion tracking');
+    enemy.n.sourcePos = { x: 12.25, y: 20 }; f.advance(33);
+    f.engine.observeUpdate({ ...empty, partObjects: [{ __id: enemy.__id, pos: enemy.n.sourcePos }] }, f.dom.window.performance.now());
+    assert.ok(f.engine.grenadeTracker.estimate(enemy, f.dom.window.performance.now()).vx > 1, 'a real move takes precedence over absence inference');
+    f.advance(200); f.engine.observeUpdate(empty, f.dom.window.performance.now());
+    assert.equal(f.engine.grenadeTracker.estimate(enemy, f.dom.window.performance.now()), null, 'large update gap invalidates inference');
+    f.advance(33); f.engine.observeUpdate(full, f.dom.window.performance.now());
+    f.advance(33); f.engine.observeUpdate({ ...empty, delObjIds: [enemy.__id] }, f.dom.window.performance.now());
+    assert.equal(f.engine.grenadeTracker.estimate(enemy, f.dom.window.performance.now()), null, 'deleted player is forgotten');
+    f.advance(33); f.engine.observeUpdate({ partObjects: [], delObjIds: [] }, f.dom.window.performance.now());
+    assert.equal(f.engine.grenadeTracker.estimate(hero, f.dom.window.performance.now()), null, 'incomplete update fails closed');
   } finally { f.close(); }
 });

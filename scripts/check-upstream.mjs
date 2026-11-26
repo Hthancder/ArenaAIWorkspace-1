@@ -317,7 +317,7 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     engine.mapping.map = { getGroundSurface() { return { type: 'grass' }; } };
     const own = engine.mapping.active, enemy = engine.mapping.players().find(p => p.__id === 2);
     const ownPos = engine.sourcePos(own), enemyPos = engine.sourcePos(enemy);
-    for (const t of [clock - 66, clock - 33, clock]) { engine.tracker.observe(own, ownPos, t); engine.tracker.observe(enemy, enemyPos, t); }
+    for (const t of [clock - 66, clock - 33, clock]) { engine.grenadeTracker.observe(own, ownPos, t); engine.grenadeTracker.observe(enemy, enemyPos, t); }
     engine.aimPlanFrame = -1;
     const aimInput = frameInput(); aimInput.toMouseLen = 2; app.game[discoverSender(app.game)](3, aimInput, 128);
     const aimWire = context.sent.at(-1).decoded;
@@ -329,10 +329,15 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     engine.config.grenadeAutoThrow = true; engine.config.grenadeAimActivation = 'hold'; engine.config.grenadeFov = 400;
     const fixtureMap = Object.values(app.game).find(v => v && v.factionMode === false);
     Object.assign(fixtureMap, { mapTexture: {}, width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } }); engine.mapping.map = fixtureMap;
+    // Source client receives complete update arrays. Seed explicit positions,
+    // then model source server's unchanged-player omission on subsequent ticks.
+    const emptyUpdate = { fullObjects: [], partObjects: [], delObjIds: [], activePlayerData: {} };
+    engine.grenadeTracker.reset(); engine.grenadeUpdateAt = null;
+    engine.observeUpdate({ ...emptyUpdate, fullObjects: [{ __id: own.__id, pos: ownPos }, { __id: enemy.__id, pos: enemyPos }] }, clock);
     context.result.setGrenade('frag'); clock += 33; engine.pre(); context.result.nativeFrame(1 / 30); app.input.flush();
     let autoReleased = false;
     for (let i = 0; i < 115; i++) {
-      clock += 33; engine.tracker.observe(own, ownPos, clock); engine.tracker.observe(enemy, enemyPos, clock);
+      clock += 33; engine.observeUpdate(emptyUpdate, clock);
       Object.assign(engine.timing, { rtt: 40, lastRtt: 40, rttAt: clock });
       const count = context.sent.length; engine.pre(); context.result.nativeFrame(1 / 30); app.input.flush();
       const wire = context.sent.slice(count).find(x => x.type === 3 && x.decoded?.shootHold === false);
