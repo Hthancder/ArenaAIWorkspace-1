@@ -324,6 +324,23 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.equal(engine.grenadeState, 'estimate-before-throw', 'grenade plan reaches source sender');
     assert.ok(engine.grenadePlan && aimWire.toMouseLen >= 0 && aimWire.toMouseLen <= 18.1, 'serialized grenade throw strength');
     assert.equal(aimWire.shootHold, false, 'grenade aim never starts Fire');
+    // Real input-frame scheduler and serializer, with injected stable snapshots,
+    // flat terrain and RTT; still not a server acknowledgement or live match.
+    engine.config.grenadeAutoThrow = true; engine.config.grenadeAimActivation = 'hold'; engine.config.grenadeFov = 400;
+    const fixtureMap = Object.values(app.game).find(v => v && v.factionMode === false);
+    Object.assign(fixtureMap, { mapTexture: {}, width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } }); engine.mapping.map = fixtureMap;
+    context.result.setGrenade('frag'); clock += 33; engine.pre(); context.result.nativeFrame(1 / 30); app.input.flush();
+    let autoReleased = false;
+    for (let i = 0; i < 115; i++) {
+      clock += 33; engine.tracker.observe(own, ownPos, clock); engine.tracker.observe(enemy, enemyPos, clock);
+      Object.assign(engine.timing, { rtt: 40, lastRtt: 40, rttAt: clock });
+      const count = context.sent.length; engine.pre(); context.result.nativeFrame(1 / 30); app.input.flush();
+      const wire = context.sent.slice(count).find(x => x.type === 3 && x.decoded?.shootHold === false);
+      if (wire) { assert.equal(wire.decoded.shootStart, false); autoReleased = true; break; }
+    }
+    assert.equal(autoReleased, true, `Source scheduler auto-release: ${engine.grenadeState} / ${engine.grenadeAuto.phase} / ${engine.grenadeAutoPlan?.reason}`);
+    app.input.mouseButtons[0] = false; clock += 33; engine.pre(); context.result.nativeFrame(1 / 30); app.input.flush();
+    engine.config.grenadeAutoThrow = false;
     engine.config.grenadeAimMode = 'off'; engine.configurationChanged('grenadeAimMode'); app.input.mouseButtons[0] = true;
     // Measure only nominal endpoint changes caused by the real source InputMsg
     // wire quantization. This is not a full server throw or a live hit test.

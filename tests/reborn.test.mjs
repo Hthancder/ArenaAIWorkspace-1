@@ -1461,6 +1461,14 @@ test('grenade preview, assist and lock are isolated and preserve native Fire; mi
     assert.equal(f.app.game.sent.at(-1).data.shootHold, false); assert.equal(f.engine.grenadeAimTimer.active, null);
     assert.equal(f.engine.processAim(input, true), null, 'hold mode relinquishes after release is forwarded');
     f.app.input.mouseButtons[0] = true; f.app.game.transmit(3, edge);
+    f.dom.window.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { code: 'AltLeft', bubbles: true }));
+    assert.equal(f.engine.grenadeManualOverride, true); assert.equal(f.engine.processAim(input, true), null);
+    const heldManual = new InputMsg(); heldManual.shootHold = true; heldManual.toMouseDir = { x: 1, y: 0 };
+    f.app.game.transmit(3, heldManual); assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, heldManual.toMouseDir);
+    assert.equal(f.engine.grenadeManualOverride, true, 'cannot reacquire while physical Fire is held');
+    f.app.input.mouseButtons[0] = false; const manualRelease = new InputMsg(); manualRelease.shootHold = false;
+    f.app.game.transmit(3, manualRelease); assert.equal(f.engine.grenadeManualOverride, false);
+    f.app.input.mouseButtons[0] = true; f.app.game.transmit(3, edge);
     f.engine.aimPlan = { dir: { x: 0, y: 1 }, distance: 18, toMouseHit: true }; f.engine.aimPlanFrame = f.engine.aimFrame; f.engine.aimPlanDirect = true;
     const switchInput = new InputMsg(); switchInput.shootHold = true; switchInput.inputs = [11]; f.app.game.transmit(3, switchInput);
     const switched = f.app.game.sent.at(-1).data;
@@ -1472,5 +1480,54 @@ test('grenade preview, assist and lock are isolated and preserve native Fire; mi
     assert.deepEqual(f.engine.diagnostics().grenadeAim.last, { state: 'missing-terrain', ageMs: 100 }, 'diagnostic survives blocked input/menu focus');
     f.engine.focusBlocked = false;
     f.dom.window.dispatchEvent(new f.dom.window.Event('blur')); assert.equal(f.engine.grenadeAimTimer.active, null);
+  } finally { f.close(); }
+});
+
+test('experimental auto throw releases only a verified live hold, then suppresses recook until physical release', () => {
+  const f = coordinated({ aim: false, grenadeAimMode: 'lock', grenadeAimActivation: 'hold', grenadeAutoThrow: true, grenadeFov: 400 });
+  try {
+    const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+    f.engine.definitions.frag = { type: 'throwable', cookable: true, fuseTime: 4, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
+    hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = [];
+    enemy.n.sourcePos = { x: 20, y: 20 };
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' };
+    f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true;
+    f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
+    const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
+    const edge = send(true); assert.equal(edge.shootHold, true);
+    let released = false;
+    for (let i = 0; i < 110; i++) {
+      f.advance(33); const now = f.dom.window.performance.now();
+      f.engine.tracker.observe(hero, hero.n.sourcePos, now); f.engine.tracker.observe(enemy, enemy.n.sourcePos, now);
+      Object.assign(f.engine.timing, { rtt: 40, lastRtt: 40, rttAt: now });
+      const wire = send(false);
+      if (!wire.shootHold) { released = true; assert.equal(wire.shootStart, false); break; }
+    }
+    assert.equal(released, true, `${f.engine.grenadeState} ${JSON.stringify(f.engine.grenadeAutoPlan)} ${f.engine.grenadeAuto.phase}`);
+    f.cfg.grenadeAutoThrow = false;
+    const after = send(true); assert.equal(after.shootHold, false); assert.equal(after.shootStart, false);
+    f.app.input.mouseButtons[0] = false; const up = new InputMsg(); f.app.game.transmit(3, up);
+    assert.equal(f.engine.grenadeAuto.phase, 'idle'); assert.equal(f.engine.grenadeManualOverride, false);
+  } finally { f.close(); }
+});
+
+test('auto throw yields immediately on lost terrain and cannot retarget before physical Fire is released', () => {
+  const f = coordinated({ aim: false, grenadeAimMode: 'lock', grenadeAimActivation: 'hold', grenadeAutoThrow: true, grenadeFov: 400 });
+  try {
+    const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+    f.engine.definitions.frag = { type: 'throwable', cookable: true, fuseTime: 4, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
+    hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = []; enemy.n.sourcePos = { x: 20, y: 20 };
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' }; f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true;
+    f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
+    const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; input.toMouseDir = { x: 0, y: 1 }; input.toMouseLen = 4; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
+    send(true);
+    for (let i = 0; i < 4; i++) { f.advance(33); const now = f.dom.window.performance.now(); f.engine.tracker.observe(hero, hero.n.sourcePos, now); f.engine.tracker.observe(enemy, enemy.n.sourcePos, now); Object.assign(f.engine.timing, { rtt: 40, lastRtt: 40, rttAt: now }); send(false); }
+    assert.equal(f.engine.grenadeAuto.phase, 'armed'); assert.equal(f.engine.grenadeAuto.target, enemy);
+    f.engine.mapping.map = {};
+    const wire = send(false); assert.deepEqual(wire.toMouseDir, { x: 0, y: 1 }); assert.equal(wire.shootHold, true);
+    assert.equal(f.engine.grenadeManualOverride, true);
+    f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
+    assert.deepEqual(send(false).toMouseDir, { x: 0, y: 1 });
+    f.app.input.mouseButtons[0] = false; f.app.game.transmit(3, new InputMsg()); assert.equal(f.engine.grenadeManualOverride, false);
   } finally { f.close(); }
 });

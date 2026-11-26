@@ -7223,6 +7223,8 @@ THE SOFTWARE.
     }
     reset() {
       this.rtt = null;
+      this.lastRtt = null;
+      this.rttAt = null;
       this.inFlightAt = null;
       this.lastSeq = null;
     }
@@ -7235,7 +7237,11 @@ THE SOFTWARE.
     received(msg, now) {
       if (this.inFlightAt !== null && msg.ack === this.lastSeq) {
         const value = now - this.inFlightAt;
-        if (value >= 0 && value < 1e3) this.rtt = this.rtt === null ? value : 0.8 * this.rtt + 0.2 * value;
+        if (value >= 0 && value < 1e3) {
+          this.lastRtt = value;
+          this.rttAt = now;
+          this.rtt = this.rtt === null ? value : 0.8 * this.rtt + 0.2 * value;
+        }
         this.inFlightAt = null;
       }
     }
@@ -7726,15 +7732,22 @@ THE SOFTWARE.
         solid.push({ type: 1, min: { x: shape.min.x - margin, y: shape.min.y - margin }, max: { x: shape.max.x + margin, y: shape.max.y + margin } });
       } else return { ok: false, reason: "unknown-collider" };
     }
+    let terrainSamples = 0;
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
       if (!vec(p) || p.x < 0 || p.x > 1024 || p.y < 0 || p.y > 1024) return { ok: false, reason: "invalid-point" };
-      try {
-        if (groundAt(p, layer) !== "ground") return { ok: false, reason: "unknown-or-water" };
-      } catch {
-        return { ok: false, reason: "unknown-or-water" };
+      const prev = i ? points[i - 1] : p;
+      if (i && solid.some((shape) => segmentBlocked(prev, p, shape))) return { ok: false, reason: "obstructed" };
+      const steps = i ? Math.max(1, Math.ceil(Math.hypot(p.x - prev.x, p.y - prev.y) / 0.5)) : 1;
+      if ((terrainSamples += steps) > 8192) return { ok: false, reason: "terrain-budget" };
+      for (let j = 1; j <= steps; j++) {
+        const f = j / steps, sample = { x: prev.x + (p.x - prev.x) * f, y: prev.y + (p.y - prev.y) * f };
+        try {
+          if (groundAt(sample, layer) !== "ground") return { ok: false, reason: "unknown-or-water" };
+        } catch {
+          return { ok: false, reason: "unknown-or-water" };
+        }
       }
-      if (i && solid.some((shape) => segmentBlocked(points[i - 1], p, shape))) return { ok: false, reason: "obstructed" };
     }
     return { ok: true, reason: "nominal-clear" };
   }
@@ -7749,6 +7762,113 @@ THE SOFTWARE.
     return solution ? { ...solution, projectedTarget: projected, horizon } : null;
   }
   __name(solveMovingOpenThrow, "solveMovingOpenThrow");
+
+  // src/grenade-release.mjs
+  function evaluateReleaseWindow({ solution, target, targetVelocity, releaseDelay, radius = 1, minDwell = 0.05, maxDwell = 0.4 }) {
+    if (!solution || !Array.isArray(solution.points) || solution.points.length < 2 || solution.points.length > 2401 || !vec(target) || !vec(targetVelocity) || !finite(releaseDelay) || releaseDelay < 0 || releaseDelay > 1 || !finite(radius) || radius <= 0 || radius > 5 || !finite(minDwell) || !finite(maxDwell) || minDwell < 0 || maxDwell < minDwell || maxDwell > 2) return { ok: false, reason: "invalid" };
+    let arrival = null, lastTime = -1, endDistance = Infinity;
+    for (const p of solution.points) {
+      if (!vec(p) || !finite(p.z) || p.z < 0 || !finite(p.t) || p.t <= lastTime || p.t < 0) return { ok: false, reason: "invalid-path" };
+      lastTime = p.t;
+      const t = releaseDelay + p.t;
+      const d = Math.hypot(p.x - (target.x + targetVelocity.x * t), p.y - (target.y + targetVelocity.y * t));
+      const settledInRegion = d <= radius && p.z <= 0.05;
+      if (settledInRegion && arrival === null) arrival = p.t;
+      if (!settledInRegion) arrival = null;
+      endDistance = d;
+    }
+    if (arrival === null || endDistance > radius) return { ok: false, reason: "no-arrival-at-detonation" };
+    const dwell = lastTime - arrival;
+    if (dwell < minDwell || dwell > maxDwell) return { ok: false, reason: "outside-window", dwell };
+    return { ok: true, reason: "nominal-window", arrival, detonation: lastTime, dwell, endDistance };
+  }
+  __name(evaluateReleaseWindow, "evaluateReleaseWindow");
+  function assessAutoThrow({
+    def,
+    origin,
+    direction,
+    mouseDistance,
+    playerVelocity,
+    target,
+    targetVelocity,
+    fuseRemaining,
+    releaseDelay,
+    layer,
+    obstacles,
+    groundAt,
+    bounds,
+    dt = 1 / 30
+  }) {
+    if (!finite(bounds?.width) || !finite(bounds?.height) || bounds.width <= 0 || bounds.height <= 0 || !finite(def?.rad) || def.rad <= 0) return { ok: false, reason: "missing-map-bounds" };
+    if (!vec(playerVelocity) || !vec(targetVelocity) || Math.hypot(playerVelocity.x, playerVelocity.y) > 4 || Math.hypot(targetVelocity.x, targetVelocity.y) > 4 || !finite(fuseRemaining) || fuseRemaining < 0.35)
+      return { ok: false, reason: "uncertain-motion-or-fuse" };
+    for (const adjustment of [-0.08, 0, 0.08]) {
+      const solution = simulateOpenThrow({ def, origin, direction, mouseDistance, playerVelocity, fuseRemaining: fuseRemaining + adjustment, dt });
+      const margin = def.rad * 0.5 + 0.1;
+      if (!solution || solution.points.some((p) => p.x < margin || p.y < margin || p.x > bounds.width - margin || p.y > bounds.height - margin))
+        return { ok: false, reason: "map-boundary" };
+      const window2 = evaluateReleaseWindow({ solution, target, targetVelocity, releaseDelay, radius: 0.75, minDwell: 0.03, maxDwell: 0.5 });
+      if (!window2.ok) return { ok: false, reason: window2.reason };
+      const path2 = validateOpenThrow({ solution, origin, def, layer, obstacles, groundAt });
+      if (!path2.ok) return path2;
+    }
+    return { ok: true, reason: "nominal-window" };
+  }
+  __name(assessAutoThrow, "assessAutoThrow");
+
+  // src/grenade-auto-release.mjs
+  var GrenadeAutoRelease = class {
+    static {
+      __name(this, "GrenadeAutoRelease");
+    }
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.phase = "idle";
+      this.target = null;
+      this.since = null;
+      this.lastTime = null;
+    }
+    observe({ held, edge, enabled, ready, target, viable, now }) {
+      if (held !== true) {
+        this.reset();
+        return "native";
+      }
+      if (this.phase === "released") return "suppress";
+      if (!finite(now) || this.lastTime !== null && now < this.lastTime) {
+        this.phase = "manual";
+        return "native";
+      }
+      this.lastTime = now;
+      if (this.phase === "manual") return "native";
+      if (this.phase === "idle") {
+        if (!edge || !enabled || !ready) {
+          this.phase = "manual";
+          return "native";
+        }
+        this.phase = "armed";
+        return "native";
+      }
+      if (!enabled || !ready) {
+        this.phase = "manual";
+        return "cancel";
+      }
+      if (this.target !== null && target !== this.target) {
+        this.phase = "manual";
+        return "cancel";
+      }
+      if (target === null || target === void 0) return "native";
+      if (this.target === null) {
+        this.target = target;
+        this.since = now;
+        return "native";
+      }
+      if (!viable || now - this.since < 200) return "native";
+      this.phase = "released";
+      return "release";
+    }
+  };
 
   // src/features.mjs
   var VERIFIED_PROTOCOL = 1028;
@@ -7893,11 +8013,16 @@ THE SOFTWARE.
       this.hooks = new Disposables();
       this.matchHooks = new Disposables();
       this.overrides = new Overrides();
+      this.grenadeAuto = new GrenadeAutoRelease();
+      this.grenadeAutoPlan = null;
+      this.lastGrenadeAutoEvidence = null;
+      this.lastGrenadeAutoSent = -Infinity;
       this.tracker = new SnapshotTracker();
       this.aimController = new AimController();
       this.grenadeAimTimer = new GrenadeTimer();
       this.grenadePlan = null;
       this.grenadeState = "off";
+      this.grenadeManualOverride = false;
       this.lastGrenadeEvidence = null;
       this.timing = new NetworkTiming();
       this.grenadeTimer = new GrenadeTimer();
@@ -7975,6 +8100,19 @@ THE SOFTWARE.
       }, "releaseLayer");
       win.addEventListener("keydown", (event) => {
         if (event.repeat || event.defaultPrevented || event.composedPath().some((n) => ["INPUT", "TEXTAREA", "SELECT"].includes(n.tagName) || n.isContentEditable)) return;
+        const firing = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+        if (event.code === this.config.grenadeCancelKey && firing && this.local?.data?.[this.local.slotKey] === 3 && ["preview", "assist", "lock"].includes(this.config.grenadeAimMode)) {
+          this.grenadeManualOverride = true;
+          this.grenadePlan = null;
+          this.aimPlan = null;
+          this.aimPlanFrame = -1;
+          this.aimOutput = null;
+          this.restoreInput();
+          this.grenadeState = "manual-override";
+          this.lastGrenadeEvidence = { state: "manual-override", recordedAt: this.win.performance.now() };
+          if (this.lastAimSent && this.timeoutKey && this.app.game?.initialized) this.app.game[this.timeoutKey] = 0;
+          return;
+        }
         if (event.code === this.config.layerKey && this.config.layerSpoofer) this.layerHeld = true;
         if (event.code === this.config.aimKey) this.holdAim = true;
       }, { signal: controller.signal });
@@ -8043,6 +8181,10 @@ THE SOFTWARE.
       this.mouseInput.restore();
     }
     releaseMatch() {
+      if (this.grenadeAuto.phase === "armed") this.grenadeAuto.phase = "manual";
+      this.grenadeAuto.target = null;
+      this.grenadeAutoPlan = null;
+      this.lastGrenadeAutoEvidence = null;
       this.restoreInput();
       this.matchHooks.clear();
       this.overrides.clear();
@@ -8053,6 +8195,7 @@ THE SOFTWARE.
       this.grenadeAimTimer.reset();
       this.grenadePlan = null;
       this.grenadeState = "off";
+      this.grenadeManualOverride = false;
       this.lastGrenadeEvidence = null;
       this.lastAimSent = null;
       this.aimOutput = null;
@@ -8157,7 +8300,7 @@ THE SOFTWARE.
               self.aimOutput = null;
               self.grenadePlan = null;
               self.grenadeState = "manual-equip";
-            } else self.aimOutput = self.aimPlanFrame === self.aimFrame && self.aimPlanDirect ? self.aimPlan : self.processAim(intent, true);
+            } else self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : self.aimPlanFrame === self.aimFrame && self.aimPlanDirect ? self.aimPlan : self.processAim(intent, true);
             if (manualEquip) {
               self.weaponSwitch.reset();
               self.switchSlot = null;
@@ -8166,7 +8309,29 @@ THE SOFTWARE.
             self.moveDirection = self.config.mobileMovement && inputShape(data2) ? self.movement.sample(data2, self.config.movementSmooth, self.win.performance.now()) : null;
             if (!self.config.mobileMovement) self.movement.reset();
             outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
-            if (!self.aimOutput) self.restoreInput();
+            const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
+            const auto = self.grenadeAuto.observe({
+              held: physicalHeld,
+              edge: data2.shootStart && data2.shootHold,
+              enabled: self.config.grenadeAutoThrow && self.config.grenadeAimMode === "lock" && self.local?.data?.[self.local.slotKey] === 3,
+              ready: self.inputReady() && !!self.timeoutKey && Object.getOwnPropertyDescriptor(self.app.game, self.timeoutKey)?.writable === true && !manualEquip && !self.manualEquipHeld && !self.grenadeManualOverride && data2.shootHold,
+              target: self.grenadeAutoPlan?.target ?? null,
+              viable: !!self.grenadeAutoPlan?.viable && !!self.aimOutput,
+              now: self.win.performance.now()
+            });
+            if (self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 && physicalHeld)
+              self.lastGrenadeAutoEvidence = { phase: self.grenadeAuto.phase, action: auto, reason: self.grenadeAutoPlan?.reason ?? "no-plan", recordedAt: self.win.performance.now() };
+            if (auto === "cancel") {
+              self.grenadeManualOverride = true;
+              self.aimOutput = null;
+              self.grenadePlan = null;
+              outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
+            }
+            if (auto === "release" || auto === "suppress") {
+              outgoing = Object.assign(Object.create(Object.getPrototypeOf(outgoing)), outgoing, { shootStart: false, shootHold: false });
+              self.grenadeManualOverride = true;
+            }
+            if (!self.aimOutput || auto === "suppress") self.restoreInput();
             if (self.meleeDirection && self.switchSlot === 2 && outgoing !== data2 && outgoing.inputs.includes(13)) self.meleeEquip = { id: self.target?.__id, until: self.win.performance.now() + 1e3 };
             self.switchSlot = null;
           }
@@ -8179,11 +8344,13 @@ THE SOFTWARE.
         const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
         if (type === 3 && inputShape(outgoing)) {
           const now = self.win.performance.now();
+          if (self.grenadeAuto.phase === "armed") self.lastGrenadeAutoSent = now;
           self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, now, self.inputReady());
           self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null;
           self.timing.sent(outgoing, now);
           if (self.config.grenadeTimer || self.grenadeTimer.active) self.guard("grenade-timer", () => self.grenadeTimer.forwarded(self.grenadeContext(), outgoing, now, outgoing.inputs.some(isManualEquip)));
           if (self.config.grenadeAimMode !== "off" && self.config.grenadeAimMode) self.grenadeAimTimer.forwarded({ ...self.grenadeContext(), enabled: true }, outgoing, now, outgoing.inputs.some(isManualEquip));
+          if (self.grenadeManualOverride && intent.shootHold === false && !(self.binds ? self.binds.isBindDown(4) : self.app.input.mouseButtons?.[0])) self.grenadeManualOverride = false;
         }
         if (joinRecord) joinRecord.forwarded = true;
         return result;
@@ -8363,7 +8530,8 @@ THE SOFTWARE.
       this.aimPlanDirect = directMouse;
       const needsRestore = !plan && this.lastAimSent;
       const needsAim = plan && (!this.lastAimSent || Math.abs(angleDelta(Math.atan2(this.lastAimSent.y, this.lastAimSent.x), Math.atan2(plan.dir.y, plan.dir.x))) > Math.PI / 1800 || plan.toMouseHit && Math.abs((this.lastAimDistance || 0) - plan.distance) > 0.5);
-      if (this.timeoutKey && (needsAim || needsRestore || this.switchSlot !== null) && this.app.game?.initialized && this.mapping?.ui?.spectating === false) {
+      const autoTick = this.grenadeAuto.phase === "armed" && this.config.grenadeAutoThrow && this.inputReady() && this.win.performance.now() - this.lastGrenadeAutoSent >= 33;
+      if (this.timeoutKey && (needsAim || needsRestore || this.switchSlot !== null || autoTick) && this.app.game?.initialized && this.mapping?.ui?.spectating === false) {
         const d = Object.getOwnPropertyDescriptor(this.app.game, this.timeoutKey);
         if (d && "value" in d && d.writable) {
           this.app.game[this.timeoutKey] = 0;
@@ -8446,8 +8614,14 @@ THE SOFTWARE.
       const fail = /* @__PURE__ */ __name((reason) => {
         record(reason);
         this.grenadePlan = null;
+        if (firing && this.grenadeAuto.phase === "armed" && this.grenadeAuto.target !== null) {
+          this.grenadeAuto.phase = "manual";
+          this.grenadeManualOverride = true;
+          this.restoreInput();
+        }
         return null;
       }, "fail");
+      if (this.grenadeManualOverride) return fail("manual-override");
       if (!this.capabilities.aim || !this.capabilities.prediction || !this.capabilities.wallcheck || !this.local || this.manualEquipHeld) return fail("missing-contract");
       const ctx = { ...this.grenadeContext(), enabled: true }, def = this.definitions?.[ctx.type];
       if (!def || ctx.type !== ctx.activeType) return fail("missing-throwable");
@@ -8473,16 +8647,19 @@ THE SOFTWARE.
         const target = this.sourcePos(p), screen = aimPoint(camera, target, pos), track = this.tracker.estimate(p, now);
         if (!screen || !track || track.age > 0.15 || track.samples?.length < 2 || !finite(track.vx) || !finite(track.vy)) continue;
         const distance = Math.hypot(screen.x - cursor.x, screen.y - cursor.y);
-        if (distance <= cfg.fov) candidates.push({ p, target, track, distance });
+        if (distance <= (cfg.grenadeFov ?? cfg.fov)) candidates.push({ p, target, track, distance });
       }
       candidates.sort((a, b) => a.distance - b.distance);
       if (!candidates.length) return fail("no-target-or-fresh-track");
       const obstacles = m.obstacles();
+      const drySurfaces = /* @__PURE__ */ new Set(["asphalt", "brick", "bunker", "carpet", "container", "grass", "shack", "snow", "stone", "tile", "warehouse", "house", "sand"]);
       const groundAt = /* @__PURE__ */ __name((point2, floor) => {
         const result = Reflect.apply(surface, map, [point2, floor]);
-        return typeof result?.type === "string" && result.type !== "water" ? "ground" : "unknown";
+        return drySurfaces.has(result?.type) ? "ground" : "unknown";
       }, "groundAt");
       for (const c of candidates.slice(0, 3)) {
+        if (firing && this.grenadeAuto.phase === "armed" && this.grenadeAuto.target !== null && c.p !== this.grenadeAuto.target)
+          return fail("auto-target-changed");
         const transit = this.timing.transit();
         const solution = solveMovingOpenThrow({ def, origin: pos, target: c.target, playerVelocity: myVelocity, targetVelocity: { x: c.track.vx, y: c.track.vy }, fuseRemaining: fuse, releaseDelay: transit + c.track.age });
         if (!solution) continue;
@@ -8492,6 +8669,26 @@ THE SOFTWARE.
           continue;
         }
         this.grenadePlan = { points: solution.points, end: solution.end, type: ctx.type };
+        if (native && cfg.grenadeAutoThrow && mode === "lock" && firing && timer) {
+          const stable = c.track.samples?.length >= 3 && playerTrack.samples?.length >= 3;
+          const timingKnown = finite(this.timing.rtt) && this.timing.rtt <= 160 && finite(this.timing.lastRtt) && this.timing.lastRtt <= 160 && finite(this.timing.rttAt) && now >= this.timing.rttAt && now - this.timing.rttAt <= 1500;
+          const result = stable && timingKnown ? assessAutoThrow({
+            def,
+            origin: pos,
+            direction: solution.direction,
+            mouseDistance: solution.mouseDistance,
+            playerVelocity: myVelocity,
+            target: c.target,
+            targetVelocity: { x: c.track.vx, y: c.track.vy },
+            fuseRemaining: fuse,
+            releaseDelay: transit + c.track.age,
+            layer,
+            obstacles,
+            groundAt,
+            bounds: { width: read(map, "width"), height: read(map, "height") }
+          }) : { ok: false, reason: "uncertain-track-or-latency" };
+          this.grenadeAutoPlan = { target: c.p, viable: result.ok, reason: result.reason };
+        }
         record(timer ? "estimate-unconfirmed" : "estimate-before-throw");
         if (mode === "preview" || cfg.grenadeAimActivation !== "equip" && !firing && !timer) return null;
         const strength = mode === "assist" ? clamp((cfg.grenadeAssistStrength ?? 35) / 100, 0, 1) : 1;
@@ -8508,6 +8705,7 @@ THE SOFTWARE.
     processAim(native, advance2, applyDirect = false) {
       const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
       this.grenadePlan = null;
+      this.grenadeAutoPlan = null;
       this.grenadeState = "off";
       this.target = null;
       this.targetId = null;
@@ -9139,6 +9337,11 @@ THE SOFTWARE.
         grenadeAim: {
           mode: this.config.grenadeAimMode || "off",
           state: this.grenadeState,
+          autoThrow: {
+            enabled: !!this.config.grenadeAutoThrow,
+            phase: this.grenadeAuto.phase,
+            last: this.lastGrenadeAutoEvidence ? (({ recordedAt, ...rest }) => ({ ...rest, ageMs: Math.max(0, Math.round(this.win.performance.now() - recordedAt)) }))(this.lastGrenadeAutoEvidence) : null
+          },
           last: this.lastGrenadeEvidence ? { state: this.lastGrenadeEvidence.state, ageMs: Math.max(0, Math.round(this.win.performance.now() - this.lastGrenadeEvidence.recordedAt)) } : null
         },
         mapHighlights: { ...this.mapHighlights.stats },
@@ -9238,8 +9441,11 @@ THE SOFTWARE.
     grenadeZones: false,
     grenadeTimer: false,
     grenadeAimMode: "off",
+    grenadeAutoThrow: false,
     grenadeAimActivation: "hold",
     grenadeAssistStrength: 35,
+    grenadeFov: 100,
+    grenadeCancelKey: "AltLeft",
     zoom: false,
     zoomFactor: 1.5,
     autoLoot: false,
@@ -9252,7 +9458,7 @@ THE SOFTWARE.
     holdAim: false
   });
   var STORAGE_KEY = "duality-reborn.config.v1";
-  var ranges = { assistStrength: [0, 100], grenadeAssistStrength: [0, 100], leadAdjustment: [50, 200], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [0.5, 3] };
+  var ranges = { assistStrength: [0, 100], grenadeAssistStrength: [0, 100], grenadeFov: [50, 400], leadAdjustment: [50, 200], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [0.5, 3] };
   var colors = /* @__PURE__ */ new Set(["espEnemyColor", "espAllyColor", "espUnknownColor", "espTargetColor"]);
   function normalizeConfig(saved) {
     const result = { ...DEFAULTS };
@@ -9262,8 +9468,9 @@ THE SOFTWARE.
       if (typeof defaultValue === "boolean" && typeof value === "boolean") result[key] = value;
       if (colors.has(key) && colorValue(value)) result[key] = value.toLowerCase();
       if (ranges[key] && finite(value)) result[key] = clamp(value, ...ranges[key]);
-      if (["menuKey", "aimKey", "stickyKey", "layerKey"].includes(key) && typeof value === "string" && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
+      if (["menuKey", "aimKey", "stickyKey", "layerKey", "grenadeCancelKey"].includes(key) && typeof value === "string" && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
     }
+    if (!finite(saved.grenadeFov)) result.grenadeFov = result.fov;
     if (["nearby", "mobile"].includes(saved.lootMode)) result.lootMode = saved.lootMode;
     if (["ring", "cross", "brackets", "diamond"].includes(saved.targetStyle)) result.targetStyle = saved.targetStyle;
     for (const [key, values] of Object.entries({ aimMode: ["off", "assist", "lock"], aimActivation: ["fire", "key", "both"], smoothProfile: ["responsive", "natural", "precise"], grenadeAimMode: ["off", "preview", "assist", "lock"], grenadeAimActivation: ["hold", "equip"] })) if (values.includes(saved[key])) result[key] = saved[key];
@@ -9300,7 +9507,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
       ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
       ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread."]]],
-      ["Grenade Aim (thử nghiệm)", [["grenadeAimMode", "Chế độ"], ["grenadeAimActivation", "Kích hoạt Assist / Lock"], ["grenadeAssistStrength", "Lực Assist bom (%)"], [null, "Ước lượng: không tự giữ hay ném. Không bảo đảm an toàn hoặc trúng."]]],
+      ["Grenade Aim (thử nghiệm)", [["grenadeAimMode", "Chế độ"], ["grenadeAimActivation", "Kích hoạt Assist / Lock"], ["grenadeAssistStrength", "Lực Assist bom (%)"], ["grenadeFov", "FOV bom (pixel)"], ["grenadeAutoThrow", "Tự thả (thử nghiệm, chỉ Lock)"], [null, "Không tự bắt đầu giữ. Mạng và fuse chưa xác nhận; không bảo đảm an toàn hoặc trúng."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
       ["Auto Switch", [["autoSwitch", "Enabled", "switch"], ["useOneGun", "Use One Gun (switch away then return)", "switch"], [null, "Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server."]]],
       ["Semi Auto", [["semi", "Held Fire: single guns + fists / melee", "semi"], [null, "Giữ nút Fire để lặp; auto/burst dùng shootHold gốc; không lặp lựu đạn. Server vẫn quyết định cooldown."]]]
@@ -9474,7 +9681,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
         return;
       }
       if (tab === "Keybinds") {
-        for (const [key, label] of [["menuKey", "Toggle Menu"], ["aimKey", "Aimbot"], ["stickyKey", "Sticky Target"], ["layerKey", "Layer Spoofer (hold)"]]) {
+        for (const [key, label] of [["menuKey", "Toggle Menu"], ["aimKey", "Aimbot"], ["stickyKey", "Sticky Target"], ["layerKey", "Layer Spoofer (hold)"], ["grenadeCancelKey", "Hủy hỗ trợ bom lần này"]]) {
           const button = el("button", { text: config[key] });
           button.onclick = () => {
             cancelKey();

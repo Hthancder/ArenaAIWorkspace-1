@@ -17,6 +17,8 @@ test('conservative open path checks spawn, swept collision, layers and unknown g
 });
 test('unknown, wet or failing terrain and invalid world inputs fail closed', () => {
   assert.equal(validateOpenThrow({ ...base, groundAt: () => 'water' }).reason, 'unknown-or-water');
+  // Water between simulation ticks must not be skipped just because both endpoints are dry.
+  assert.equal(validateOpenThrow({ ...base, groundAt: p => p.x > 11.9 && p.x < 12.2 ? 'water' : 'ground' }).reason, 'unknown-or-water');
   assert.equal(validateOpenThrow({ ...base, groundAt: () => undefined }).reason, 'unknown-or-water');
   assert.equal(validateOpenThrow({ ...base, groundAt: () => { throw Error('no map'); } }).reason, 'unknown-or-water');
   assert.equal(validateOpenThrow({ ...base, obstacles: null }).ok, false);

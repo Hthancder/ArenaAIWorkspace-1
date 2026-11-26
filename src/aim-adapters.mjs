@@ -47,14 +47,14 @@ export function discoverSourceFields(player, schema) {
 // Bounded local estimates; ACK includes scheduling and is not a server clock.
 export class NetworkTiming {
   constructor() { this.reset(); }
-  reset() { this.rtt = null; this.inFlightAt = null; this.lastSeq = null; }
+  reset() { this.rtt = null; this.lastRtt = null; this.rttAt = null; this.inFlightAt = null; this.lastSeq = null; }
   sent(msg, now) {
     if (msg?.seq !== this.lastSeq) { this.lastSeq = msg?.seq; this.inFlightAt = now; }
   }
   received(msg, now) {
     if (this.inFlightAt !== null && msg.ack === this.lastSeq) {
       const value = now - this.inFlightAt;
-      if (value >= 0 && value < 1000) this.rtt = this.rtt === null ? value : .8 * this.rtt + .2 * value;
+      if (value >= 0 && value < 1000) { this.lastRtt = value; this.rttAt = now; this.rtt = this.rtt === null ? value : .8 * this.rtt + .2 * value; }
       this.inFlightAt = null;
     }
   }

@@ -83,12 +83,21 @@ export function validateOpenThrow({ solution, origin, def, layer, obstacles, gro
       solid.push({ type: 1, min: { x: shape.min.x - margin, y: shape.min.y - margin }, max: { x: shape.max.x + margin, y: shape.max.y + margin } });
     } else return { ok: false, reason: 'unknown-collider' };
   }
+  let terrainSamples = 0;
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     if (!vec(p) || p.x < 0 || p.x > 1024 || p.y < 0 || p.y > 1024) return { ok: false, reason: 'invalid-point' };
-    try { if (groundAt(p, layer) !== 'ground') return { ok: false, reason: 'unknown-or-water' }; }
-    catch { return { ok: false, reason: 'unknown-or-water' }; }
-    if (i && solid.some(shape => segmentBlocked(points[i - 1], p, shape))) return { ok: false, reason: 'obstructed' };
+    const prev = i ? points[i - 1] : p;
+    if (i && solid.some(shape => segmentBlocked(prev, p, shape))) return { ok: false, reason: 'obstructed' };
+    // Tick endpoints can straddle a river or water decal. Extra bounded samples
+    // reduce that blind spot, but cannot prove that arbitrarily thin water is absent.
+    const steps = i ? Math.max(1, Math.ceil(Math.hypot(p.x - prev.x, p.y - prev.y) / .5)) : 1;
+    if ((terrainSamples += steps) > 8192) return { ok: false, reason: 'terrain-budget' };
+    for (let j = 1; j <= steps; j++) {
+      const f = j / steps, sample = { x: prev.x + (p.x - prev.x) * f, y: prev.y + (p.y - prev.y) * f };
+      try { if (groundAt(sample, layer) !== 'ground') return { ok: false, reason: 'unknown-or-water' }; }
+      catch { return { ok: false, reason: 'unknown-or-water' }; }
+    }
   }
   return { ok: true, reason: 'nominal-clear' };
 }

@@ -18,7 +18,9 @@ import { NativeNames } from './native-names.mjs';
 import { drawTargetIndicator } from './target-indicator.mjs';
 import { LootBackoff } from './loot-backoff.mjs';
 import { GrenadeTimer, drawGrenadeTimer } from './grenade-timer.mjs';
-import { solveMovingOpenThrow, validateOpenThrow } from './grenade-aim.mjs';
+import { simulateOpenThrow, solveMovingOpenThrow, validateOpenThrow } from './grenade-aim.mjs';
+import { assessAutoThrow } from './grenade-release.mjs';
+import { GrenadeAutoRelease } from './grenade-auto-release.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
 export const isManualEquip = code => code >= 11 && code <= 20 || code === 27 || code === 28;
@@ -130,7 +132,8 @@ export class Features {
   constructor(win, app, config, report, definitions = null) {
     this.win = win; this.app = app; this.config = config; this.report = report; this.definitions = definitions;
     this.hooks = new Disposables(); this.matchHooks = new Disposables(); this.overrides = new Overrides();
-    this.tracker = new SnapshotTracker(); this.aimController = new AimController(); this.grenadeAimTimer = new GrenadeTimer(); this.grenadePlan = null; this.grenadeState = 'off'; this.lastGrenadeEvidence = null; this.timing = new NetworkTiming(); this.grenadeTimer = new GrenadeTimer(); this.names = new NativeNames(); this.aimEvidence = new AimEvidence(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities = new Map(); this.focusBlocked = false; this.protocol = null; this.mapping = null; this.local = null;
+    this.grenadeAuto = new GrenadeAutoRelease(); this.grenadeAutoPlan = null; this.lastGrenadeAutoEvidence = null; this.lastGrenadeAutoSent = -Infinity;
+    this.tracker = new SnapshotTracker(); this.aimController = new AimController(); this.grenadeAimTimer = new GrenadeTimer(); this.grenadePlan = null; this.grenadeState = 'off'; this.grenadeManualOverride = false; this.lastGrenadeEvidence = null; this.timing = new NetworkTiming(); this.grenadeTimer = new GrenadeTimer(); this.names = new NativeNames(); this.aimEvidence = new AimEvidence(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities = new Map(); this.focusBlocked = false; this.protocol = null; this.mapping = null; this.local = null;
     this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null; this.lastPredictionEvidence = null;
     this.target = null; this.targetId = null; this.dot = null; this.mouseInput = new MouseInputFrame(); this.aimFrame = 0; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.lastMap = -Infinity;
     this.lastVisual = -Infinity; this.lastInput = -Infinity; this.lastScan = -Infinity;
@@ -156,6 +159,15 @@ export class Features {
     const releaseLayer = () => { this.layerHeld = false; this.layerOverrides.clear(); };
     win.addEventListener('keydown', event => {
       if (event.repeat || event.defaultPrevented || event.composedPath().some(n => ['INPUT', 'TEXTAREA', 'SELECT'].includes(n.tagName) || n.isContentEditable)) return;
+      // Do not consume the key or synthesize Fire. Cancel remains latched
+      // until the user's native release has actually been forwarded.
+      const firing = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+      if (event.code === this.config.grenadeCancelKey && firing && this.local?.data?.[this.local.slotKey] === 3 && ['preview', 'assist', 'lock'].includes(this.config.grenadeAimMode)) {
+        this.grenadeManualOverride = true; this.grenadePlan = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimOutput = null;
+        this.restoreInput(); this.grenadeState = 'manual-override'; this.lastGrenadeEvidence = { state: 'manual-override', recordedAt: this.win.performance.now() };
+        if (this.lastAimSent && this.timeoutKey && this.app.game?.initialized) this.app.game[this.timeoutKey] = 0;
+        return;
+      }
       if (event.code === this.config.layerKey && this.config.layerSpoofer) this.layerHeld = true;
       if (event.code === this.config.aimKey) this.holdAim = true;
     }, { signal: controller.signal });
@@ -189,7 +201,11 @@ export class Features {
   }
   restoreInput() { this.mouseInput.restore(); }
   releaseMatch() {
-    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; this.grenadeState = 'off'; this.lastGrenadeEvidence = null; this.lastAimSent = null; this.aimOutput = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
+    // Do not re-arm across a match transition while the button is still held;
+    // preserve post-release suppression until a physical button-up packet.
+    if (this.grenadeAuto.phase === 'armed') this.grenadeAuto.phase = 'manual';
+    this.grenadeAuto.target = null; this.grenadeAutoPlan = null; this.lastGrenadeAutoEvidence = null;
+    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; this.grenadeState = 'off'; this.grenadeManualOverride = false; this.lastGrenadeEvidence = null; this.lastAimSent = null; this.aimOutput = null; this.aimPlan = null; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset(); this.lastPredictionEvidence = null;
     this.target = null; this.targetId = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.local = null; this.mapping = null; this.effects = [];
     this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.pickupPauseUntil = 0; this.lootBackoff.reset();
@@ -242,12 +258,33 @@ export class Features {
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           if (!self.inputReady()) { self.stats.aimState = self.inputBlockReason(); self.aimOutput = null; self.aimController.reset(); self.weaponSwitch.reset(); self.movement.reset(); self.switchSlot = null; self.meleeDirection = null; }
           else if (manualEquip && self.local?.data?.[self.local.slotKey] === 3 && ['preview', 'assist', 'lock'].includes(self.config.grenadeAimMode)) { self.aimOutput = null; self.grenadePlan = null; self.grenadeState = 'manual-equip'; }
-          else self.aimOutput = self.aimPlanFrame === self.aimFrame && self.aimPlanDirect ? self.aimPlan : self.processAim(intent, true);
+          else self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3
+            ? self.processAim(intent, true) // Revalidate at the actual sender, not a cached render plan.
+            : self.aimPlanFrame === self.aimFrame && self.aimPlanDirect ? self.aimPlan : self.processAim(intent, true);
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
           if (!self.config.mobileMovement) self.movement.reset();
           outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
-          if (!self.aimOutput) self.restoreInput();
+          const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
+          const auto = self.grenadeAuto.observe({ held: physicalHeld, edge: data.shootStart && data.shootHold,
+            enabled: self.config.grenadeAutoThrow && self.config.grenadeAimMode === 'lock' && self.local?.data?.[self.local.slotKey] === 3,
+            ready: self.inputReady() && !!self.timeoutKey && Object.getOwnPropertyDescriptor(self.app.game, self.timeoutKey)?.writable === true
+              && !manualEquip && !self.manualEquipHeld && !self.grenadeManualOverride && data.shootHold,
+            target: self.grenadeAutoPlan?.target ?? null, viable: !!self.grenadeAutoPlan?.viable && !!self.aimOutput,
+            now: self.win.performance.now() });
+          if (self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 && physicalHeld)
+            self.lastGrenadeAutoEvidence = { phase: self.grenadeAuto.phase, action: auto, reason: self.grenadeAutoPlan?.reason ?? 'no-plan', recordedAt: self.win.performance.now() };
+          if (auto === 'cancel') {
+            self.grenadeManualOverride = true; self.aimOutput = null; self.grenadePlan = null;
+            outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
+          }
+          if (auto === 'release' || auto === 'suppress') {
+            // Clone native message: never mutate the game's input. Suppress both
+            // held and start until physical release, so it cannot recook.
+            outgoing = Object.assign(Object.create(Object.getPrototypeOf(outgoing)), outgoing, { shootStart: false, shootHold: false });
+            self.grenadeManualOverride = true;
+          }
+          if (!self.aimOutput || auto === 'suppress') self.restoreInput();
           if (self.meleeDirection && self.switchSlot === 2 && outgoing !== data && outgoing.inputs.includes(13)) self.meleeEquip = { id: self.target?.__id, until: self.win.performance.now() + 1000 };
           self.switchSlot = null;
         }
@@ -255,9 +292,11 @@ export class Features {
       const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
       if (type === 3 && inputShape(outgoing)) {
         const now = self.win.performance.now();
+        if (self.grenadeAuto.phase === 'armed') self.lastGrenadeAutoSent = now;
         self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, now, self.inputReady()); self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null; self.timing.sent(outgoing, now);
         if (self.config.grenadeTimer || self.grenadeTimer.active) self.guard('grenade-timer', () => self.grenadeTimer.forwarded(self.grenadeContext(), outgoing, now, outgoing.inputs.some(isManualEquip)));
         if (self.config.grenadeAimMode !== 'off' && self.config.grenadeAimMode) self.grenadeAimTimer.forwarded({ ...self.grenadeContext(), enabled: true }, outgoing, now, outgoing.inputs.some(isManualEquip));
+        if (self.grenadeManualOverride && intent.shootHold === false && !(self.binds ? self.binds.isBindDown(4) : self.app.input.mouseButtons?.[0])) self.grenadeManualOverride = false;
       }
       if (joinRecord) joinRecord.forwarded = true; // Forwarded to native sender; not a server acknowledgement.
       return result;
@@ -396,7 +435,9 @@ export class Features {
     this.aimPlan = plan; this.aimPlanFrame = aimFrame; this.aimPlanDirect = directMouse;
     const needsRestore = !plan && this.lastAimSent;
     const needsAim = plan && (!this.lastAimSent || Math.abs(angleDelta(Math.atan2(this.lastAimSent.y, this.lastAimSent.x), Math.atan2(plan.dir.y, plan.dir.x))) > Math.PI / 1800 || plan.toMouseHit && Math.abs((this.lastAimDistance || 0) - plan.distance) > .5);
-    if (this.timeoutKey && (needsAim || needsRestore || this.switchSlot !== null) && this.app.game?.initialized && this.mapping?.ui?.spectating === false) {
+    const autoTick = this.grenadeAuto.phase === 'armed' && this.config.grenadeAutoThrow && this.inputReady()
+      && this.win.performance.now() - this.lastGrenadeAutoSent >= 33;
+    if (this.timeoutKey && (needsAim || needsRestore || this.switchSlot !== null || autoTick) && this.app.game?.initialized && this.mapping?.ui?.spectating === false) {
       const d = Object.getOwnPropertyDescriptor(this.app.game, this.timeoutKey);
       if (d && 'value' in d && d.writable) { this.app.game[this.timeoutKey] = 0; this.aimEvidence.requests++; }
     }
@@ -460,7 +501,14 @@ export class Features {
     // Preserve only anonymous status so opening Help does not erase the last
     // live failure; menu focus intentionally blocks input before reaching here.
     const record = state => { this.grenadeState = state; this.lastGrenadeEvidence = { state, recordedAt: now }; };
-    const fail = reason => { record(reason); this.grenadePlan = null; return null; };
+    const fail = reason => {
+      record(reason); this.grenadePlan = null;
+      if (firing && this.grenadeAuto.phase === 'armed' && this.grenadeAuto.target !== null) {
+        this.grenadeAuto.phase = 'manual'; this.grenadeManualOverride = true; this.restoreInput();
+      }
+      return null;
+    };
+    if (this.grenadeManualOverride) return fail('manual-override');
     if (!this.capabilities.aim || !this.capabilities.prediction || !this.capabilities.wallcheck || !this.local || this.manualEquipHeld) return fail('missing-contract');
     const ctx = { ...this.grenadeContext(), enabled: true }, def = this.definitions?.[ctx.type];
     if (!def || ctx.type !== ctx.activeType) return fail('missing-throwable');
@@ -489,19 +537,36 @@ export class Features {
       const target = this.sourcePos(p), screen = aimPoint(camera, target, pos), track = this.tracker.estimate(p, now);
       if (!screen || !track || track.age > .15 || track.samples?.length < 2 || !finite(track.vx) || !finite(track.vy)) continue;
       const distance = Math.hypot(screen.x - cursor.x, screen.y - cursor.y);
-      if (distance <= cfg.fov) candidates.push({ p, target, track, distance });
+      if (distance <= (cfg.grenadeFov ?? cfg.fov)) candidates.push({ p, target, track, distance });
     }
     candidates.sort((a, b) => a.distance - b.distance);
     if (!candidates.length) return fail('no-target-or-fresh-track');
     const obstacles = m.obstacles();
-    const groundAt = (point, floor) => { const result = Reflect.apply(surface, map, [point, floor]); return typeof result?.type === 'string' && result.type !== 'water' ? 'ground' : 'unknown'; };
+    // Only accept surface types present in the pinned upstream contract. An
+    // unknown future surface must not silently be treated as dry ground.
+    const drySurfaces = new Set(['asphalt', 'brick', 'bunker', 'carpet', 'container', 'grass', 'shack', 'snow', 'stone', 'tile', 'warehouse', 'house', 'sand']);
+    const groundAt = (point, floor) => { const result = Reflect.apply(surface, map, [point, floor]); return drySurfaces.has(result?.type) ? 'ground' : 'unknown'; };
     for (const c of candidates.slice(0, 3)) {
+      if (firing && this.grenadeAuto.phase === 'armed' && this.grenadeAuto.target !== null && c.p !== this.grenadeAuto.target)
+        return fail('auto-target-changed');
       const transit = this.timing.transit();
       const solution = solveMovingOpenThrow({ def, origin: pos, target: c.target, playerVelocity: myVelocity, targetVelocity: { x: c.track.vx, y: c.track.vy }, fuseRemaining: fuse, releaseDelay: transit + c.track.age });
       if (!solution) continue;
       const checked = validateOpenThrow({ solution, origin: pos, def, layer, obstacles, groundAt });
       if (!checked.ok) { this.grenadeState = checked.reason; continue; }
       this.grenadePlan = { points: solution.points, end: solution.end, type: ctx.type };
+      if (native && cfg.grenadeAutoThrow && mode === 'lock' && firing && timer) {
+        // Unknown or high RTT, recently changed movement, and missing target
+        // identity are not sufficient evidence for an automatic release.
+        const stable = c.track.samples?.length >= 3 && playerTrack.samples?.length >= 3;
+        const timingKnown = finite(this.timing.rtt) && this.timing.rtt <= 160 && finite(this.timing.lastRtt)
+          && this.timing.lastRtt <= 160 && finite(this.timing.rttAt) && now >= this.timing.rttAt && now - this.timing.rttAt <= 1500;
+        const result = stable && timingKnown ? assessAutoThrow({ def, origin: pos, direction: solution.direction,
+          mouseDistance: solution.mouseDistance, playerVelocity: myVelocity, target: c.target,
+          targetVelocity: { x: c.track.vx, y: c.track.vy }, fuseRemaining: fuse,
+          releaseDelay: transit + c.track.age, layer, obstacles, groundAt, bounds: { width: read(map, 'width'), height: read(map, 'height') } }) : { ok: false, reason: 'uncertain-track-or-latency' };
+        this.grenadeAutoPlan = { target: c.p, viable: result.ok, reason: result.reason };
+      }
       record(timer ? 'estimate-unconfirmed' : 'estimate-before-throw');
       if (mode === 'preview' || cfg.grenadeAimActivation !== 'equip' && !firing && !timer) return null;
       const strength = mode === 'assist' ? clamp((cfg.grenadeAssistStrength ?? 35) / 100, 0, 1) : 1;
@@ -517,7 +582,7 @@ export class Features {
   }
   processAim(native, advance, applyDirect = false) {
     const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
-    this.grenadePlan = null; this.grenadeState = 'off';
+    this.grenadePlan = null; this.grenadeAutoPlan = null; this.grenadeState = 'off';
     this.target = null; this.targetId = null; this.dot = null; this.meleeDirection = null; this.stats.aimRejections = {}; this.stats.predictionState = null; this.stats.aimApproximate = false;
     const blockedInput = this.inputBlockReason();
     const note = state => this.aimEvidence.attempt(state, { mode, activation: cfg.aimActivation, wallcheckRequested: !!cfg.wallcheck,
@@ -930,6 +995,8 @@ export class Features {
       autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
       grenadeTimer: { enabled: !!this.config.grenadeTimer, state: this.grenadeTimer.active ? 'forwarded-edge-unconfirmed' : this.config.grenadeTimer ? 'waiting-for-edge' : 'disabled' },
       grenadeAim: { mode: this.config.grenadeAimMode || 'off', state: this.grenadeState,
+        autoThrow: { enabled: !!this.config.grenadeAutoThrow, phase: this.grenadeAuto.phase,
+          last: this.lastGrenadeAutoEvidence ? (({ recordedAt, ...rest }) => ({ ...rest, ageMs: Math.max(0, Math.round(this.win.performance.now() - recordedAt)) }))(this.lastGrenadeAutoEvidence) : null },
         last: this.lastGrenadeEvidence ? { state: this.lastGrenadeEvidence.state, ageMs: Math.max(0, Math.round(this.win.performance.now() - this.lastGrenadeEvidence.recordedAt)) } : null },
       mapHighlights: { ...this.mapHighlights.stats },
       nativeNames: { ...this.names.stats },
