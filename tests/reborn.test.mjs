@@ -991,6 +991,33 @@ test('Final configuration is equivalent across unrelated visual toggle orders; s
   assert.deepEqual(outputs[0], outputs[1]);
 });
 
+test('own-motion experiment adjusts sender only with fresh matching movement and safe open space', () => {
+  const f = coordinated({ predict: true, wallcheck: true, ownMotionCompensation: true, humanLikeAim: false });
+  try {
+    const table = {};
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true); f.engine.pre(); f.engine.capabilities.prediction = true;
+    for (const [time,y] of [[870,19.04],[910,19.36],[950,19.68],[990,20]]) f.engine.tracker.observe(f.app.game.hero, {x:10,y}, time, 0);
+    f.engine.timing.rtt = 80; f.engine.timing.lastRtt = 80; f.engine.timing.rttAt = 990;
+    const msg = new InputMsg(); msg.moveRight = false; msg.moveUp = true; msg.shootHold = true; msg.toMouseLen = 1.25;
+    f.app.game.transmit(3, msg);
+    let wire = f.app.game.sent.at(-1).data;
+    assert.ok(wire.toMouseDir.y < -.2, JSON.stringify(wire.toMouseDir));
+    assert.equal(f.engine.diagnostics().lastPrediction.ownMotionMs, 90); assert.equal(wire.shootHold, true);
+    msg.moveUp = false; f.app.game.transmit(3, msg); wire = f.app.game.sent.at(-1).data;
+    assert.ok(Math.abs(wire.toMouseDir.y) < .001, 'stopping immediately falls back to observed origin');
+    assert.equal(f.engine.diagnostics().lastPrediction.ownMotionMs, null);
+    msg.moveUp = true; f.engine.timing.rttAt = -1000; f.app.game.transmit(3, msg);
+    assert.equal(f.engine.diagnostics().lastPrediction.ownMotionMs, null, 'stale RTT fails closed');
+    f.engine.timing.rttAt = 990;
+    table[900] = { __id: 900, __type: 2, active: true, collidable: true, layer: 0, height: 1,
+      collider: { type: 0, pos: {x:10,y:22}, rad:.2 } };
+    f.app.game.transmit(3, msg);
+    assert.equal(f.engine.diagnostics().lastPrediction.ownMotionMs, null, 'nearby obstacle disables projected origin');
+    assert.equal(DEFAULTS.ownMotionCompensation, false);
+  } finally { f.close(); }
+});
+
 test('optional instant-fire Lock removes controller lag only while physical Fire is held', () => {
   const f = coordinated({ aimMode: 'lock', aimActivation: 'key', humanLikeAim: true, smooth: 90, lockInstantFire: true, fov: 400 });
   try {
@@ -1486,12 +1513,14 @@ test('last prediction diagnostics expose bounded snapshot evidence without posit
     const hero = f.app.game.hero;
     f.engine.tracker.observe(hero, { x: 10, y: 20 }, 900);
     f.engine.tracker.observe(hero, { x: 10, y: 20.4 }, 950);
+    f.engine.mapping.visualPosKey = 'visual'; hero.visual = { x: 10, y: 19.5 }; enemy.visual = { x: 12, y: 20 };
     const input = new InputMsg(); input.toMouseLen = 2;
     assert.ok(f.engine.processAim(input, true), JSON.stringify(f.engine.stats));
     const evidence = f.engine.diagnostics().lastPrediction;
     assert.equal(evidence.state, 'bounded-oscillation'); assert.equal(evidence.historySamples, 27);
     assert.ok(evidence.snapshotAgeMs >= 0); assert.ok(evidence.estimatedSpeed >= 0); assert.equal(evidence.rttMs, 74);
     assert.equal(evidence.ownSnapshotAgeMs, 50); assert.ok(Math.abs(evidence.ownEstimatedSpeed - 8) < .01);
+    assert.ok(Number.isFinite(evidence.visualCrossTrack)); assert.ok(evidence.visualCrossTrack >= 0);
     assert.ok(!JSON.stringify(evidence).includes('sourcePos'));
   } finally { f.close(); }
 });

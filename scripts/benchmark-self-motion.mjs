@@ -2,6 +2,7 @@
 // Tests shooter origin projection without editing runtime code. Received samples
 // are quantized and delayed; actual future positions are used only for scoring.
 import { SnapshotTracker, predictShot, muzzleAt } from '../src/aim.mjs';
+import { projectOwnOrigin } from '../src/self-motion.mjs';
 const q=(a,p)=>[...a].sort((a,b)=>a-b)[Math.floor((a.length-1)*p)];
 const quant=n=>Math.round(n*65535/1024)*1024/65535;
 const paths={
@@ -17,9 +18,11 @@ const shooters={
   straight:t=>({x:0,y:8*t}),
   reverse:t=>({x:0,y:4*Math.asin(Math.sin(Math.PI*t))}),
   stop:paths.stop,
+  // Orbit the stationary target at x=60; no claims about live movement physics.
+  orbit:t=>({x:60 + 12*Math.cos(.7*t),y:12*Math.sin(.7*t)}),
 };
 for (const [ownName,ownTruth] of Object.entries(shooters)) for (const [targetName,targetTruth] of Object.entries(paths)) {
-  const rows={baseline:[],project:[]}, rejected={baseline:0,project:0};
+  const rows={baseline:[],project:[],guarded:[]}, rejected={baseline:0,project:0,guarded:0}; let guardedCount=0;
   for (const [down,up] of [[.03,.03],[.08,.08],[.15,.15],[.03,.15],[.15,.03]]) for(const fps of [30,60,144]) for(const bulletSpeed of [66,100,182]) for(const phase of [0,.009,.019]) for (const cadence of ['regular', 'jitter-gap']) {
     const own=new SnapshotTracker(), enemy=new SnapshotTracker(), me={__id:1}, target={__id:2};
     const packets=[]; let lastArrival=-Infinity;
@@ -40,7 +43,14 @@ for (const [ownName,ownTruth] of Object.entries(shooters)) for (const [targetNam
       const latency=Math.min(.1,(down+up)/2);
       for(const model of Object.keys(rows)) {
         const delta=model==='project'?Math.min(.2,o.age+Math.min(.1,latency*2)):0;
-        const origin={x:o.pos.x+o.vx*delta,y:o.pos.y+o.vy*delta};
+        const current=ownTruth(now), before=ownTruth(now-.001);
+        // Ideal current movement direction as a proxy for desktop input; this
+        // is not the game's real movement physics or an observed input trace.
+        const input={x:current.x-before.x,y:current.y-before.y}, len=Math.hypot(input.x,input.y);
+        const movement=len>1e-6?{x:input.x/len,y:input.y/len}:{x:0,y:0};
+        const guarded=model==='guarded'?projectOwnOrigin(o.pos,o,movement,{rtt:(down+up)*1000,lastRtt:(down+up)*1000,rttAt:now*1000},now*1000):null;
+        if (guarded) guardedCount++;
+        const origin=guarded||{x:o.pos.x+o.vx*delta,y:o.pos.y+o.vy*delta};
         const shot=predictShot({origin,target:e.pos,track:e,profile,latency,stabilize:true,compensateSnapshot:true});
         // Score rejects as an approximate direct/native fallback rather than
         // discarding difficult frames; actual user mouse direction is unknown.
@@ -55,6 +65,6 @@ for (const [ownName,ownTruth] of Object.entries(shooters)) for (const [targetNam
     }
   }
   const fmt=a=>`n=${a.length},median=${q(a,.5).toFixed(3)},p95=${q(a,.95).toFixed(3)},over1=${(100*a.filter(x=>x>1).length/a.length).toFixed(1)}%`;
-  console.log(`${ownName}/${targetName}\tbaseline:${fmt(rows.baseline)},reject=${rejected.baseline}\tproject:${fmt(rows.project)},reject=${rejected.project}`);
+  console.log(`${ownName}/${targetName}\tbaseline:${fmt(rows.baseline)},reject=${rejected.baseline}\tproject:${fmt(rows.project)},reject=${rejected.project}\tguarded:${fmt(rows.guarded)},reject=${rejected.guarded},projected=${guardedCount}`);
 }
 console.log('Synthetic proxy only: target/shooter model, no wall, spread, acceleration, server ticks or player input. True future used for scoring only.');

@@ -7125,11 +7125,13 @@ THE SOFTWARE.
       this.target = null;
       this.mode = null;
       this.angularVelocity = 0;
+      this.cubic = null;
+      this.profile = null;
     }
     constructor() {
       this.reset();
     }
-    step(native, wanted, { mode, strength, smooth, now, target, humanLike = smooth > 0, profile = "natural" }) {
+    step(native, wanted, { mode, strength, smooth, now, target, humanLike = smooth > 0, profile = "natural", cursorRadius = 100, targetRadius = 100 }) {
       const n = unit(native), d = unit(wanted);
       if (!n || !d || mode === "off") {
         this.reset();
@@ -7141,15 +7143,43 @@ THE SOFTWARE.
         const out = a + angleDelta(a, b) * clamp(strength / 100, 0, 1);
         return { x: Math.cos(out), y: Math.sin(out) };
       }
-      if (this.target !== target || this.mode !== mode || this.time === null || now - this.time > 250) {
+      if (this.target !== target || this.mode !== mode || this.profile !== null && this.profile !== profile || this.time === null || now - this.time > 250 || now < this.time) {
         this.angle = a;
         this.angularVelocity = 0;
+        this.cubic = null;
       }
       const dt = this.time === null ? 1 / 60 : clamp((now - this.time) / 1e3, 0, 0.05);
       if (!humanLike || smooth <= 0) {
         this.angle = b;
         this.angularVelocity = 0;
+        this.cubic = null;
+      } else if (profile === "duality") {
+        const nr = clamp(finite(cursorRadius) ? cursorRadius : 100, 1e-3, 4096);
+        const tr = clamp(finite(targetRadius) ? targetRadius : nr, 1e-3, 4096);
+        const desired = { x: d.x * tr, y: d.y * tr };
+        let cur = { x: n.x * nr, y: n.y * nr };
+        if (this.cubic) {
+          const c = this.cubic, t = clamp((now - c.startTime) / c.duration, 0, 1), eased = 1 - (1 - t) ** 3;
+          if (c.angularPath) {
+            const startAngle = Math.atan2(c.start.y, c.start.x), endAngle = Math.atan2(c.end.y, c.end.x);
+            const angle = startAngle + angleDelta(startAngle, endAngle) * eased;
+            const radius = Math.hypot(c.start.x, c.start.y) + (Math.hypot(c.end.x, c.end.y) - Math.hypot(c.start.x, c.start.y)) * eased;
+            cur = { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
+          } else cur = { x: c.start.x + (c.end.x - c.start.x) * eased, y: c.start.y + (c.end.y - c.start.y) * eased };
+        }
+        if (!this.cubic || Math.abs(desired.x - this.cubic.end.x) > 1e-3 || Math.abs(desired.y - this.cubic.end.y) > 1e-3) {
+          const distance = Math.hypot(desired.x - cur.x, desired.y - cur.y);
+          const angular = Math.abs(angleDelta(Math.atan2(cur.y, cur.x), b));
+          const immediate = distance <= 6 && angular <= Math.PI / 90;
+          const duration = immediate ? 0 : 45 + 360 * Math.max(clamp(angular / Math.PI, 0, 1), clamp(distance / 450, 0, 1)) * clamp(smooth / 100, 0, 1);
+          this.cubic = { start: cur, end: desired, startTime: now, duration: Math.max(duration, 1e-3), angularPath: angular > Math.PI * 0.9 };
+          if (immediate) cur = desired;
+        }
+        const normalized = unit(cur) || d;
+        this.angle = Math.atan2(normalized.y, normalized.x);
+        this.angularVelocity = 0;
       } else {
+        this.cubic = null;
         const profiles = { responsive: { time: 0.78, rate: 12 }, natural: { time: 1, rate: 8.5 }, precise: { time: 1.32, rate: 6.25 } };
         const selectedProfile = profiles[profile] || profiles.natural;
         const amount = clamp(finite(smooth) ? smooth : 50, 1, 100);
@@ -7164,9 +7194,25 @@ THE SOFTWARE.
       this.time = now;
       this.target = target;
       this.mode = mode;
+      this.profile = profile;
       return { x: Math.cos(this.angle), y: Math.sin(this.angle) };
     }
   };
+
+  // src/self-motion.mjs
+  function projectOwnOrigin(origin, track, movement, timing, now) {
+    if (!vec(origin) || !track || !vec(movement) || !finite(now)) return null;
+    if (!finite(track.age) || track.age < 0 || track.age > 0.1 || !Array.isArray(track.samples) || track.samples.length < 3) return null;
+    const first = track.samples[0], last = track.samples.at(-1);
+    if (!finite(first?.t) || !finite(last?.t) || last.t - first.t < 60 || !finite(track.error) || track.error > 0.12) return null;
+    const { vx, vy } = track, speed = Math.hypot(vx, vy), magnitude = Math.hypot(movement.x, movement.y);
+    if (!finite(vx) || !finite(vy) || speed < 0.6 || speed > 20 || magnitude < 0.5) return null;
+    if ((vx * movement.x + vy * movement.y) / (speed * magnitude) < 0.9) return null;
+    if (!finite(timing?.rtt) || !finite(timing?.lastRtt) || !finite(timing?.rttAt) || timing.rtt < 0 || timing.rtt > 200 || timing.lastRtt < 0 || timing.lastRtt > 200 || now < timing.rttAt || now - timing.rttAt > 1500) return null;
+    const seconds = Math.min(0.2, track.age + timing.rtt / 1e3);
+    return { x: origin.x + vx * seconds, y: origin.y + vy * seconds, seconds };
+  }
+  __name(projectOwnOrigin, "projectOwnOrigin");
 
   // src/aim-adapters.mjs
   function discoverInputTimeout(game) {
@@ -8425,7 +8471,7 @@ THE SOFTWARE.
             } else {
               const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
               const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
-              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true, !!self.mouseInput.record?.captured);
+              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : !(self.config.ownMotionCompensation && modeOf(self.config) === "lock" && self.local?.data?.[self.local.slotKey] !== 3) && !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true, !!self.mouseInput.record?.captured);
             }
             if (manualEquip) {
               self.weaponSwitch.reset();
@@ -9020,6 +9066,12 @@ THE SOFTWARE.
       const obstacles = profile || cfg.wallcheck ? m.obstacles() : [];
       const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
       if (profile && muzzleObstacles.length > 1024) return fail("muzzle-obstacle-budget");
+      let ownProjection = null;
+      if (cfg.ownMotionCompensation && cfg.predict && cfg.wallcheck && !cfg.predictionStrict && mode === "lock" && !melee && profile && this.protocol === VERIFIED_PROTOCOL && this.capabilities.prediction && this.binds && !native?.touchMoveActive) {
+        const movement = native ? { x: Number(native.moveRight) - Number(native.moveLeft), y: Number(native.moveUp) - Number(native.moveDown) } : { x: Number(!!this.binds.isBindDown(1)) - Number(!!this.binds.isBindDown(0)), y: Number(!!this.binds.isBindDown(2)) - Number(!!this.binds.isBindDown(3)) };
+        const candidate = projectOwnOrigin(pos, this.tracker.estimate(m.active, now), movement, this.timing, now);
+        if (candidate && !segmentCandidates(obstacles, pos, candidate, Math.abs(profile.offset) + profile.barrel + selfRadius + 1.5).length) ownProjection = candidate;
+      }
       for (const candidate of ordered.slice(0, 6)) {
         let shot, track = null;
         if (melee) shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos, distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: "melee" };
@@ -9049,8 +9101,8 @@ THE SOFTWARE.
               approximate: true
             };
           } else {
-            shot = predictShot({
-              origin: pos,
+            const solve = /* @__PURE__ */ __name((origin) => predictShot({
+              origin,
               target: candidate.pos,
               track,
               profile,
@@ -9059,8 +9111,17 @@ THE SOFTWARE.
               lead: (cfg.leadAdjustment ?? 100) / 100,
               radius: at2(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
               stabilize: mode === "lock" && cfg.stabilizeStrafe !== false,
-              muzzleFor: /* @__PURE__ */ __name((origin, dir2, model) => clippedMuzzle(origin, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1, selfRadius), "muzzleFor")
-            });
+              muzzleFor: /* @__PURE__ */ __name((origin2, dir2, model) => clippedMuzzle(origin2, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1, selfRadius), "muzzleFor")
+            }), "solve");
+            shot = solve(ownProjection || pos);
+            if (ownProjection && (!shot.dir || shotLayer(ownProjection, shot.dir, rawLayer, selfRadius, structures || []) !== layerFor(shot.dir))) {
+              ownProjection = null;
+              shot = solve(pos);
+            }
+            if (shot.dir && ownProjection) {
+              shot.ownMotionSeconds = ownProjection.seconds;
+              shot.approximate = true;
+            }
             if (shot.dir && cfg.predict && !track) {
               shot.state = predictionReady ? "direct-awaiting-snapshot" : "direct-prediction-unavailable";
               shot.approximate = true;
@@ -9091,6 +9152,16 @@ THE SOFTWARE.
           if (cfg.sticky && !warming) this.stickyId = candidate.p.__id;
           return fail("wall-blocked");
         }
+        if (ownProjection && shot.ownMotionSeconds) {
+          const currentMuzzle = clippedMuzzle(pos, shot.dir, profile, muzzleObstacles, layerFor(shot.dir), rawLayer & 1, selfRadius);
+          const length = Math.hypot(shot.world.x - currentMuzzle.x, shot.world.y - currentMuzzle.y) + hitRadius;
+          const from = { pos: currentMuzzle, layer: layerFor(shot.dir) }, to = { pos: { x: currentMuzzle.x + shot.dir.x * length, y: currentMuzzle.y + shot.dir.y * length } };
+          if (this.blocked(from, to, true, obstacles) || this.blockedByPlayer(from, to, candidate.p, players)) {
+            reject("wall");
+            if (cfg.sticky && !warming) this.stickyId = candidate.p.__id;
+            return fail("wall-blocked");
+          }
+        }
         if (warming) {
           this.aimPreparation = { state: "ready", prediction: shot.state, approximate: !!shot.approximate };
           this.stats.aimState = "waiting-activation";
@@ -9110,7 +9181,9 @@ THE SOFTWARE.
           now,
           target: candidate.p,
           humanLike: !!cfg.humanLikeAim && !instantFire,
-          profile: cfg.smoothProfile || "responsive"
+          profile: cfg.smoothProfile || "responsive",
+          cursorRadius: Math.hypot(mouse.x - read(camera.camera, camera.widthKey) / 2, mouse.y - read(camera.camera, camera.heightKey) / 2),
+          targetRadius: shot.distance * scale
         }) : !melee && mode === "assist" ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
         if (cfg.wallcheck && !melee && dir && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) {
           const actualLayer = layerFor(dir);
@@ -9128,6 +9201,8 @@ THE SOFTWARE.
         }
         if (advance2) {
           const ownTrack = this.tracker.estimate(m.active, now);
+          const visualOwn = read(m.active, m.visualPosKey), visualTarget = read(candidate.p, m.visualPosKey);
+          const visualCrossTrack = vec(visualOwn) && vec(visualTarget) && vec(dir) ? Math.abs((visualTarget.x - visualOwn.x) * dir.y - (visualTarget.y - visualOwn.y) * dir.x) : null;
           this.lastPredictionEvidence = {
             recordedAt: now,
             weapon: typeof actualWeapon === "string" ? actualWeapon : null,
@@ -9135,8 +9210,10 @@ THE SOFTWARE.
             state: shot.state,
             approximate: !!shot.approximate,
             controllerErrorDeg: vec(dir) && vec(shot.dir) ? Math.round(Math.abs(angleDelta(Math.atan2(dir.y, dir.x), Math.atan2(shot.dir.y, shot.dir.x))) * 18e4 / Math.PI) / 1e3 : null,
+            visualCrossTrack: finite(visualCrossTrack) ? Math.round(visualCrossTrack * 1e3) / 1e3 : null,
             snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1e3) : null,
             estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
+            ownMotionMs: finite(shot.ownMotionSeconds) ? Math.round(shot.ownMotionSeconds * 1e3) : null,
             ownSnapshotAgeMs: finite(ownTrack?.age) ? Math.round(ownTrack.age * 1e3) : null,
             ownEstimatedSpeed: finite(ownTrack?.vx) && finite(ownTrack?.vy) ? Math.round(Math.hypot(ownTrack.vx, ownTrack.vy) * 100) / 100 : null,
             historySamples: Array.isArray(track?.motion) ? track.motion.length : 0,
@@ -9583,7 +9660,7 @@ THE SOFTWARE.
         inputBlockReason: this.inputBlockReason(),
         mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, capturingWrites: !!this.mouseInput.record?.captured, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
-        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, lockInstantFire: !!this.config.lockInstantFire, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || "responsive" },
+        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, ownMotionCompensation: !!this.config.ownMotionCompensation, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, lockInstantFire: !!this.config.lockInstantFire, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || "responsive" },
         aimPreparation: this.aimPreparation,
         runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: "Script-local hook durations only; not game FPS, GPU time, network delay or hit rate." },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
@@ -9636,6 +9713,7 @@ THE SOFTWARE.
     wallcheck: true,
     predict: true,
     stabilizeStrafe: true,
+    ownMotionCompensation: false,
     melee: false,
     autoMelee: false,
     autoSwitch: false,
@@ -9712,7 +9790,7 @@ THE SOFTWARE.
     if (!finite(saved.grenadeFov)) result.grenadeFov = result.fov;
     if (["nearby", "mobile"].includes(saved.lootMode)) result.lootMode = saved.lootMode;
     if (["ring", "cross", "brackets", "diamond"].includes(saved.targetStyle)) result.targetStyle = saved.targetStyle;
-    for (const [key, values] of Object.entries({ aimMode: ["off", "assist", "lock"], aimActivation: ["fire", "key", "both"], smoothProfile: ["responsive", "natural", "precise"], grenadeAimMode: ["off", "preview", "assist", "lock"], grenadeAimActivation: ["hold", "equip"] })) if (values.includes(saved[key])) result[key] = saved[key];
+    for (const [key, values] of Object.entries({ aimMode: ["off", "assist", "lock"], aimActivation: ["fire", "key", "both"], smoothProfile: ["responsive", "natural", "precise", "duality"], grenadeAimMode: ["off", "preview", "assist", "lock"], grenadeAimActivation: ["hold", "equip"] })) if (values.includes(saved[key])) result[key] = saved[key];
     for (const key of ["espLegend", "espLabels", "espDistance", "espWeapons", "espHighlightTarget", "espMarkers", "espOffscreen"]) result[key] = false;
     if (saved.version !== 2) {
       result.lines = false;
@@ -9744,7 +9822,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["lockInstantFire", "Lock tức thời khi giữ Fire", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
       ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["aimAllies", "Nhắm đồng đội (debug; cả địch)", "aim"], ["wallcheck", "Wallcheck", "wallcheck"], [null, "Lock + Keep target: sau khi chọn trong FOV, giữ mục tiêu trong lần kích hoạt kể cả khi chuột ra ngoài FOV. Vật cản/người chắn vẫn khiến aim nhả. Assist vẫn theo FOV."]]],
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
-      ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
+      ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["ownMotionCompensation", "Bù di chuyển bản thân (thử nghiệm)", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
       ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Lock tức thời khi giữ Fire bỏ smooth trong lúc bắn; không tự bắn và không xóa độ trễ mạng. Shotgun vẫn chịu random pellet spread."]]],
       ["Grenade Aim (thử nghiệm)", [["grenadeAimMode", "Chế độ"], ["grenadeAimActivation", "Kích hoạt Assist / Lock"], ["grenadeAssistStrength", "Lực Assist bom (%)"], ["grenadeFov", "FOV bom (pixel)"], ["grenadeAimAllies", "Nhắm bom vào đồng đội (debug; cả địch)"], ["grenadeAutoThrow", "Tự thả (thử nghiệm, chỉ Lock)"], [null, "Debug đồng đội có thể chọn cả địch và đồng đội; Auto Throw có thể tự thả vào mục tiêu đã chọn. Không tự bắt đầu giữ. Mạng và fuse chưa xác nhận; không bảo đảm an toàn hoặc trúng."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
@@ -9849,7 +9927,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     const row = /* @__PURE__ */ __name(([key, label, capability]) => {
       if (key === null) return el("div", { class: "hint", text: label });
       const title = el("span", { text: label }), labelEl = el("label", { class: "row" }, title);
-      const choices = { grenadeAimMode: [["off", "Off"], ["preview", "Preview"], ["assist", "Assist"], ["lock", "Lock"]], grenadeAimActivation: [["hold", "Giữ Fire"], ["equip", "Cầm bom"]], targetStyle: [["ring", "Vòng tròn"], ["cross", "Tâm ngắm"], ["brackets", "Góc khung"], ["diamond", "Hình thoi"]], lootMode: [["nearby", "Nearby supplies (now)"], ["mobile", "Mobile loot / doors (next join)"]], aimMode: [["off", "Off"], ["assist", "Aim Assist"], ["lock", "Aim Lock"]], aimActivation: [["fire", "Hold Fire"], ["key", "Hold aim key"], ["both", "Aim key + Fire"]], smoothProfile: [["responsive", "Responsive / pro"], ["natural", "Natural"], ["precise", "Precise / cinematic"]] };
+      const choices = { grenadeAimMode: [["off", "Off"], ["preview", "Preview"], ["assist", "Assist"], ["lock", "Lock"]], grenadeAimActivation: [["hold", "Giữ Fire"], ["equip", "Cầm bom"]], targetStyle: [["ring", "Vòng tròn"], ["cross", "Tâm ngắm"], ["brackets", "Góc khung"], ["diamond", "Hình thoi"]], lootMode: [["nearby", "Nearby supplies (now)"], ["mobile", "Mobile loot / doors (next join)"]], aimMode: [["off", "Off"], ["assist", "Aim Assist"], ["lock", "Aim Lock"]], aimActivation: [["fire", "Hold Fire"], ["key", "Hold aim key"], ["both", "Aim key + Fire"]], smoothProfile: [["responsive", "Responsive / pro"], ["natural", "Natural"], ["precise", "Precise / cinematic"], ["duality", "Duality-inspired (cubic)"]] };
       const input = choices[key] ? el("select") : el("input", { type: colors.has(key) ? "color" : ranges[key] ? "range" : "checkbox" });
       input.dataset.config = key;
       if (choices[key]) {

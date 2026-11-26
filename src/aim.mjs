@@ -206,18 +206,47 @@ export function predictShot({ origin, target, track, profile, latency = 0, lead 
   return { mouseLen, state: confidence < 1 ? 'reduced-lead-uncertainty' : bounded ? 'bounded-oscillation' : track ? 'predicted' : 'direct-no-history', world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
 }
 export class AimController {
-  reset() { this.angle = null; this.time = null; this.target = null; this.mode = null; this.angularVelocity = 0; }
+  reset() { this.angle = null; this.time = null; this.target = null; this.mode = null; this.angularVelocity = 0; this.cubic = null; this.profile = null; }
   constructor() { this.reset(); }
-  step(native, wanted, { mode, strength, smooth, now, target, humanLike = smooth > 0, profile = 'natural' }) {
+  step(native, wanted, { mode, strength, smooth, now, target, humanLike = smooth > 0, profile = 'natural', cursorRadius = 100, targetRadius = 100 }) {
     const n = unit(native), d = unit(wanted); if (!n || !d || mode === 'off') { this.reset(); return n; }
     const a = Math.atan2(n.y, n.x), b = Math.atan2(d.y, d.x);
     if (mode === 'assist') { this.reset(); const out = a + angleDelta(a, b) * clamp(strength / 100, 0, 1); return { x: Math.cos(out), y: Math.sin(out) }; }
-    if (this.target !== target || this.mode !== mode || this.time === null || now - this.time > 250) { this.angle = a; this.angularVelocity = 0; }
+    if (this.target !== target || this.mode !== mode || this.profile !== null && this.profile !== profile || this.time === null || now - this.time > 250 || now < this.time) {
+      this.angle = a; this.angularVelocity = 0; this.cubic = null;
+    }
     const dt = this.time === null ? 1 / 60 : clamp((now - this.time) / 1000, 0, .05);
     // smooth: 0 is fast but humanLike callers normally treat 0 as direct.
     if (!humanLike || smooth <= 0) {
-      this.angle = b; this.angularVelocity = 0;
+      this.angle = b; this.angularVelocity = 0; this.cubic = null;
+    } else if (profile === 'duality') {
+      // Inspired by Duality's screen-space cubic ease-out. Retarget from the
+      // current point, never pause/replay Fire. Coordinates are viewport-relative.
+      const nr = clamp(finite(cursorRadius) ? cursorRadius : 100, .001, 4096);
+      const tr = clamp(finite(targetRadius) ? targetRadius : nr, .001, 4096);
+      const desired = { x: d.x * tr, y: d.y * tr };
+      let cur = { x: n.x * nr, y: n.y * nr };
+      if (this.cubic) {
+        const c = this.cubic, t = clamp((now - c.startTime) / c.duration, 0, 1), eased = 1 - (1 - t) ** 3;
+        if (c.angularPath) {
+          const startAngle = Math.atan2(c.start.y, c.start.x), endAngle = Math.atan2(c.end.y, c.end.x);
+          const angle = startAngle + angleDelta(startAngle, endAngle) * eased;
+          const radius = Math.hypot(c.start.x, c.start.y) + (Math.hypot(c.end.x, c.end.y) - Math.hypot(c.start.x, c.start.y)) * eased;
+          cur = { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
+        } else cur = { x: c.start.x + (c.end.x - c.start.x) * eased, y: c.start.y + (c.end.y - c.start.y) * eased };
+      }
+      if (!this.cubic || Math.abs(desired.x - this.cubic.end.x) > .001 || Math.abs(desired.y - this.cubic.end.y) > .001) {
+        const distance = Math.hypot(desired.x - cur.x, desired.y - cur.y);
+        const angular = Math.abs(angleDelta(Math.atan2(cur.y, cur.x), b));
+        const immediate = distance <= 6 && angular <= Math.PI / 90;
+        const duration = immediate ? 0 : 45 + 360 * Math.max(clamp(angular / Math.PI, 0, 1), clamp(distance / 450, 0, 1)) * clamp(smooth / 100, 0, 1);
+        this.cubic = { start: cur, end: desired, startTime: now, duration: Math.max(duration, .001), angularPath: angular > Math.PI * .9 };
+        if (immediate) cur = desired;
+      }
+      const normalized = unit(cur) || d;
+      this.angle = Math.atan2(normalized.y, normalized.x); this.angularVelocity = 0;
     } else {
+      this.cubic = null;
       const profiles = { responsive: { time: .78, rate: 12 }, natural: { time: 1, rate: 8.5 }, precise: { time: 1.32, rate: 6.25 } };
       const selectedProfile = profiles[profile] || profiles.natural;
       const amount = clamp(finite(smooth) ? smooth : 50, 1, 100);
@@ -232,7 +261,7 @@ export class AimController {
       this.angularVelocity = solved.velocity;
       this.angle = Math.atan2(Math.sin(solved.value), Math.cos(solved.value));
     }
-    this.time = now; this.target = target; this.mode = mode;
+    this.time = now; this.target = target; this.mode = mode; this.profile = profile;
     return { x: Math.cos(this.angle), y: Math.sin(this.angle) };
   }
 }

@@ -58,6 +58,25 @@ test('responsive Lock brakes observed reversals without changing Assist or other
   assert.ok(Math.abs(angle(direct) + .2) < 1e-12);
 });
 
+test('Duality-inspired cubic profile converges at 30/60/144 Hz and is isolated from instant Lock and Assist', () => {
+  for (const hz of [30, 60, 144]) {
+    const c = new AimController(), target = {}, errors = [];
+    for (let i = 0; i < hz; i++) {
+      const out = c.step({ x: 1, y: 0 }, { x: 0, y: 1 }, { mode: 'lock', humanLike: true, smooth: 50, profile: 'duality', cursorRadius: 120, targetRadius: 120, target, now: i * 1000 / hz });
+      errors.push(Math.abs(Math.PI / 2 - angle(out)));
+    }
+    assert.ok(errors.at(-1) < .001); assert.ok(errors.every((e, i) => !i || e <= errors[i - 1] + 1e-9));
+    const direct = c.step({ x: 1, y: 0 }, { x: 0, y: -1 }, { mode: 'lock', humanLike: false, smooth: 50, profile: 'duality', target, now: 1100 });
+    assert.ok(Math.abs(angle(direct) + Math.PI / 2) < 1e-9);
+    const assist = c.step({ x: 1, y: 0 }, { x: 0, y: 1 }, { mode: 'assist', strength: 35, profile: 'duality' });
+    assert.ok(Math.abs(angle(assist) - Math.PI / 2 * .35) < 1e-9);
+  }
+  assert.equal(normalizeConfig({ smoothProfile: 'duality' }).smoothProfile, 'duality');
+  const c = new AimController(), target = {}, angles = [];
+  for (let i = 0; i <= 60; i++) angles.push(angle(c.step({x:1,y:0},{x:-1,y:0}, { mode:'lock', humanLike:true, smooth:50, profile:'duality', target, now:i*10 })));
+  for (let i=1;i<angles.length;i++) assert.ok(Math.abs(angleDelta(angles[i-1],angles[i])) < .5, 'opposite direction avoids screen-center singularity');
+});
+
 test('Assist is monotonic, strength zero is native and moving intent escapes without controller memory', () => {
   const c = new AimController(); let last = -1;
   for (const strength of [0, 10, 35, 70, 100]) {
