@@ -7437,11 +7437,16 @@ THE SOFTWARE.
     }
     physical(input) {
       const mouse = read(input, "mousePos"), r = this.record;
+      if (r && mouse === r.owner && r.captured) {
+        const x = Object.getOwnPropertyDescriptor(mouse, "x"), y = Object.getOwnPropertyDescriptor(mouse, "y");
+        if (x?.get === r.get.x && x?.set === r.set.x && y?.get === r.get.y && y?.set === r.set.y) return { ...r.raw };
+        return null;
+      }
       if (!vec(mouse)) return null;
       if (!r || mouse !== r.owner) return point(mouse);
       return { x: mouse.x === r.applied.x ? r.raw.x : mouse.x, y: mouse.y === r.applied.y ? r.raw.y : mouse.y };
     }
-    apply(input, camera, plan) {
+    apply(input, camera, plan, captureWrites = false) {
       this.restore();
       const mouse = read(input, "mousePos"), raw = this.physical(input);
       const width = read(camera?.camera, camera?.widthKey), height = read(camera?.camera, camera?.heightKey);
@@ -7458,13 +7463,34 @@ THE SOFTWARE.
         return false;
       }
       this.record = { owner: mouse, raw, applied };
-      try {
-        mouse.x = applied.x;
-        mouse.y = applied.y;
-      } catch {
-        this.restore();
-        this.skippedFrames++;
-        return false;
+      if (captureWrites && dx.configurable && dy.configurable) {
+        const r = this.record;
+        r.captured = true;
+        r.descriptors = { x: dx, y: dy };
+        r.get = {};
+        r.set = {};
+        for (const key of ["x", "y"]) {
+          r.get[key] = () => r.applied[key];
+          r.set[key] = (value) => {
+            r.raw[key] = value;
+          };
+        }
+        try {
+          for (const key of ["x", "y"]) Object.defineProperty(mouse, key, { configurable: true, enumerable: r.descriptors[key].enumerable, get: r.get[key], set: r.set[key] });
+        } catch {
+          this.restore();
+          this.skippedFrames++;
+          return false;
+        }
+      } else {
+        try {
+          mouse.x = applied.x;
+          mouse.y = applied.y;
+        } catch {
+          this.restore();
+          this.skippedFrames++;
+          return false;
+        }
       }
       this.appliedFrames++;
       return true;
@@ -7487,7 +7513,9 @@ THE SOFTWARE.
       if (!r) return;
       for (const key of ["x", "y"]) {
         const d = Object.getOwnPropertyDescriptor(r.owner, key);
-        if (d && "value" in d && d.writable && d.value === r.applied[key]) r.owner[key] = r.raw[key];
+        if (r.captured) {
+          if (d?.get === r.get[key] && d?.set === r.set[key]) Object.defineProperty(r.owner, key, { ...r.descriptors[key], value: r.raw[key] });
+        } else if (d && "value" in d && d.writable && d.value === r.applied[key]) r.owner[key] = r.raw[key];
       }
     }
     snapshot() {
@@ -8197,7 +8225,13 @@ THE SOFTWARE.
       }, { signal: controller.signal });
       win.addEventListener("keyup", (event) => {
         if (event.code === this.config.layerKey) releaseLayer();
-        if (event.code === this.config.aimKey) this.holdAim = false;
+        if (event.code === this.config.aimKey) {
+          this.holdAim = false;
+          if (this.config.aimActivation !== "fire") this.restoreInput();
+        }
+      }, { signal: controller.signal });
+      win.addEventListener("mouseup", (event) => {
+        if (event.button === 0 && this.config.aimActivation !== "key") this.restoreInput();
       }, { signal: controller.signal });
       win.addEventListener("blur", () => {
         releaseLayer();
@@ -8250,7 +8284,7 @@ THE SOFTWARE.
       if (!this.app.input || !patchMethod(this.app.input, "flush", (original) => {
         const self = this;
         return function() {
-          self.restoreInput();
+          if (!self.mouseInput.record?.captured) self.restoreInput();
           return Reflect.apply(original, this, arguments);
         };
       }, this.hooks)) this.report("warning", "Không có flush contract: aim input bị khóa.");
@@ -8391,7 +8425,7 @@ THE SOFTWARE.
             } else {
               const cursor = self.mouseInput.physical(self.app.input), planned = self.aimPlanCursor;
               const sameCursor = vec(cursor) && vec(planned) && cursor.x === planned.x && cursor.y === planned.y;
-              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true);
+              self.aimOutput = self.config.grenadeAutoThrow && self.local?.data?.[self.local.slotKey] === 3 ? self.processAim(intent, true) : !data2.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0]) && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true, !!self.mouseInput.record?.captured);
             }
             if (manualEquip) {
               self.weaponSwitch.reset();
@@ -9117,7 +9151,7 @@ THE SOFTWARE.
         } else this.meleeEquip = null;
         const outputDistance = profile?.toMouseHit && !melee ? shot.mouseLen : shot.distance;
         const directInput = applyDirect && this.config.directMouseInput !== false && !!this.flushReady;
-        const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }) : false;
+        const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }, mode === "lock" && !melee) : false;
         this.stats.aimState = directInput && !directApplied ? "ready-to-send" : advance2 ? "input-applied" : "ready-to-send";
         if (advance2) this.lastAimDistance = outputDistance;
         note(this.stats.aimState);
@@ -9196,7 +9230,7 @@ THE SOFTWARE.
       this.effects = out;
     }
     post() {
-      this.restoreInput();
+      if (!this.mouseInput.record?.captured) this.restoreInput();
       this.aimPlanFrame = -1;
       this.aimPlanDirect = false;
       const now = this.win.performance.now();
@@ -9297,7 +9331,7 @@ THE SOFTWARE.
       if (!prepareOverlay(canvas, ctx, width, height, this.win.devicePixelRatio)) return;
       ctx.globalAlpha = 1;
       ctx.setLineDash([]);
-      const mouse = this.app.input?.mousePos;
+      const mouse = this.mouseInput.physical(this.app.input);
       if (cfg.aim && cfg.showFov && vec(mouse)) {
         ctx.strokeStyle = "#ffffff44";
         ctx.lineWidth = 1;
@@ -9545,7 +9579,7 @@ THE SOFTWARE.
         mapHighlights: { ...this.mapHighlights.stats },
         nativeNames: { ...this.names.stats },
         inputBlockReason: this.inputBlockReason(),
-        mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
+        mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, capturingWrites: !!this.mouseInput.record?.captured, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
         aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || "responsive" },
         aimPreparation: this.aimPreparation,

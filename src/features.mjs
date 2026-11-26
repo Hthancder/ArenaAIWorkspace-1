@@ -175,7 +175,9 @@ export class Features {
       if (event.code === this.config.layerKey && this.config.layerSpoofer) this.layerHeld = true;
       if (event.code === this.config.aimKey) this.holdAim = true;
     }, { signal: controller.signal });
-    win.addEventListener('keyup', event => { if (event.code === this.config.layerKey) releaseLayer(); if (event.code === this.config.aimKey) this.holdAim = false; }, { signal: controller.signal });
+    win.addEventListener('keyup', event => { if (event.code === this.config.layerKey) releaseLayer(); if (event.code === this.config.aimKey) { this.holdAim = false; if (this.config.aimActivation !== 'fire') this.restoreInput(); } }, { signal: controller.signal });
+    // Yield immediately on the ordinary mouse release; never consume or synthesize it.
+    win.addEventListener('mouseup', event => { if (event.button === 0 && this.config.aimActivation !== 'key') this.restoreInput(); }, { signal: controller.signal });
     win.addEventListener('blur', () => { releaseLayer(); this.restoreInput(); this.focusBlocked = true; this.holdAim = false; this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; }, { signal: controller.signal });
     win.addEventListener('focus', () => { this.focusBlocked = false; }, { signal: controller.signal });
     win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) { releaseLayer(); this.restoreInput(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; } }, { signal: controller.signal });
@@ -197,7 +199,9 @@ export class Features {
     if (!this.app.input || !patchMethod(this.app.input, 'flush', original => {
       const self = this;
       return function () {
-        self.restoreInput(); // Restore BEFORE native flush captures old state.
+        // Captured Lock keeps physical writes separate until the next frame;
+        // ordinary transactions are restored before native flush as before.
+        if (!self.mouseInput.record?.captured) self.restoreInput();
         return Reflect.apply(original, this, arguments);
       };
     }, this.hooks)) this.report('warning', 'Không có flush contract: aim input bị khóa.');
@@ -277,7 +281,7 @@ export class Features {
             ? self.processAim(intent, true) // Revalidate at the actual sender, not a cached render plan.
             : !data.shootStart && sameCursor && self.aimPlanFrame === self.aimFrame && self.aimPlanDirect
                 && self.aimPlanFiring === (self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0])
-                && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true);
+                && self.aimPlanHoldAim === self.holdAim ? self.aimPlan : self.processAim(intent, true, !!self.mouseInput.record?.captured);
           }
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
@@ -818,7 +822,7 @@ export class Features {
       } else this.meleeEquip = null;
       const outputDistance = profile?.toMouseHit && !melee ? shot.mouseLen : shot.distance;
       const directInput = applyDirect && this.config.directMouseInput !== false && !!this.flushReady;
-      const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }) : false;
+      const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }, mode === 'lock' && !melee) : false;
       this.stats.aimState = directInput && !directApplied ? 'ready-to-send' : advance ? 'input-applied' : 'ready-to-send';
       if (advance) this.lastAimDistance = outputDistance;
       note(this.stats.aimState);
@@ -887,7 +891,8 @@ export class Features {
     this.effects = out;
   }
   post() {
-    this.restoreInput(); this.aimPlanFrame = -1; this.aimPlanDirect = false;
+    if (!this.mouseInput.record?.captured) this.restoreInput();
+    this.aimPlanFrame = -1; this.aimPlanDirect = false;
     const now = this.win.performance.now(); this.stats.frames++;
     if (now - this.lastVisual < 1000 / 30) return;
     this.lastVisual = now;
@@ -949,7 +954,7 @@ export class Features {
     const width = this.win.innerWidth, height = this.win.innerHeight;
     if (!prepareOverlay(canvas, ctx, width, height, this.win.devicePixelRatio)) return;
     ctx.globalAlpha = 1; ctx.setLineDash([]);
-    const mouse = this.app.input?.mousePos;
+    const mouse = this.mouseInput.physical(this.app.input);
     if (cfg.aim && cfg.showFov && vec(mouse)) {
       ctx.strokeStyle = '#ffffff44'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(mouse.x, mouse.y, cfg.fov, 0, Math.PI * 2); ctx.stroke();
@@ -1112,7 +1117,7 @@ export class Features {
       mapHighlights: { ...this.mapHighlights.stats },
       nativeNames: { ...this.names.stats },
       inputBlockReason: this.inputBlockReason(),
-      mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
+      mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, capturingWrites: !!this.mouseInput.record?.captured, ...this.mouseInput.snapshot() },
       registry: { state: m?.registryState ?? 'waiting-mapping', ...m?.registryEvidence },
       aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || 'responsive' },
       aimPreparation: this.aimPreparation,

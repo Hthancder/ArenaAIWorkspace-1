@@ -1,0 +1,9 @@
+# Đồng bộ Lock và chuột theo cách tách intent của Duality
+
+Người dùng báo khi giữ Fire, súng giật giữa hướng chuột thật và hướng Lock. Trong `docs/duality_client.js` bản 4.1 người dùng cung cấp, phân tích tĩnh cho thấy Duality giữ tọa độ thật khi game ghi `mousePos.x/y`, nhưng getter trả tọa độ aimbot; game đọc cùng hướng đó cho local rotation và input. Smooth của Duality là nội suy cubic ease-out; nó còn có logic hoãn/phát lại Fire. Không chạy script tham khảo.
+
+Bản này giữ nguyên predictor/SmoothDamp hiện tại, không hoãn hay tự tạo Fire. Với **gun Lock + Direct native mouse input**, nếu cả hai thuộc tính chuột là data property writable/configurable, script tạm cài getter/setter có sở hữu: setter giữ tọa độ người chơi, getter đưa game hướng Lock. Quyền này được giữ qua native flush và visual pass, thay mới ở frame kế tiếp, còn packet vẫn được xác minh và chỉnh ở sender. Tính FOV/Assist dùng tọa độ thật, không dùng hướng ảo. Nếu sender phải tính lại trong cùng frame, hướng game và packet được cập nhật cùng nghiệm.
+
+Khi nhả activation, mất focus, đóng/tắt, fail-closed hoặc thay đổi cấu hình, thuộc tính nguyên bản và tọa độ thật được trả lại. Bản thân event Fire không bị chặn. Nếu đối tượng bị thay thế hoặc script khác thay descriptor, chỉ khôi phục thuộc tính còn thuộc về mình; nếu property không configurable, dùng đường ghi/khôi phục theo frame cũ. Không áp dụng accessor duy trì cho Assist hoặc grenade. Đây là can thiệp vào input object của game, không phải hook driver/OS và không đảm bảo tương thích khi script khác cũng sửa input.
+
+Kiểm thử gồm ghi chuột trong lúc Lock, đọc game-facing/physical riêng, packet và Fire, flush/visual, nhả, descriptor không hỗ trợ, đối tượng bị thay, và fixture trích source rotation/scheduler/serializer bốn biến thể. Kiểm thử không thay thế trận live; `mouseInput.capturingWrites` trong diagnostics cho biết accessor có đang được sở hữu hay không, không chứng minh server nhận đạn hoặc trúng.

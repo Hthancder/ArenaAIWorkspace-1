@@ -17,6 +17,35 @@ test('native mouse transaction changes direction but preserves real cursor radiu
   frame.restore(); assert.equal(frame.snapshot().active, false);
 });
 
+test('captured Lock retains game-facing aim while real mouse writes remain available and restore exactly', () => {
+  const input = { mousePos: { x: 440, y: 300 } }, mouse = input.mousePos, frame = new MouseInputFrame();
+  const original = Object.getOwnPropertyDescriptors(mouse);
+  assert.ok(frame.apply(input, camera(), plan, true));
+  mouse.x = 650; mouse.y = 100;
+  assert.deepEqual({ x: mouse.x, y: mouse.y }, { x: 424, y: 268 });
+  assert.deepEqual(frame.physical(input), { x: 650, y: 100 });
+  frame.restore(); assert.deepEqual(mouse, { x: 650, y: 100 });
+  assert.deepEqual(Object.getOwnPropertyDescriptor(mouse, 'x'), { ...original.x, value: 650 });
+  assert.deepEqual(Object.getOwnPropertyDescriptor(mouse, 'y'), { ...original.y, value: 100 });
+});
+
+test('non-configurable native data properties safely fall back to frame transaction', () => {
+  const input = { mousePos: { x: 440, y: 300 } }, frame = new MouseInputFrame();
+  Object.defineProperty(input.mousePos, 'x', { configurable: false, writable: true, enumerable: true, value: 440 });
+  assert.ok(frame.apply(input, camera(), plan, true)); assert.equal(frame.record.captured, undefined);
+  frame.restore(); assert.deepEqual(input.mousePos, { x: 440, y: 300 });
+});
+
+test('captured Lock leaves replaced descriptors and replacement objects alone', () => {
+  const input = { mousePos: { x: 440, y: 300 } }, mouse = input.mousePos, frame = new MouseInputFrame();
+  frame.apply(input, camera(), plan, true); mouse.y = 123;
+  Object.defineProperty(mouse, 'x', { configurable: true, writable: true, enumerable: true, value: 999 });
+  assert.equal(frame.physical(input), null); frame.restore();
+  assert.deepEqual(mouse, { x: 999, y: 123 });
+  frame.apply(input, camera(), plan, true); input.mousePos = { x: 700, y: 600 }; frame.restore();
+  assert.deepEqual(input.mousePos, { x: 700, y: 600 }); assert.deepEqual(mouse, { x: 999, y: 123 });
+});
+
 test('sender raw intent reconstruction uses current zoom and retains native prototype/fields', () => {
   class Input { serialize() {} addInput() {} }
   const native = Object.assign(new Input(), { toMouseDir: { x: .6, y: .8 }, toMouseLen: 2, shootHold: true, moveLeft: true, inputs: [11] });

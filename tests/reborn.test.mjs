@@ -573,8 +573,44 @@ test('direct native mouse route advances Lock once per frame and keeps the real 
     assert.equal(f.engine.stats.aimState, 'input-applied');
     assert.equal(f.engine.diagnostics().mouseInput.enabled, true);
     assert.ok(f.engine.diagnostics().mouseInput.appliedFrames >= 1);
-    f.app.input.flush(); assert.deepEqual(f.app.input.mousePos, { x: 440, y: 300 });
+    f.app.input.flush(); assert.deepEqual(f.engine.mouseInput.physical(f.app.input), { x: 440, y: 300 });
+    assert.equal(f.engine.diagnostics().mouseInput.active, true, 'Lock owns game-facing vector across flush');
+    f.app.input.mouseButtons[0] = false; f.advance(); f.engine.pre();
+    assert.deepEqual(f.app.input.mousePos, { x: 440, y: 300 });
     const d = f.engine.diagnostics().mouseInput; assert.equal(d.active, false);
+  } finally { f.close(); }
+});
+
+test('Lock captures physical mouse writes through flush and visual pass until release, without changing Fire', () => {
+  const f = coordinated({ aimMode: 'lock', humanLikeAim: false, sticky: true });
+  try {
+    f.engine.pre(); assert.equal(f.engine.diagnostics().mouseInput.capturingWrites, true);
+    const mouse = f.app.input.mousePos;
+    mouse.x = 400; mouse.y = 40;
+    assert.deepEqual(f.engine.mouseInput.physical(f.app.input), { x: 400, y: 40 });
+    assert.ok(mouse.x > 400 && Math.abs(mouse.y - 300) < .01, 'game-facing vector remains aimed despite physical write');
+    f.app.input.flush(); f.engine.post(); assert.equal(f.engine.diagnostics().mouseInput.capturingWrites, true);
+    const native = new InputMsg(); native.shootHold = true; native.toMouseLen = 8;
+    f.app.game.transmit(3, native); const wire = f.app.game.sent.at(-1).data;
+    assert.ok(wire.toMouseDir.x > .99); assert.equal(wire.shootHold, true); assert.equal(native.shootHold, true);
+    assert.ok(f.engine.diagnostics().mouseInput.capturingWrites);
+    f.app.input.mouseButtons[0] = false; f.dom.window.dispatchEvent(new f.dom.window.MouseEvent('mouseup', { button: 0 }));
+    assert.deepEqual(mouse, { x: 400, y: 40 }); assert.equal(f.engine.diagnostics().mouseInput.capturingWrites, false);
+  } finally { f.close(); }
+});
+
+test('captured Lock restores latest physical intent on blur and dispose', () => {
+  const f = coordinated();
+  try {
+    f.engine.pre(); assert.ok(f.engine.mouseInput.record?.captured);
+    f.app.input.mousePos.x = 510; f.app.input.mousePos.y = 220;
+    f.dom.window.dispatchEvent(new f.dom.window.Event('blur'));
+    assert.deepEqual(f.app.input.mousePos, { x: 510, y: 220 }); assert.equal(f.engine.mouseInput.record, null);
+    f.dom.window.dispatchEvent(new f.dom.window.Event('focus'));
+    f.app.input.mousePos.x = 440; f.app.input.mousePos.y = 300; f.advance(); f.engine.pre();
+    assert.ok(f.engine.mouseInput.record?.captured);
+    f.app.input.mousePos.x = 501; f.engine.dispose();
+    assert.deepEqual(f.app.input.mousePos, { x: 501, y: 300 });
   } finally { f.close(); }
 });
 

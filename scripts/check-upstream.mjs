@@ -191,8 +191,14 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     wire=context.sent.at(-1).decoded;assert.ok(wire.toMouseDir.y>.1, 'Correct aim on wire after target moves');
     assert.ok(context.result.nativePrevious().toMouseDir.y>.1,'Direct mouse path reaches native input construction and prevInput before sender correction');
     assert.ok(app.input.mousePos.y<300,'Native mouse input vector is corrected during the frame');
-    app.input.flush(); assert.equal(app.input.mousePos.y,300,'Real mouse intent restored before native flush');
-    assert.equal(context.result.localRotation(),0,'Actual local rotation returns to real mouse when the transaction ends');
+    app.input.mousePos.x = 430; app.input.mousePos.y = 280;
+    assert.deepEqual(engine.mouseInput.physical(app.input), { x: 430, y: 280 }, 'Physical write is retained separately');
+    assert.ok(app.input.mousePos.y < 300 && app.input.mousePos.y !== 280, 'Lock owns game-facing vector after physical mouse writes');
+    app.input.flush();
+    assert.ok(engine.diagnostics().mouseInput.capturingWrites, 'Lock remains active across native flush');
+    assert.ok(Math.abs(context.result.localRotation()+Math.atan2(mouseDirection.y,mouseDirection.x))<1e-8, 'Local rotation stays aligned with locked vector');
+    engine.restoreInput(); assert.equal(app.input.mousePos.x,430); assert.equal(app.input.mousePos.y,280);
+    app.input.mousePos.x = 440; app.input.mousePos.y = 300;
     const savedDefs=engine.definitions;
     engine.definitions=null;engine.config.esp=true;engine.config.nametags=false;engine.lastVisual=-Infinity;
     clock+=17;engine.pre();context.result.nativeFrame(1/60);engine.post();
