@@ -1,4 +1,4 @@
-# Tabspace 0.119 — bản thử nghiệm
+# Tabspace 0.120 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -271,3 +271,6 @@ Tham khảo các nguyên tắc từ [taste-skill](https://github.com/Leonxlnx/ta
 Trong popup → **Thao tác nhanh nhiều tab**, chọn **Lưu bản sao** hoặc **Cho nghỉ** để chỉ hiện các trường cần cho việc đó; phạm vi và các lựa chọn của từng hành động vẫn độc lập. Chế độ không hỏi vẫn tách riêng và mặc định xem trước. Khi đích lưu được chọn bị đổi tên, thay đổi hoặc biến mất lúc làm mới danh sách, cần chọn lại thay vì tự chuyển sang đích khác.
 
 Dưới danh sách tab, **Chọn thêm…** có thể chọn nhanh toàn bộ tab web trong cửa sổ hiện tại hoặc mọi cửa sổ thường, kể cả tab không nằm trong phần đang hiển thị. Giữ các lựa chọn trước đó và báo tổng số; nếu vượt 100 lựa chọn hoặc gặp tab đã chọn thay đổi, không thay đổi lựa chọn. Phần thao tác nhanh vẫn xử lý tối đa 500 tab web/lượt nếu chọn nguồn toàn bộ/trừ tab, không cần đánh dấu từng tab. Không tự lưu, đóng hay cho nghỉ khi dùng lệnh chọn. Tab ẩn danh, trang không phải web và tab đang chuyển URL bị bỏ qua.
+
+### Trang tab đang mở gọn hơn (0.120)
+**Bộ lọc & sắp xếp** có thể thu gọn; dòng tóm tắt vẫn cho biết số bộ lọc đang áp dụng và thứ tự khi khác mặc định. Mở ra để thay đổi hoặc đặt lại; thu gọn không xóa lọc, tìm kiếm hay lựa chọn. Nút **Chọn nhanh…** luôn ở thanh tìm kiếm của trang Tab đang mở. Khi chọn nhiều tab, các thao tác thường dùng vẫn ở ngoài; **Thêm thao tác** chứa lưu phiên, ghim, nhóm Chrome và bỏ chọn phần đang thấy. Menu thích ứng cửa sổ hẹp và vẫn dùng được bằng bàn phím.
