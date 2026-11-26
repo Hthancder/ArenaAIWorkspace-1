@@ -7,6 +7,10 @@ const trajectories = {
   straight: t => ({ x: 60, y: 12 * t }),
   reverse: t => ({ x: 60, y: 6 * Math.asin(Math.sin(Math.PI * t)) }),
   curve: t => ({ x: 60 + 12 * Math.sin(t), y: 12 * (1 - Math.cos(t)) }),
+  'fast-straight-20': t => ({ x: 60, y: 20 * t }),
+  'fast-straight-30-stress': t => ({ x: 60, y: 30 * t }),
+  'fast-reverse-20': t => ({ x: 60, y: (20 / Math.PI) * Math.asin(Math.sin(Math.PI * t)) }),
+  'fast-start-stop-20': t => ({ x: 60, y: 20 * (Math.floor(t / 1.4) * .7 + Math.min(t % 1.4, .7)) }),
 };
 for (const [name, truth] of Object.entries(trajectories)) for (const [down, up] of [[.03, .03], [.08, .08], [.15, .15], [.25, .25], [.03, .15], [.15, .03]]) {
   const errors = [], rejected = { n: 0 }; let n = 0;

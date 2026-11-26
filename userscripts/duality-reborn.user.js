@@ -7759,6 +7759,7 @@ THE SOFTWARE.
       this.meleeEquip = null;
       this.manualEquipHeld = false;
       this.actualWeapon = null;
+      this.lastPredictionEvidence = null;
       this.target = null;
       this.targetId = null;
       this.dot = null;
@@ -7892,6 +7893,7 @@ THE SOFTWARE.
       this.sourceFields = null;
       this.observedEntities.clear();
       this.timing.reset();
+      this.lastPredictionEvidence = null;
       this.target = null;
       this.targetId = null;
       this.dot = null;
@@ -8340,12 +8342,12 @@ THE SOFTWARE.
       const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
       if (profile && muzzleObstacles.length > 1024) return fail("muzzle-obstacle-budget");
       for (const candidate of ordered.slice(0, 6)) {
-        let shot;
+        let shot, track = null;
         if (melee) shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos, distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: "melee" };
         else {
           if (!profile && !([0, 1].includes(slot) && !gun)) return fail("unsupported-weapon-profile");
           const predictionReady = !!(cfg.predict && profile && this.capabilities.prediction);
-          const track = predictionReady ? this.tracker.estimate(candidate.p, now) : null;
+          track = predictionReady ? this.tracker.estimate(candidate.p, now) : null;
           if (predictionReady && !track && this.tracker.states.has(candidate.p)) {
             reject("staleSnapshot");
             continue;
@@ -8426,6 +8428,18 @@ THE SOFTWARE.
             return fail("wall-blocked");
           }
         }
+        if (advance2) this.lastPredictionEvidence = {
+          recordedAt: now,
+          weapon: typeof actualWeapon === "string" ? actualWeapon : null,
+          mode,
+          state: shot.state,
+          approximate: !!shot.approximate,
+          snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1e3) : null,
+          estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
+          historySamples: Array.isArray(track?.motion) ? track.motion.length : 0,
+          confidence: finite(shot.confidence) ? Math.round(shot.confidence * 1e3) / 1e3 : null,
+          rttMs: finite(this.timing.rtt) ? Math.round(this.timing.rtt) : null
+        };
         this.dot = project(camera, shot.world);
         if (melee) {
           this.meleeDirection = shot.dir;
@@ -8825,6 +8839,10 @@ THE SOFTWARE.
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
         aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || "responsive" },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
+        lastPrediction: this.lastPredictionEvidence ? (() => {
+          const { recordedAt, ...evidence } = this.lastPredictionEvidence;
+          return { ...evidence, ageMs: Math.max(0, Math.round(this.win.performance.now() - recordedAt)) };
+        })() : null,
         missingContracts: Object.keys(checks).filter((key) => !checks[key]),
         capabilities: { ...this.capabilities },
         stats: { ...this.stats },

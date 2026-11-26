@@ -1276,3 +1276,35 @@ test('strafe stabilization toggle is exposed and can be disabled', () => {
     toggle.click(); assert.equal(config.stabilizeStrafe, false);
   } finally { menu.dispose(); dom.window.close(); }
 });
+
+test('last prediction diagnostics survive release, age and reset without target identity or position', () => {
+  const f = coordinated({ predict: true });
+  try {
+    f.send();
+    const first = f.engine.diagnostics().lastPrediction;
+    assert.ok(first); assert.equal(first.mode, 'lock'); assert.equal(first.state, 'direct-prediction-unavailable');
+    assert.equal(first.snapshotAgeMs, null); assert.equal(first.estimatedSpeed, null); assert.equal(first.historySamples, 0);
+    assert.equal(first.ageMs, 0);
+    f.app.input.mouseButtons[0] = false; f.advance(400); f.send();
+    const saved = f.engine.diagnostics().lastPrediction;
+    assert.equal(saved.ageMs, 400); assert.equal(saved.state, first.state);
+    for (const key of ['targetId', 'playerId', 'name', 'position', 'pos', 'world']) assert.equal(Object.hasOwn(saved, key), false);
+    f.engine.releaseMatch(); assert.equal(f.engine.diagnostics().lastPrediction, null);
+  } finally { f.close(); }
+});
+
+test('last prediction diagnostics expose bounded snapshot evidence without positions', () => {
+  const f = coordinated({ predict: true, stabilizeStrafe: true });
+  try {
+    f.engine.pre(); const enemy = f.app.game.barn.playerPool.list[1];
+    f.engine.capabilities.prediction = true;
+    for (let i = 0; i < 27; i++) f.engine.tracker.observe(enemy, { x: 12, y: 20 + .4 * Math.sin(i * 33 / 1000 * Math.PI * 3) }, 142 + i * 33);
+    f.engine.timing.rtt = 74;
+    const input = new InputMsg(); input.toMouseLen = 2;
+    assert.ok(f.engine.processAim(input, true), JSON.stringify(f.engine.stats));
+    const evidence = f.engine.diagnostics().lastPrediction;
+    assert.equal(evidence.state, 'bounded-oscillation'); assert.equal(evidence.historySamples, 27);
+    assert.ok(evidence.snapshotAgeMs >= 0); assert.ok(evidence.estimatedSpeed >= 0); assert.equal(evidence.rttMs, 74);
+    assert.ok(!JSON.stringify(evidence).includes('sourcePos'));
+  } finally { f.close(); }
+});
