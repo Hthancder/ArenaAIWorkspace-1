@@ -775,15 +775,22 @@ export class Features {
       }
       // Retain the last accepted solution after Fire is released; this is not a
       // server hit record. No target ID, coordinates, or player name is kept.
-      if (advance) this.lastPredictionEvidence = {
-        recordedAt: now, weapon: typeof actualWeapon === 'string' ? actualWeapon : null, mode,
-        state: shot.state, approximate: !!shot.approximate,
-        snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1000) : null,
-        estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
-        historySamples: Array.isArray(track?.motion) ? track.motion.length : 0,
-        confidence: finite(shot.confidence) ? Math.round(shot.confidence * 1000) / 1000 : null,
-        rttMs: finite(this.timing.rtt) ? Math.round(this.timing.rtt) : null,
-      };
+      if (advance) {
+        // Anonymous local-only evidence: the solver currently starts at the
+        // last observed own position, not an extrapolated future muzzle.
+        const ownTrack = this.tracker.estimate(m.active, now);
+        this.lastPredictionEvidence = {
+          recordedAt: now, weapon: typeof actualWeapon === 'string' ? actualWeapon : null, mode,
+          state: shot.state, approximate: !!shot.approximate,
+          snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1000) : null,
+          estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
+          ownSnapshotAgeMs: finite(ownTrack?.age) ? Math.round(ownTrack.age * 1000) : null,
+          ownEstimatedSpeed: finite(ownTrack?.vx) && finite(ownTrack?.vy) ? Math.round(Math.hypot(ownTrack.vx, ownTrack.vy) * 100) / 100 : null,
+          historySamples: Array.isArray(track?.motion) ? track.motion.length : 0,
+          confidence: finite(shot.confidence) ? Math.round(shot.confidence * 1000) / 1000 : null,
+          rttMs: finite(this.timing.rtt) ? Math.round(this.timing.rtt) : null,
+        };
+      }
       this.dot = project(camera, shot.world);
       if (melee) {
         this.meleeDirection = shot.dir; this.weaponSwitch.reset(); this.switchSlot = null;

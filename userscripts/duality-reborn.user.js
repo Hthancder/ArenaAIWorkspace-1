@@ -9045,18 +9045,23 @@ THE SOFTWARE.
             return fail("wall-blocked");
           }
         }
-        if (advance2) this.lastPredictionEvidence = {
-          recordedAt: now,
-          weapon: typeof actualWeapon === "string" ? actualWeapon : null,
-          mode,
-          state: shot.state,
-          approximate: !!shot.approximate,
-          snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1e3) : null,
-          estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
-          historySamples: Array.isArray(track?.motion) ? track.motion.length : 0,
-          confidence: finite(shot.confidence) ? Math.round(shot.confidence * 1e3) / 1e3 : null,
-          rttMs: finite(this.timing.rtt) ? Math.round(this.timing.rtt) : null
-        };
+        if (advance2) {
+          const ownTrack = this.tracker.estimate(m.active, now);
+          this.lastPredictionEvidence = {
+            recordedAt: now,
+            weapon: typeof actualWeapon === "string" ? actualWeapon : null,
+            mode,
+            state: shot.state,
+            approximate: !!shot.approximate,
+            snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1e3) : null,
+            estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
+            ownSnapshotAgeMs: finite(ownTrack?.age) ? Math.round(ownTrack.age * 1e3) : null,
+            ownEstimatedSpeed: finite(ownTrack?.vx) && finite(ownTrack?.vy) ? Math.round(Math.hypot(ownTrack.vx, ownTrack.vy) * 100) / 100 : null,
+            historySamples: Array.isArray(track?.motion) ? track.motion.length : 0,
+            confidence: finite(shot.confidence) ? Math.round(shot.confidence * 1e3) / 1e3 : null,
+            rttMs: finite(this.timing.rtt) ? Math.round(this.timing.rtt) : null
+          };
+        }
         this.dot = project(camera, shot.world);
         if (melee) {
           this.meleeDirection = shot.dir;

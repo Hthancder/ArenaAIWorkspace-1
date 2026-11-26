@@ -1300,11 +1300,15 @@ test('last prediction diagnostics expose bounded snapshot evidence without posit
     f.engine.capabilities.prediction = true;
     for (let i = 0; i < 27; i++) f.engine.tracker.observe(enemy, { x: 12, y: 20 + .4 * Math.sin(i * 33 / 1000 * Math.PI * 3) }, 142 + i * 33);
     f.engine.timing.rtt = 74;
+    const hero = f.app.game.hero;
+    f.engine.tracker.observe(hero, { x: 10, y: 20 }, 900);
+    f.engine.tracker.observe(hero, { x: 10, y: 20.4 }, 950);
     const input = new InputMsg(); input.toMouseLen = 2;
     assert.ok(f.engine.processAim(input, true), JSON.stringify(f.engine.stats));
     const evidence = f.engine.diagnostics().lastPrediction;
     assert.equal(evidence.state, 'bounded-oscillation'); assert.equal(evidence.historySamples, 27);
     assert.ok(evidence.snapshotAgeMs >= 0); assert.ok(evidence.estimatedSpeed >= 0); assert.equal(evidence.rttMs, 74);
+    assert.equal(evidence.ownSnapshotAgeMs, 50); assert.ok(Math.abs(evidence.ownEstimatedSpeed - 8) < .01);
     assert.ok(!JSON.stringify(evidence).includes('sourcePos'));
   } finally { f.close(); }
 });
