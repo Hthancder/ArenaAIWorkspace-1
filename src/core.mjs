@@ -307,7 +307,10 @@ export function discover(game) {
     const current = read(pool, poolKey);
     return Array.isArray(current) ? current.filter(p => isPlayer(p) && read(p, 'active')) : [];
   };
-  const active = unique(objects.filter(([, p]) => isPlayer(p) && players().includes(p)).map(([, p]) => p));
+  // The pool can be large during fights; compute membership once per discovery
+  // rather than filtering the full pool for every object in the game container.
+  const activePlayers = new Set(players());
+  const active = unique(objects.filter(([, p]) => isPlayer(p) && activePlayers.has(p)).map(([, p]) => p));
   const schema = active ? discoverPlayerSchema(active) : null;
   const ui = unique(objects.filter(([, v]) => typeof readMethod(v, 'setSpectating') === 'function' && typeof read(v, 'spectating') === 'boolean').map(([, v]) => v));
   const map = unique(objects.filter(([, v]) => entries(v).some(([k]) => k === 'mapTexture') && typeof readMethod(v, 'getGroundSurface') === 'function').map(([, v]) => v));

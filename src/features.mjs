@@ -21,6 +21,7 @@ import { GrenadeTimer, drawGrenadeTimer } from './grenade-timer.mjs';
 import { simulateOpenThrow, solveMovingOpenThrow, validateOpenThrow } from './grenade-aim.mjs';
 import { assessAutoThrow } from './grenade-release.mjs';
 import { GrenadeAutoRelease } from './grenade-auto-release.mjs';
+import { RuntimePerf } from './runtime-perf.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
 export const isManualEquip = code => code >= 11 && code <= 20 || code === 27 || code === 28;
@@ -131,6 +132,7 @@ export function modifyMessage(data, config, context) {
 export class Features {
   constructor(win, app, config, report, definitions = null) {
     this.win = win; this.app = app; this.config = config; this.report = report; this.definitions = definitions;
+    this.runtimePerf = new RuntimePerf();
     this.hooks = new Disposables(); this.matchHooks = new Disposables(); this.overrides = new Overrides();
     this.grenadeAuto = new GrenadeAutoRelease(); this.grenadeAutoPlan = null; this.lastGrenadeAutoEvidence = null; this.lastGrenadeAutoSent = -Infinity;
     this.grenadeTracker = new SnapshotTracker(); this.grenadeUpdateAt = null;
@@ -152,8 +154,9 @@ export class Features {
     this.mapHighlights = new MapHighlights(config, report);
     this.installFlush();
     const ticker = app.pixi.ticker;
-    const pre = () => this.guard('input-frame', () => this.pre());
-    const post = () => this.guard('visual-frame', () => this.post());
+    const measure = (key, operation) => { const start = win.performance.now(); try { operation(); } finally { this.runtimePerf.add(key, win.performance.now() - start); } };
+    const pre = () => measure('inputFrame', () => this.guard('input-frame', () => this.pre()));
+    const post = () => measure('visualFrame', () => this.guard('visual-frame', () => this.post()));
     ticker.add(pre, null, 10); ticker.add(post, null, -20);
     this.hooks.add(() => ticker.remove(pre, null)); this.hooks.add(() => ticker.remove(post, null));
     const controller = new win.AbortController(); this.hooks.add(() => controller.abort());
@@ -227,7 +230,9 @@ export class Features {
         // Capture arrival before native processing; main-thread work is not network latency.
         const arrivedAt = self.win.performance.now();
         const result = Reflect.apply(original, this, arguments);
-        self.observeUpdate(msg, arrivedAt); return result;
+        const start = self.win.performance.now();
+        try { self.observeUpdate(msg, arrivedAt); } finally { self.runtimePerf.add('snapshotHook', self.win.performance.now() - start); }
+        return result;
       }, this.gameHooks);
     }
     this.senderReady = false;
@@ -347,7 +352,9 @@ export class Features {
     // Boot/rejoin is immediate; stable discovery is throttled, never per player/per frame.
     if (!force && now - this.lastMap < 1000 && this.mapping) return;
     this.lastMap = now; this.stats.mappingRuns++;
+    const discoveryStart = this.win.performance.now();
     const next = discover(game);
+    this.runtimePerf.add('discovery', this.win.performance.now() - discoveryStart);
     if (next.pool !== this.lastPool || next.active !== this.lastActive || next.active?.__id !== this.lastActiveId) {
       this.releaseMatch(); this.failed.clear();
       this.lastPool = next.pool; this.lastActive = next.active; this.lastActiveId = next.active?.__id;
@@ -495,7 +502,15 @@ export class Features {
         if (!visible.has(p) || p.__id !== id || !p.active || mentioned.has(id) && !ids.has(id)) { this.grenadeTracker.forget(p); continue; }
         if (!mentioned.has(id) && cadence) {
           const pos = at(p, [m.schema.netKey, fields.pos]), layer = this.sourceLayer(p);
-          if (vec(pos) && Number.isInteger(layer)) this.grenadeTracker.observe(p, pos, now, layer);
+          if (vec(pos) && Number.isInteger(layer)) {
+            const s = this.grenadeTracker.states.get(p);
+            // Already-stable omitted players do not need another regression on
+            // every packet. Real position updates always bypass this fast path.
+            const settled = s?.id === id && s.layer === layer && now > s.time && now - s.time < 50
+              && Math.hypot(s.vx, s.vy) < .1 && s.samples?.length >= 3
+              && s.samples.every(o => Math.hypot(o.p.x - pos.x, o.p.y - pos.y) < .02);
+            if (!settled) this.grenadeTracker.observe(p, pos, now, layer);
+          }
         }
       }
       // Most control-only updates do not change positions: avoid a full player scan for gun prediction.
@@ -865,7 +880,10 @@ export class Features {
     this.names.sync(m, namePlayers, cfg);
     const keep = new Map();
     const want = (owner, key) => { if (!keep.has(owner)) keep.set(owner, new Set()); keep.get(owner).add(key); };
-    if (cfg.xray && now - this.lastScan > 500) { this.scanEffects(); this.lastScan = now; }
+    if (cfg.xray && now - this.lastScan > 500) {
+      const scanStart = this.win.performance.now(); this.scanEffects();
+      this.runtimePerf.add('xrayScan', this.win.performance.now() - scanStart); this.lastScan = now;
+    }
     for (const effect of cfg.xray ? this.effects : []) {
       const { owner, kind, entity, building, type } = effect;
       if (read(entity, 'active') === false || read(building, 'active') === false || owner.destroyed || read(entity, 'sprite') !== owner) continue;
@@ -1071,6 +1089,7 @@ export class Features {
       registry: { state: m?.registryState ?? 'waiting-mapping', ...m?.registryEvidence },
       aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || 'responsive' },
       aimPreparation: this.aimPreparation,
+      runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: 'Script-local hook durations only; not game FPS, GPU time, network delay or hit rate.' },
       aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
       lastPrediction: this.lastPredictionEvidence ? (() => {
         const { recordedAt, ...evidence } = this.lastPredictionEvidence;

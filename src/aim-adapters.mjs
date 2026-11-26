@@ -31,9 +31,15 @@ export function discoverUpdateReceiver(game) {
     return ['fullObjects', 'partObjects', 'delObjIds', 'activePlayerData'].every(key => refs.has(key));
   }).map(([key]) => key));
 }
+const sourceFieldCache = new WeakMap();
 export function discoverSourceFields(player, schema) {
+  const list = methods(player), cached = sourceFieldCache.get(player);
+  // Structural roles depend on method implementations and netData key, not
+  // the moving values. Reuse only while the exact method set is unchanged.
+  if (cached && cached.netKey === schema.netKey && cached.methods.length === list.length
+    && cached.methods.every(([key, fn], i) => list[i][0] === key && list[i][1] === fn)) return { ...cached.fields };
   const roles = { pos: [], layer: [], perks: [], scale: [] };
-  for (const [, fn] of methods(player)) {
+  for (const [, fn] of list) {
     const tree = ast(fn), root = tree?.params?.[0]?.name; if (!root) continue;
     walk(tree, n => {
       if (n.type !== 'AssignmentExpression' || n.operator !== '=') return;
@@ -41,7 +47,9 @@ export function discoverSourceFields(player, schema) {
       for (const p of paths(n.right, root)) if (p.length === 1 && roles[p[0]]) roles[p[0]].push(left[1]);
     });
   }
-  return Object.fromEntries(Object.entries(roles).map(([role, keys]) => [role, unique(keys)]));
+  const fields = Object.fromEntries(Object.entries(roles).map(([role, keys]) => [role, unique(keys)]));
+  if (player && (typeof player === 'object' || typeof player === 'function')) sourceFieldCache.set(player, { netKey: schema.netKey, methods: list, fields });
+  return { ...fields };
 }
 
 // Bounded local estimates; ACK includes scheduling and is not a server clock.

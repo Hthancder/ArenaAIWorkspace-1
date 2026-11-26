@@ -1554,6 +1554,10 @@ test('grenade stationary inference uses complete recent world updates and is iso
     const now = f.dom.window.performance.now(), g = f.engine.grenadeTracker.estimate(enemy, now), gun = f.engine.tracker.estimate(enemy, now);
     assert.ok(g && g.samples.length >= 3); assert.ok(Math.abs(g.vx) < 1e-9); assert.ok(Math.abs(g.vy) < 1e-9);
     assert.equal(gun.samples.length, 1, 'absence inference never changes gun motion tracking');
+    f.advance(33); f.engine.observeUpdate(empty, f.dom.window.performance.now());
+    const previousSampleTime = f.engine.grenadeTracker.states.get(enemy).time;
+    f.advance(33); f.engine.observeUpdate(empty, f.dom.window.performance.now());
+    assert.equal(f.engine.grenadeTracker.states.get(enemy).time, previousSampleTime, 'avoid refitting unchanged stationary tracks too frequently');
     enemy.n.sourcePos = { x: 12.25, y: 20 }; f.advance(33);
     f.engine.observeUpdate({ ...empty, partObjects: [{ __id: enemy.__id, pos: enemy.n.sourcePos }] }, f.dom.window.performance.now());
     assert.ok(f.engine.grenadeTracker.estimate(enemy, f.dom.window.performance.now()).vx > 1, 'a real move takes precedence over absence inference');

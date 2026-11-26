@@ -135,7 +135,13 @@ test('AST adapters infer contracts by dataflow and reject ambiguous native sched
   const p = { net: {}, apply(data) { this.net.p = { x: data.pos.x, y: data.pos.y }; this.net.l = data.layer; this.net.s = data.scale; this.net.perks = data.perks; } };
   // Actual source uses v2.copy(data.pos), not pos.x/y expressions.
   p.apply = function (data) { this.net.p = copy(data.pos); this.net.l = data.layer; this.net.s = data.scale; this.net.perks = data.perks; };
-  assert.deepEqual(discoverSourceFields(p, { netKey: 'net' }), { pos: 'p', layer: 'l', scale: 's', perks: 'perks' });
+  const first = discoverSourceFields(p, { netKey: 'net' });
+  assert.deepEqual(first, { pos: 'p', layer: 'l', scale: 's', perks: 'perks' });
+  first.pos = 'tampered';
+  assert.equal(discoverSourceFields(p, { netKey: 'net' }).pos, 'p', 'cached results cannot be mutated by caller');
+  p.apply = function (data) { this.net.newPos = copy(data.pos); this.net.l = data.layer; };
+  assert.equal(discoverSourceFields(p, { netKey: 'net' }).pos, 'newPos', 'new implementation invalidates role cache');
+  assert.equal(discoverSourceFields(p, { netKey: 'other' }).pos, null, 'different net key invalidates role cache');
 });
 
 test('ACK timing is local bounded RTT/2, duplicate ACK cannot be counted twice', () => {

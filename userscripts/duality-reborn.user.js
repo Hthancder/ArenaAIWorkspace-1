@@ -6031,7 +6031,8 @@ THE SOFTWARE.
       const current2 = read(pool, poolKey);
       return Array.isArray(current2) ? current2.filter((p) => isPlayer(p) && read(p, "active")) : [];
     }, "players");
-    const active = unique(objects.filter(([, p]) => isPlayer(p) && players().includes(p)).map(([, p]) => p));
+    const activePlayers = new Set(players());
+    const active = unique(objects.filter(([, p]) => isPlayer(p) && activePlayers.has(p)).map(([, p]) => p));
     const schema = active ? discoverPlayerSchema(active) : null;
     const ui = unique(objects.filter(([, v]) => typeof readMethod(v, "setSpectating") === "function" && typeof read(v, "spectating") === "boolean").map(([, v]) => v));
     const map = unique(objects.filter(([, v]) => entries(v).some(([k]) => k === "mapTexture") && typeof readMethod(v, "getGroundSurface") === "function").map(([, v]) => v));
@@ -7199,9 +7200,12 @@ THE SOFTWARE.
     }).map(([key]) => key));
   }
   __name(discoverUpdateReceiver, "discoverUpdateReceiver");
+  var sourceFieldCache = /* @__PURE__ */ new WeakMap();
   function discoverSourceFields(player, schema) {
+    const list = methods(player), cached = sourceFieldCache.get(player);
+    if (cached && cached.netKey === schema.netKey && cached.methods.length === list.length && cached.methods.every(([key, fn], i) => list[i][0] === key && list[i][1] === fn)) return { ...cached.fields };
     const roles = { pos: [], layer: [], perks: [], scale: [] };
-    for (const [, fn] of methods(player)) {
+    for (const [, fn] of list) {
       const tree = ast(fn), root = tree?.params?.[0]?.name;
       if (!root) continue;
       walk(tree, (n) => {
@@ -7211,7 +7215,9 @@ THE SOFTWARE.
         for (const p of paths(n.right, root)) if (p.length === 1 && roles[p[0]]) roles[p[0]].push(left[1]);
       });
     }
-    return Object.fromEntries(Object.entries(roles).map(([role, keys]) => [role, unique(keys)]));
+    const fields = Object.fromEntries(Object.entries(roles).map(([role, keys]) => [role, unique(keys)]));
+    if (player && (typeof player === "object" || typeof player === "function")) sourceFieldCache.set(player, { netKey: schema.netKey, methods: list, fields });
+    return { ...fields };
   }
   __name(discoverSourceFields, "discoverSourceFields");
   var NetworkTiming = class {
@@ -7878,6 +7884,36 @@ THE SOFTWARE.
     }
   };
 
+  // src/runtime-perf.mjs
+  var RuntimePerf = class {
+    static {
+      __name(this, "RuntimePerf");
+    }
+    constructor(limit = 256) {
+      this.limit = limit;
+      this.series = /* @__PURE__ */ new Map();
+    }
+    add(name, ms) {
+      if (!finite(ms) || ms < 0 || ms > 6e4) return;
+      let row = this.series.get(name);
+      if (!row) this.series.set(name, row = { samples: [], next: 0, peak: 0, count: 0 });
+      row.count++;
+      row.peak = Math.max(row.peak, ms);
+      if (row.samples.length < this.limit) row.samples.push(ms);
+      else {
+        row.samples[row.next] = ms;
+        row.next = (row.next + 1) % this.limit;
+      }
+    }
+    snapshot() {
+      return Object.fromEntries([...this.series].map(([key, row]) => {
+        const a = [...row.samples].sort((x, y) => x - y);
+        const round = /* @__PURE__ */ __name((n) => Math.round(n * 1e3) / 1e3, "round");
+        return [key, { samples: a.length, count: row.count, p95Ms: round(a[Math.floor((a.length - 1) * 0.95)]), maxMs: round(a[a.length - 1]), sessionPeakMs: round(row.peak) }];
+      }));
+    }
+  };
+
   // src/features.mjs
   var VERIFIED_PROTOCOL = 1028;
   var isManualEquip = /* @__PURE__ */ __name((code) => code >= 11 && code <= 20 || code === 27 || code === 28, "isManualEquip");
@@ -8018,6 +8054,7 @@ THE SOFTWARE.
       this.config = config;
       this.report = report;
       this.definitions = definitions;
+      this.runtimePerf = new RuntimePerf();
       this.hooks = new Disposables();
       this.matchHooks = new Disposables();
       this.overrides = new Overrides();
@@ -8096,8 +8133,16 @@ THE SOFTWARE.
       this.mapHighlights = new MapHighlights(config, report);
       this.installFlush();
       const ticker = app.pixi.ticker;
-      const pre = /* @__PURE__ */ __name(() => this.guard("input-frame", () => this.pre()), "pre");
-      const post = /* @__PURE__ */ __name(() => this.guard("visual-frame", () => this.post()), "post");
+      const measure = /* @__PURE__ */ __name((key, operation) => {
+        const start2 = win.performance.now();
+        try {
+          operation();
+        } finally {
+          this.runtimePerf.add(key, win.performance.now() - start2);
+        }
+      }, "measure");
+      const pre = /* @__PURE__ */ __name(() => measure("inputFrame", () => this.guard("input-frame", () => this.pre())), "pre");
+      const post = /* @__PURE__ */ __name(() => measure("visualFrame", () => this.guard("visual-frame", () => this.post())), "post");
       ticker.add(pre, null, 10);
       ticker.add(post, null, -20);
       this.hooks.add(() => ticker.remove(pre, null));
@@ -8261,7 +8306,12 @@ THE SOFTWARE.
         patchMethod(game, this.receiverKey, (original) => function(msg) {
           const arrivedAt = self2.win.performance.now();
           const result = Reflect.apply(original, this, arguments);
-          self2.observeUpdate(msg, arrivedAt);
+          const start2 = self2.win.performance.now();
+          try {
+            self2.observeUpdate(msg, arrivedAt);
+          } finally {
+            self2.runtimePerf.add("snapshotHook", self2.win.performance.now() - start2);
+          }
           return result;
         }, this.gameHooks);
       }
@@ -8425,7 +8475,9 @@ THE SOFTWARE.
       if (!force && now - this.lastMap < 1e3 && this.mapping) return;
       this.lastMap = now;
       this.stats.mappingRuns++;
+      const discoveryStart = this.win.performance.now();
       const next = discover(game);
+      this.runtimePerf.add("discovery", this.win.performance.now() - discoveryStart);
       if (next.pool !== this.lastPool || next.active !== this.lastActive || next.active?.__id !== this.lastActiveId) {
         this.releaseMatch();
         this.failed.clear();
@@ -8601,7 +8653,11 @@ THE SOFTWARE.
           }
           if (!mentioned.has(id) && cadence) {
             const pos = at2(p, [m.schema.netKey, fields.pos]), layer = this.sourceLayer(p);
-            if (vec(pos) && Number.isInteger(layer)) this.grenadeTracker.observe(p, pos, now, layer);
+            if (vec(pos) && Number.isInteger(layer)) {
+              const s = this.grenadeTracker.states.get(p);
+              const settled = s?.id === id && s.layer === layer && now > s.time && now - s.time < 50 && Math.hypot(s.vx, s.vy) < 0.1 && s.samples?.length >= 3 && s.samples.every((o) => Math.hypot(o.p.x - pos.x, o.p.y - pos.y) < 0.02);
+              if (!settled) this.grenadeTracker.observe(p, pos, now, layer);
+            }
           }
         }
         if (!ids.size) return;
@@ -9121,7 +9177,9 @@ THE SOFTWARE.
         keep.get(owner).add(key);
       }, "want");
       if (cfg.xray && now - this.lastScan > 500) {
+        const scanStart = this.win.performance.now();
         this.scanEffects();
+        this.runtimePerf.add("xrayScan", this.win.performance.now() - scanStart);
         this.lastScan = now;
       }
       for (const effect of cfg.xray ? this.effects : []) {
@@ -9439,6 +9497,7 @@ THE SOFTWARE.
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
         aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || "responsive" },
         aimPreparation: this.aimPreparation,
+        runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: "Script-local hook durations only; not game FPS, GPU time, network delay or hit rate." },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
         lastPrediction: this.lastPredictionEvidence ? (() => {
           const { recordedAt, ...evidence } = this.lastPredictionEvidence;
