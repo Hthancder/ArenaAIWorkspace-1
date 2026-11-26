@@ -66,6 +66,18 @@ test('weapon switch detects single and burst ammo changes without first-frame or
   assert.equal(manager.sample({ ...input, slot: 1, now: 230 }), 0);
   ws[1].ammo--; assert.equal(manager.sample({ ...input, held: false, slot: 1, now: 500 }), null);
 });
+test('weapon switch does not mistake a reload from empty for a shot while Fire is held', () => {
+  for (const oneGun of [false, true]) {
+    const manager = new WeaponSwitch(), ws = weapons(); ws[0].ammo = 0;
+    const input = { enabled: true, ready: true, definitions: switchDefs, held: true, oneGun, slot: 0, weapons: ws, now: 0 };
+    assert.equal(manager.sample(input), null);
+    ws[0].ammo = 10;
+    assert.equal(manager.sample({ ...input, now: 100 }), null, 'reload must not equip another slot');
+    assert.equal(manager.pending, null);
+    ws[0].ammo--;
+    assert.equal(manager.sample({ ...input, now: 110 }), 1, 'an observed ammo decrease still switches');
+  }
+});
 test('Use One Gun waits for observed equip before requesting return, cancels on release', () => {
   const manager = new WeaponSwitch(), ws = weapons(), input = { enabled: true, ready: true, definitions: switchDefs, held: true, oneGun: true, slot: 0, weapons: ws, now: 0 };
   manager.sample(input); ws[0].ammo--; assert.equal(manager.sample({ ...input, now: 10 }), 1);

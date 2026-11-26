@@ -6731,7 +6731,7 @@ THE SOFTWARE.
       }
       const prior = this.last;
       this.last = { slot, type: current2.type, ammo: current2.ammo };
-      const shot = prior?.slot === slot && prior.type === current2.type && (current2.ammo < prior.ammo || held && prior.ammo === 0 && current2.ammo > 0);
+      const shot = prior?.slot === slot && prior.type === current2.type && current2.ammo < prior.ammo;
       this.state = "watching-ammo";
       if (!held || !shot || now < this.next) return null;
       const other = weapons[1 - slot];

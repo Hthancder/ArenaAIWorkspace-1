@@ -17,7 +17,10 @@ export class WeaponSwitch {
     if (![0, 1].includes(slot) || !eligible(current)) { this.last = null; this.state = 'unsupported-weapon'; return null; }
     const prior = this.last;
     this.last = { slot, type: current.type, ammo: current.ammo };
-    const shot = prior?.slot === slot && prior.type === current.type && (current.ammo < prior.ammo || held && prior.ammo === 0 && current.ammo > 0);
+    // A reload also raises ammo from zero while Fire is held. It is not
+    // evidence of a shot, and switching here can interrupt normal play.
+    // Coalesced reload+shot updates may therefore be missed deliberately.
+    const shot = prior?.slot === slot && prior.type === current.type && current.ammo < prior.ammo;
     this.state = 'watching-ammo';
     if (!held || !shot || now < this.next) return null;
     const other = weapons[1 - slot];
