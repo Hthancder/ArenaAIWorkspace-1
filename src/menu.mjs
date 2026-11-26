@@ -2,7 +2,7 @@ import { clamp, finite } from './core.mjs';
 import { colorValue, ESP_PALETTE } from './esp.mjs';
 
 export const DEFAULTS = Object.freeze({
-  version: 3, aim: false, aimMode: 'lock', aimActivation: 'fire', directMouseInput: true, assistStrength: 35, latencyCompensation: true, leadAdjustment: 100, humanLikeAim: true, smooth: 50, smoothProfile: 'responsive', predictionStrict: false, knocked: false, sticky: true, aimAllies: false, grenadeAimAllies: false,
+  version: 3, aim: false, aimMode: 'lock', aimActivation: 'fire', directMouseInput: true, assistStrength: 35, latencyCompensation: true, leadAdjustment: 100, humanLikeAim: true, smooth: 50, smoothProfile: 'responsive', lockInstantFire: false, predictionStrict: false, knocked: false, sticky: true, aimAllies: false, grenadeAimAllies: false,
   showDot: false, showTarget: false, targetStyle: 'ring', fov: 100, showFov: true, wallcheck: true, predict: true, stabilizeStrafe: true,
   melee: false, autoMelee: false, autoSwitch: false, useOneGun: false, layerSpoofer: false, layerKey: 'KeyT', semi: false, xray: false, darkerSmokes: true, ceilings: true, mapHighlights: false, smallerTrees: true,
   smokeOpacity: 50, treeOpacity: 50, esp: false, nametags: true, lines: false,
@@ -59,11 +59,11 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 `;
 const GROUPS = {
   Main: [
-    ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['directMouseInput', 'Direct native mouse input', 'aim'], ['assistStrength', 'Assist strength (%)', 'aim'], ['humanLikeAim', 'Human-like aim (Lock)', 'aim'], ['smoothProfile', 'Aim profile', 'aim'], ['smooth', 'Human-like amount (0–100)', 'aim']]],
+    ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['directMouseInput', 'Direct native mouse input', 'aim'], ['assistStrength', 'Assist strength (%)', 'aim'], ['humanLikeAim', 'Human-like aim (Lock)', 'aim'], ['lockInstantFire', 'Lock tức thời khi giữ Fire', 'aim'], ['smoothProfile', 'Aim profile', 'aim'], ['smooth', 'Human-like amount (0–100)', 'aim']]],
     ['Aim — Target selection', [['fov', 'FOV radius (input pixels)'], ['sticky', 'Keep target', 'aim'], ['knocked', 'Include downed', 'aim'], ['aimAllies', 'Nhắm đồng đội (debug; cả địch)', 'aim'], ['wallcheck', 'Wallcheck', 'wallcheck'], [null, 'Lock + Keep target: sau khi chọn trong FOV, giữ mục tiêu trong lần kích hoạt kể cả khi chuột ra ngoài FOV. Vật cản/người chắn vẫn khiến aim nhả. Assist vẫn theo FOV.']]],
     ['Aim — Hỗ trợ ngắm', [['showFov', 'FOV circle'], ['showDot', 'Predicted point (optional)'], ['showTarget', 'Hiển thị mục tiêu đang ngắm'], ['targetStyle', 'Kiểu mục tiêu'], [null, 'Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ.']]],
     ['Aim — Prediction', [['predict', 'Auto prediction', 'prediction'], ['stabilizeStrafe', 'Ổn định dao động A–D (Lock)', 'prediction'], [null, 'Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này.']]],
-    ['Aim — Advanced prediction', [['latencyCompensation', 'Estimated latency compensation', 'prediction'], ['leadAdjustment', 'Lead adjustment (%)', 'prediction'], ['predictionStrict', 'Strict prediction (skip uncertain shots)', 'prediction'], [null, 'Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread.']]],
+    ['Aim — Advanced prediction', [['latencyCompensation', 'Estimated latency compensation', 'prediction'], ['leadAdjustment', 'Lead adjustment (%)', 'prediction'], ['predictionStrict', 'Strict prediction (skip uncertain shots)', 'prediction'], [null, 'Lead = vị trí tương lai theo tốc độ đạn/snapshot. Lock tức thời khi giữ Fire bỏ smooth trong lúc bắn; không tự bắn và không xóa độ trễ mạng. Shotgun vẫn chịu random pellet spread.']]],
     ['Grenade Aim (thử nghiệm)', [['grenadeAimMode', 'Chế độ'], ['grenadeAimActivation', 'Kích hoạt Assist / Lock'], ['grenadeAssistStrength', 'Lực Assist bom (%)'], ['grenadeFov', 'FOV bom (pixel)'], ['grenadeAimAllies', 'Nhắm bom vào đồng đội (debug; cả địch)'], ['grenadeAutoThrow', 'Tự thả (thử nghiệm, chỉ Lock)'], [null, 'Debug đồng đội có thể chọn cả địch và đồng đội; Auto Throw có thể tự thả vào mục tiêu đã chọn. Không tự bắt đầu giữ. Mạng và fuse chưa xác nhận; không bảo đảm an toàn hoặc trúng.']]],
     ['Melee Lock', [['melee', 'Enabled', 'mobile'], ['autoMelee', 'Auto Melee (from gun, while firing)', 'switch']]],
     ['Auto Switch', [['autoSwitch', 'Enabled', 'switch'], ['useOneGun', 'Use One Gun (switch away then return)', 'switch'], [null, 'Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server.']]],
@@ -171,7 +171,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
       for (const [name, rows] of GROUPS[tab]) {
         const details = el('details'); details.open = openGroups.get(name) ?? (name.includes('Mode') || name === 'Aim — Prediction');
         details.ontoggle = () => openGroups.set(name, details.open);
-        const visible = rows.filter(([key]) => key !== 'assistStrength' || config.aim && config.aimMode === 'assist').filter(([key]) => !['smooth', 'smoothProfile'].includes(key) || config.aimMode === 'lock');
+        const visible = rows.filter(([key]) => key !== 'assistStrength' || config.aim && config.aimMode === 'assist').filter(([key]) => !['smooth', 'smoothProfile', 'lockInstantFire'].includes(key) || config.aimMode === 'lock');
         details.append(el('summary', { text: name }), ...visible.map(row)); panel.append(details);
       }
       refreshRows();

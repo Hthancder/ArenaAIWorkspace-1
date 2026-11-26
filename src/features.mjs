@@ -785,8 +785,12 @@ export class Features {
       this.target = candidate.p; this.targetId = candidate.p.__id; this.stickyId = candidate.p.__id;
       this.stats.predictionState = shot.state;
       this.stats.aimApproximate = !!shot.approximate;
+      // Optional direct fire tracking: keep human-like acquisition when using
+      // key activation, but remove controller lag while physical Fire is held.
+      // Does not alter prediction, activation, Fire or Assist.
+      const instantFire = !melee && mode === 'lock' && cfg.lockInstantFire && firing;
       const dir = advance ? this.aimController.step(physical, shot.dir, { mode: melee ? 'lock' : mode, strength: cfg.assistStrength ?? 35,
-        smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth, now, target: candidate.p, humanLike: !!cfg.humanLikeAim, profile: cfg.smoothProfile || 'responsive' }) : !melee && mode === 'assist' ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
+        smooth: melee || !cfg.humanLikeAim || instantFire ? 0 : cfg.smooth, now, target: candidate.p, humanLike: !!cfg.humanLikeAim && !instantFire, profile: cfg.smoothProfile || 'responsive' }) : !melee && mode === 'assist' ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
       if (cfg.wallcheck && !melee && dir && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) {
         const actualLayer = layerFor(dir);
         if (actualLayer === null) { reject('aimLayer'); return fail('wall-blocked'); }
@@ -806,6 +810,7 @@ export class Features {
         this.lastPredictionEvidence = {
           recordedAt: now, weapon: typeof actualWeapon === 'string' ? actualWeapon : null, mode,
           state: shot.state, approximate: !!shot.approximate,
+          controllerErrorDeg: vec(dir) && vec(shot.dir) ? Math.round(Math.abs(angleDelta(Math.atan2(dir.y, dir.x), Math.atan2(shot.dir.y, shot.dir.x))) * 180000 / Math.PI) / 1000 : null,
           snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1000) : null,
           estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
           ownSnapshotAgeMs: finite(ownTrack?.age) ? Math.round(ownTrack.age * 1000) : null,
@@ -1119,7 +1124,7 @@ export class Features {
       inputBlockReason: this.inputBlockReason(),
       mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, capturingWrites: !!this.mouseInput.record?.captured, ...this.mouseInput.snapshot() },
       registry: { state: m?.registryState ?? 'waiting-mapping', ...m?.registryEvidence },
-      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || 'responsive' },
+      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, lockInstantFire: !!this.config.lockInstantFire, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || 'responsive' },
       aimPreparation: this.aimPreparation,
       runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: 'Script-local hook durations only; not game FPS, GPU time, network delay or hit rate.' },
       aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),

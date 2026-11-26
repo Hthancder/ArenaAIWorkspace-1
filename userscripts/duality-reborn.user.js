@@ -9102,13 +9102,14 @@ THE SOFTWARE.
         this.stickyId = candidate.p.__id;
         this.stats.predictionState = shot.state;
         this.stats.aimApproximate = !!shot.approximate;
+        const instantFire = !melee && mode === "lock" && cfg.lockInstantFire && firing;
         const dir = advance2 ? this.aimController.step(physical, shot.dir, {
           mode: melee ? "lock" : mode,
           strength: cfg.assistStrength ?? 35,
-          smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth,
+          smooth: melee || !cfg.humanLikeAim || instantFire ? 0 : cfg.smooth,
           now,
           target: candidate.p,
-          humanLike: !!cfg.humanLikeAim,
+          humanLike: !!cfg.humanLikeAim && !instantFire,
           profile: cfg.smoothProfile || "responsive"
         }) : !melee && mode === "assist" ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
         if (cfg.wallcheck && !melee && dir && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) {
@@ -9133,6 +9134,7 @@ THE SOFTWARE.
             mode,
             state: shot.state,
             approximate: !!shot.approximate,
+            controllerErrorDeg: vec(dir) && vec(shot.dir) ? Math.round(Math.abs(angleDelta(Math.atan2(dir.y, dir.x), Math.atan2(shot.dir.y, shot.dir.x))) * 18e4 / Math.PI) / 1e3 : null,
             snapshotAgeMs: finite(track?.age) ? Math.round(track.age * 1e3) : null,
             estimatedSpeed: finite(track?.vx) && finite(track?.vy) ? Math.round(Math.hypot(track.vx, track.vy) * 100) / 100 : null,
             ownSnapshotAgeMs: finite(ownTrack?.age) ? Math.round(ownTrack.age * 1e3) : null,
@@ -9581,7 +9583,7 @@ THE SOFTWARE.
         inputBlockReason: this.inputBlockReason(),
         mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, capturingWrites: !!this.mouseInput.record?.captured, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
-        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smoothProfile: this.config.smoothProfile || "responsive" },
+        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, lockInstantFire: !!this.config.lockInstantFire, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || "responsive" },
         aimPreparation: this.aimPreparation,
         runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: "Script-local hook durations only; not game FPS, GPU time, network delay or hit rate." },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
@@ -9620,6 +9622,7 @@ THE SOFTWARE.
     humanLikeAim: true,
     smooth: 50,
     smoothProfile: "responsive",
+    lockInstantFire: false,
     predictionStrict: false,
     knocked: false,
     sticky: true,
@@ -9738,11 +9741,11 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 `;
   var GROUPS = {
     Main: [
-      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
+      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["lockInstantFire", "Lock tức thời khi giữ Fire", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
       ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["aimAllies", "Nhắm đồng đội (debug; cả địch)", "aim"], ["wallcheck", "Wallcheck", "wallcheck"], [null, "Lock + Keep target: sau khi chọn trong FOV, giữ mục tiêu trong lần kích hoạt kể cả khi chuột ra ngoài FOV. Vật cản/người chắn vẫn khiến aim nhả. Assist vẫn theo FOV."]]],
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
       ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
-      ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread."]]],
+      ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Lock tức thời khi giữ Fire bỏ smooth trong lúc bắn; không tự bắn và không xóa độ trễ mạng. Shotgun vẫn chịu random pellet spread."]]],
       ["Grenade Aim (thử nghiệm)", [["grenadeAimMode", "Chế độ"], ["grenadeAimActivation", "Kích hoạt Assist / Lock"], ["grenadeAssistStrength", "Lực Assist bom (%)"], ["grenadeFov", "FOV bom (pixel)"], ["grenadeAimAllies", "Nhắm bom vào đồng đội (debug; cả địch)"], ["grenadeAutoThrow", "Tự thả (thử nghiệm, chỉ Lock)"], [null, "Debug đồng đội có thể chọn cả địch và đồng đội; Auto Throw có thể tự thả vào mục tiêu đã chọn. Không tự bắt đầu giữ. Mạng và fuse chưa xác nhận; không bảo đảm an toàn hoặc trúng."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
       ["Auto Switch", [["autoSwitch", "Enabled", "switch"], ["useOneGun", "Use One Gun (switch away then return)", "switch"], [null, "Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server."]]],
@@ -9907,7 +9910,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
           const details = el("details");
           details.open = openGroups.get(name) ?? (name.includes("Mode") || name === "Aim — Prediction");
           details.ontoggle = () => openGroups.set(name, details.open);
-          const visible = rows.filter(([key]) => key !== "assistStrength" || config.aim && config.aimMode === "assist").filter(([key]) => !["smooth", "smoothProfile"].includes(key) || config.aimMode === "lock");
+          const visible = rows.filter(([key]) => key !== "assistStrength" || config.aim && config.aimMode === "assist").filter(([key]) => !["smooth", "smoothProfile", "lockInstantFire"].includes(key) || config.aimMode === "lock");
           details.append(el("summary", { text: name }), ...visible.map(row));
           panel.append(details);
         }
