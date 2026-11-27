@@ -652,6 +652,7 @@ function pickupFixture() {
   Object.defineProperty(dom.window.performance, 'now', { value: () => clock, configurable: true });
   const loot = { __id: 9, __type: 3, active: true, type: '9mm', count: 30, pos: { x: 10, y: 20 }, rad: 2, ownerId: 0, layer: 0 };
   app.game.lootBarn = { closestLoot: loot, getClosestLoot() { return this.closestLoot; } };
+  app.game.creator = { table: { 9: loot }, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
   const config = { ...DEFAULTS, autoLoot: true, lootMode: 'nearby' }, definitions = { ...defs, '9mm': { type: 'ammo' } };
   const engine = new Features(dom.window, app, config, () => {}, definitions);
   return { dom, app, loot, config, engine, advance(ms) { clock += ms; } };
@@ -1306,6 +1307,23 @@ test('nearby pickup revalidates changed closest loot without suppressing physica
     assert.equal(f.app.game.binds.isBindPressed(10), false, 'pooled object changed type');
     f.loot.type = '9mm'; f.loot.pos = { x: 50, y: 50 };
     assert.equal(f.app.game.binds.isBindPressed(10), false, 'item moved outside radius');
+  } finally { f.engine.dispose(); f.dom.window.close(); }
+});
+
+test('nearby pickup checks for closer server-eligible loot again at bind time', () => {
+  const f = pickupFixture();
+  try {
+    f.loot.pos = { x: 11.5, y: 20 }; f.app.game.transmit(1, new JoinMsg()); f.engine.pre();
+    assert.equal(f.app.game.binds.isBindPressed(10), true);
+    const gun = { __id: 10, __type: 3, active: true, type: 'mp5', pos: { x: 10.8, y: 20 }, rad: .2, ownerId: 0, layer: 0 };
+    f.app.game.creator.table[10] = gun;
+    assert.equal(f.app.game.binds.isBindPressed(10), false, 'do not send the already-planned pulse');
+    assert.equal(f.engine.stats.lootState, 'competing-loot');
+    f.advance(350); f.engine.pre(); assert.equal(f.engine.pickupPulse, false);
+    delete f.app.game.creator.table[10]; f.advance(700); f.engine.pre();
+    assert.equal(f.app.game.binds.isBindPressed(10), true, 'normal backoff resumes after conflict disappears');
+    f.app.game.creator.table = null;
+    assert.equal(f.app.game.binds.isBindPressed(10), false, 'missing registry must not be treated as empty');
   } finally { f.engine.dispose(); f.dom.window.close(); }
 });
 

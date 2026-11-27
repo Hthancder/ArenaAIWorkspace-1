@@ -7770,6 +7770,38 @@ THE SOFTWARE.
     }
   };
 
+  // src/loot-safety.mjs
+  function nearbyLootSafety(registry, candidate, origin, layer, ownerId) {
+    if (!registry || typeof registry !== "object" || Array.isArray(registry) || !candidate || !vec(origin) || !Number.isInteger(layer) || !Number.isInteger(ownerId) || !vec(read(candidate, "pos"))) return "missing-registry";
+    const p = read(candidate, "pos"), candidateDistance = (p.x - origin.x) ** 2 + (p.y - origin.y) ** 2;
+    if (!finite(candidateDistance)) return "missing-registry";
+    let found = false;
+    try {
+      const keys = Object.getOwnPropertyNames(registry);
+      if (keys.length > 8192) return "registry-budget";
+      for (const key of keys) {
+        const d = Object.getOwnPropertyDescriptor(registry, key);
+        if (!d || !("value" in d)) return "missing-registry";
+        const loot = d.value;
+        if (loot === candidate) {
+          found = true;
+          continue;
+        }
+        if (read(loot, "__type") !== 3 || read(loot, "active") === false) continue;
+        if (read(loot, "active") !== true) return "unknown-loot";
+        const otherLayer = read(loot, "layer"), owner = read(loot, "ownerId"), pos = read(loot, "pos");
+        if (!Number.isInteger(otherLayer) || !Number.isInteger(owner) || !vec(pos)) return "unknown-loot";
+        if (!sameLayer(otherLayer, layer) || owner !== 0 && owner !== ownerId) continue;
+        const distance = (pos.x - origin.x) ** 2 + (pos.y - origin.y) ** 2;
+        if (!finite(distance) || distance <= candidateDistance) return "competing-loot";
+      }
+    } catch {
+      return "missing-registry";
+    }
+    return found ? "clear-observed" : "candidate-not-in-registry";
+  }
+  __name(nearbyLootSafety, "nearbyLootSafety");
+
   // src/grenade-timer.mjs
   var GrenadeTimer = class {
     static {
@@ -9620,9 +9652,26 @@ THE SOFTWARE.
       const m = this.mapping, pos = m?.active && this.sourcePos(m.active), lootPos = read(loot, "pos");
       return !!(m?.active && read(loot, "__type") === 3 && read(loot, "active") === true && vec(lootPos) && vec(pos) && sameLayer(read(loot, "layer"), this.sourceLayer(m.active)) && finite(read(loot, "rad")) && loot.rad > 0 && (loot.ownerId === 0 || loot.ownerId === m.active.__id) && Math.hypot(lootPos.x - pos.x, lootPos.y - pos.y) < loot.rad && ["ammo", "heal", "boost", "throwable"].includes(this.definitions?.[read(loot, "type")]?.type));
     }
+    pickupSafety(loot) {
+      const m = this.mapping;
+      if (!["snapshot-id-table", "native-id-table"].includes(m?.registryState)) return "missing-registry";
+      return nearbyLootSafety(
+        read(m?.creator, m?.registryKey),
+        loot,
+        m?.active && this.sourcePos(m.active),
+        m?.active && this.sourceLayer(m.active),
+        read(m?.active, "__id")
+      );
+    }
     pickupStillValid() {
       const attempt = this.pickupAttempt, loot = this.lootSource && read(this.lootSource.owner, this.lootSource.key);
-      return !!(attempt && loot === attempt.entity && loot.__id === attempt.id && loot.type === attempt.type && loot.count === attempt.count && this.pickupEligible(loot));
+      if (!(attempt && loot === attempt.entity && loot.__id === attempt.id && loot.type === attempt.type && loot.count === attempt.count && this.pickupEligible(loot))) return false;
+      const safety = this.pickupSafety(loot);
+      if (safety !== "clear-observed") {
+        this.stats.lootState = safety;
+        return false;
+      }
+      return true;
     }
     updateLoot() {
       this.pickupPulse = false;
@@ -9648,6 +9697,11 @@ THE SOFTWARE.
       const attempt = this.lootBackoff.attempt(loot, now);
       if (!attempt) {
         this.stats.lootState = "pickup-backoff";
+        return;
+      }
+      const safety = this.pickupSafety(loot);
+      if (safety !== "clear-observed") {
+        this.stats.lootState = safety;
         return;
       }
       this.pickupAttempt = { entity: loot, ...attempt };
@@ -9891,7 +9945,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     ],
     Misc: [
       ["Map Highlights", [["mapHighlights", "Special map markers", "mapHighlights"], ["smallerTrees", "Smaller minimap trees", "mapHighlights"], [null, "Clone shape khi render minimap; chỉ redraw khi đổi setting/map. Không hook Array.sort hoặc đổi collider."]]],
-      ["Auto Loot", [["autoLoot", "Enabled", "sender"], ["lootMode", "Pickup mode", "sender"], [null, "Nearby tạm nghỉ 3,5 giây sau khi gửi lệnh vứt; server tự chọn loot gần nhất, có thể khác khi trễ mạng. Mobile: cần Join mới, có cả mở cửa."]]],
+      ["Auto Loot", [["autoLoot", "Enabled", "sender"], ["lootMode", "Pickup mode", "sender"], [null, "Nearby tạm nghỉ 3,5 giây sau khi vứt; bỏ qua nếu loot khác có thể gần hơn. Server vẫn có thể chọn khác khi trễ mạng. Mobile: cần Join mới, có cả mở cửa."]]],
       ["Mobile Movement", [["mobileMovement", "Enabled", "mobile"], ["movementSmooth", "Direction Smooth", "mobile"], [null, "Làm mượt đổi hướng khi giữ phím; nhả phím dừng ngay, không ghi đè input gốc."]]]
     ]
   };

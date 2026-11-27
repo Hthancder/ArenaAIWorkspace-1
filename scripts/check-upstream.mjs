@@ -118,7 +118,7 @@ const binds=Object.assign(new InputBinds(),{input,isKeyBound(){return false},bin
 const game=Object.assign(new Game(),{initialized:true,connecting:false,connected:false,m_input:input,m_camera:camera,m_activePlayer:hero,m_playerBarn:barn,m_inputBinds:binds,m_touch:Object.assign(new Touch(),{shotDetected:false}),
  m_uiManager:{spectating:false,setSpectating(){},updateMapIndicators(){}},m_inputMsgTimeout:1,m_prevInputMsg:new InputMsg(),seq:0,seqInFlight:false,m_activeId:1,m_localId:1,lastUpdateTime:0,pings:[],updateIntervals:[],m_map:{factionMode:false},m_renderer:{setActiveLayer(){},setUnderground(){}},m_audioManager:{},m_planeBarn:{updatePlanes(){}},debugHUD:{pingGraph:{addEntry(){}},updateIntervalGraph:{addEntry(){}}},m_config:{get(k){return k==='playerName'?'source-fixture':{outfit:'',melee:'',heal:'',boost:'',emotes:[]}}},m_sendMessageImpl(){},
  m_smokeBarn:Object.assign(new SmokeBarn(),{m_particles:[],zIdx:2147483647}),m_emoteBarn:{wheelDisplayed:false},m_lootBarn:Object.assign(new LootBarn(),{closestLoot:{__id:7,__type:3,active:true,type:'9mm',count:30,layer:0,pos:{x:10,y:20},rad:2,ownerId:0}})});
-game.m_objectCreator=Object.assign(new Creator(),{m_idToObj:{1:hero,2:enemy,3:ally,4:unknown},m_types:{}});
+game.m_objectCreator=Object.assign(new Creator(),{m_idToObj:{1:hero,2:enemy,3:ally,4:unknown,7:game.m_lootBarn.closestLoot},m_types:{}});
 // Both tables have native get/delete flow, reproducing preview.3 ambiguity.
 // Only the actual Creator receives world delObjIds in the source snapshot receiver.
 game.m_decoy={mirror:{2:enemy},get(id){return this.mirror[id]},remove(id){delete this.mirror[id]}};

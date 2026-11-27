@@ -14,6 +14,8 @@
 
 ## Giới hạn quan trọng
 
+Bản mới thêm guard các vật cạnh tranh đã replicate; chi tiết và đánh đổi xem `docs/ra-soat-loot-gan-nhat.vi.md`. Guard không thay đổi các giới hạn server dưới đây.
+
 Input Loot **không chứa ID mục tiêu**. Bán kính chọn loot của server desktop khác bán kính client, và vị trí/loot có thể thay đổi trong khi gói đang truyền. Dù client chỉ phát lệnh khi thấy ammo/heal/boost/throwable, server có thể chọn item khác, kể cả súng/gear. Không cam kết tuyệt đối chỉ nhặt supply; khi có nhiều vật nằm sát nhau, nên cân nhắc tắt Nearby. Khi vật gần nhất phía client không phải supply, Nearby không chọn vật thứ hai. Mobile vẫn dùng chính sách server, có thể nhặt súng/gear và mở cửa, và chỉ thay đổi khi Join mới.
 
 Không có xác nhận nhặt thật hay dung lượng inventory được suy ra từ mỗi lần phát; server là nguồn quyết định. Không thay đổi giao thức hoặc tốc độ mạng, không cam kết giảm ping, hết giật hay cải thiện FPS. Kiểm thử tự động là fixture và source-method pinned, chưa phải kiểm thử live.

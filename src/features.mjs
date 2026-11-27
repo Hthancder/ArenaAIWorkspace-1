@@ -17,6 +17,7 @@ import { MouseInputFrame } from './mouse-input.mjs';
 import { NativeNames } from './native-names.mjs';
 import { drawTargetIndicator } from './target-indicator.mjs';
 import { LootBackoff } from './loot-backoff.mjs';
+import { nearbyLootSafety } from './loot-safety.mjs';
 import { GrenadeTimer, drawGrenadeTimer } from './grenade-timer.mjs';
 import { simulateOpenThrow, solveMovingOpenThrow, validateOpenThrow } from './grenade-aim.mjs';
 import { assessAutoThrow } from './grenade-release.mjs';
@@ -1122,10 +1123,19 @@ export class Features {
       && Math.hypot(lootPos.x - pos.x, lootPos.y - pos.y) < loot.rad
       && ['ammo', 'heal', 'boost', 'throwable'].includes(this.definitions?.[read(loot, 'type')]?.type));
   }
+  pickupSafety(loot) {
+    const m = this.mapping;
+    if (!['snapshot-id-table', 'native-id-table'].includes(m?.registryState)) return 'missing-registry';
+    return nearbyLootSafety(read(m?.creator, m?.registryKey), loot, m?.active && this.sourcePos(m.active),
+      m?.active && this.sourceLayer(m.active), read(m?.active, '__id'));
+  }
   pickupStillValid() {
     const attempt = this.pickupAttempt, loot = this.lootSource && read(this.lootSource.owner, this.lootSource.key);
-    return !!(attempt && loot === attempt.entity && loot.__id === attempt.id && loot.type === attempt.type
-      && loot.count === attempt.count && this.pickupEligible(loot));
+    if (!(attempt && loot === attempt.entity && loot.__id === attempt.id && loot.type === attempt.type
+      && loot.count === attempt.count && this.pickupEligible(loot))) return false;
+    const safety = this.pickupSafety(loot);
+    if (safety !== 'clear-observed') { this.stats.lootState = safety; return false; }
+    return true;
   }
   updateLoot() {
     this.pickupPulse = false;
@@ -1140,6 +1150,8 @@ export class Features {
     // goes through normal InputMsg diff detection and the server's pickup checks.
     const attempt = this.lootBackoff.attempt(loot, now);
     if (!attempt) { this.stats.lootState = 'pickup-backoff'; return; }
+    const safety = this.pickupSafety(loot);
+    if (safety !== 'clear-observed') { this.stats.lootState = safety; return; }
     this.pickupAttempt = { entity: loot, ...attempt };
     this.pickupPulse = true; this.stats.pickupPulses++; this.stats.lootState = 'loot-input-ready';
   }
