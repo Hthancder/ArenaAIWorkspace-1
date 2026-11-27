@@ -1,4 +1,4 @@
-import { ast, methods, path, paths, read, unique, walk } from './core.mjs';
+import { ast, finite, methods, path, paths, read, unique, walk } from './core.mjs';
 
 // Identify native send scheduling by data flow, not the property's spelling.
 export function discoverInputTimeout(game) {
@@ -62,9 +62,17 @@ export class NetworkTiming {
   received(msg, now) {
     if (this.inFlightAt !== null && msg.ack === this.lastSeq) {
       const value = now - this.inFlightAt;
-      if (value >= 0 && value < 1000) { this.lastRtt = value; this.rttAt = now; this.rtt = this.rtt === null ? value : .8 * this.rtt + .2 * value; }
+      if (value >= 0 && value < 1000) {
+        const freshHistory = finite(this.rtt) && finite(this.rttAt) && now >= this.rttAt && now - this.rttAt <= 1500;
+        this.rtt = freshHistory ? .8 * this.rtt + .2 * value : value;
+        this.lastRtt = value; this.rttAt = now;
+      }
       this.inFlightAt = null;
     }
   }
-  transit() { return this.rtt === null ? 0 : Math.min(.1, this.rtt / 2000); }
+  transit(now) {
+    // An old ACK is not evidence of current latency after a stall or clock reset.
+    if (!finite(now) || !finite(this.rttAt) || now < this.rttAt || now - this.rttAt > 1500 || !finite(this.rtt) || this.rtt < 0) return 0;
+    return Math.min(.1, this.rtt / 2000);
+  }
 }

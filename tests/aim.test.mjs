@@ -138,6 +138,9 @@ test('Stair aim-layer uses source cardinal direction and real collision radius, 
   assert.equal(shotLayer({ x: 0, y: 0 }, { x: -1, y: 0 }, 0, 1, structures), 3);
   assert.equal(shotLayer({ x: 0, y: 0 }, { x: 0, y: 1 }, 0, 1, structures), 0);
   assert.equal(shotLayer({ x: 10, y: 0 }, { x: -1, y: 0 }, 0, 1, structures), 0);
+  assert.equal(shotLayer({ x: 0, y: 0 }, { x: 1, y: 0 }, 0, 1, Array(257).fill(structures[0])), null);
+  assert.equal(shotLayer({ x: 0, y: 0 }, { x: 1, y: 0 }, 0, 1, [{ active: true, stairs: Array(33).fill(structures[0].stairs[0]) }]), null);
+  assert.equal(shotLayer({ x: 0, y: 0 }, { x: 1, y: 0 }, 0, 1, [{ active: true, stairs: [{ collision: null }] }]), null);
 });
 
 test('Muzzle clips against eligible bullet-height obstacles; below-height/dead/other floor do not clip', () => {
@@ -165,8 +168,13 @@ test('AST adapters infer contracts by dataflow and reject ambiguous native sched
 
 test('ACK timing is local bounded RTT/2, duplicate ACK cannot be counted twice', () => {
   const t = new NetworkTiming(); t.sent({ seq: 4 }, 1000); t.sent({ seq: 4 }, 1020); t.received({ ack: 3 }, 1030);
-  assert.equal(t.rtt, null); t.received({ ack: 4 }, 1080); assert.equal(t.transit(), .04);
-  t.received({ ack: 4 }, 1300); assert.equal(t.rtt, 80); t.reset(); assert.equal(t.transit(), 0);
+  assert.equal(t.rtt, null); t.received({ ack: 4 }, 1080); assert.equal(t.transit(1080), .04);
+  t.received({ ack: 4 }, 1300); assert.equal(t.rtt, 80); assert.equal(t.transit(2581), 0); assert.equal(t.transit(1079), 0);
+  t.sent({ seq: 5 }, 3000); t.received({ ack: 5 }, 3020);
+  assert.equal(t.rtt, 20, 'a fresh ACK after a long gap starts a new estimate');
+  t.sent({ seq: 6 }, 3050); t.received({ ack: 6 }, 3090);
+  assert.equal(t.rtt, 24, 'nearby ACKs still use the EWMA');
+  t.reset(); assert.equal(t.transit(2600), 0);
 });
 
 test('Native TextStyle cyan is replaced not multiplied; unknown names untouched; restore obeys ownership and latest visibility', () => {

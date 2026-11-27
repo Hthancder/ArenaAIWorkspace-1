@@ -25,10 +25,15 @@ export function geometryObjects(registry) {
 // Structure.stairs is public client state built from shared map definitions.
 // Server checkStructureStairs uses circle/AABB, then cardinal facing to choose aimLayer.
 export function shotLayer(pos, direction, layer, radius, structures) {
-  for (const structure of structures.slice(0, 256)) {
+  // Never infer a clear layer from a truncated or malformed stair list.
+  if (!Array.isArray(structures) || structures.length > 256) return null;
+  for (const structure of structures) {
     if (structure.active !== true || !Array.isArray(structure.stairs)) continue;
-    for (const stair of structure.stairs.slice(0, 32)) {
-      if (stair.lootOnly || !vec(stair.collision?.min) || !vec(stair.collision?.max)) continue;
+    if (structure.stairs.length > 32) return null;
+    for (const stair of structure.stairs) {
+      if (stair?.lootOnly) continue;
+      if (!vec(stair?.collision?.min) || !vec(stair?.collision?.max)
+          || stair.collision.min.x > stair.collision.max.x || stair.collision.min.y > stair.collision.max.y) return null;
       const { min, max } = stair.collision;
       const x = Math.max(min.x, Math.min(max.x, pos.x)), y = Math.max(min.y, Math.min(max.y, pos.y));
       if ((x - pos.x) ** 2 + (y - pos.y) ** 2 > radius ** 2) continue;

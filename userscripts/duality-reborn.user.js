@@ -7313,15 +7313,17 @@ THE SOFTWARE.
       if (this.inFlightAt !== null && msg.ack === this.lastSeq) {
         const value = now - this.inFlightAt;
         if (value >= 0 && value < 1e3) {
+          const freshHistory = finite(this.rtt) && finite(this.rttAt) && now >= this.rttAt && now - this.rttAt <= 1500;
+          this.rtt = freshHistory ? 0.8 * this.rtt + 0.2 * value : value;
           this.lastRtt = value;
           this.rttAt = now;
-          this.rtt = this.rtt === null ? value : 0.8 * this.rtt + 0.2 * value;
         }
         this.inFlightAt = null;
       }
     }
-    transit() {
-      return this.rtt === null ? 0 : Math.min(0.1, this.rtt / 2e3);
+    transit(now) {
+      if (!finite(now) || !finite(this.rttAt) || now < this.rttAt || now - this.rttAt > 1500 || !finite(this.rtt) || this.rtt < 0) return 0;
+      return Math.min(0.1, this.rtt / 2e3);
     }
   };
 
@@ -7348,10 +7350,13 @@ THE SOFTWARE.
   }
   __name(geometryObjects, "geometryObjects");
   function shotLayer(pos, direction, layer, radius, structures) {
-    for (const structure of structures.slice(0, 256)) {
+    if (!Array.isArray(structures) || structures.length > 256) return null;
+    for (const structure of structures) {
       if (structure.active !== true || !Array.isArray(structure.stairs)) continue;
-      for (const stair of structure.stairs.slice(0, 32)) {
-        if (stair.lootOnly || !vec(stair.collision?.min) || !vec(stair.collision?.max)) continue;
+      if (structure.stairs.length > 32) return null;
+      for (const stair of structure.stairs) {
+        if (stair?.lootOnly) continue;
+        if (!vec(stair?.collision?.min) || !vec(stair?.collision?.max) || stair.collision.min.x > stair.collision.max.x || stair.collision.min.y > stair.collision.max.y) return null;
         const { min, max } = stair.collision;
         const x = Math.max(min.x, Math.min(max.x, pos.x)), y = Math.max(min.y, Math.min(max.y, pos.y));
         if ((x - pos.x) ** 2 + (y - pos.y) ** 2 > radius ** 2) continue;
@@ -9002,7 +9007,7 @@ THE SOFTWARE.
       for (const c of candidates.slice(0, 3)) {
         if (firing && this.grenadeAuto.phase === "armed" && this.grenadeAuto.target !== null && c.p !== this.grenadeAuto.target)
           return fail("auto-target-changed");
-        const transit = this.timing.transit();
+        const transit = this.timing.transit(now);
         const solution = solveMovingOpenThrow({ def, origin: pos, target: c.target, playerVelocity: myVelocity, targetVelocity: { x: c.track.vx, y: c.track.vy }, fuseRemaining: fuse, releaseDelay: transit + c.track.age });
         if (!solution) continue;
         const checked = validateOpenThrow({ solution, origin: pos, def, layer, obstacles, groundAt });
@@ -9199,7 +9204,7 @@ THE SOFTWARE.
               target: candidate.pos,
               track,
               profile,
-              latency: track && cfg.latencyCompensation ? this.timing.transit() : 0,
+              latency: track && cfg.latencyCompensation ? this.timing.transit(now) : 0,
               compensateSnapshot: mode === "lock",
               lead: (cfg.leadAdjustment ?? 100) / 100,
               radius: at2(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
