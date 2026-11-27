@@ -7403,6 +7403,21 @@ THE SOFTWARE.
     return distance > 0 ? { x: muzzle.x + dx * length / distance, y: muzzle.y + dy * length / distance } : { ...muzzle };
   }
   __name(pathToTarget, "pathToTarget");
+  function pathAlongAim(muzzle, direction, target, radius = 0) {
+    const n = Math.hypot(direction.x, direction.y), dx = target.x - muzzle.x, dy = target.y - muzzle.y;
+    const distance = Math.hypot(dx, dy), r = finite(radius) ? Math.max(0, radius) : 0;
+    if (!finite(n) || n <= 1e-8) return { ...muzzle };
+    const x = direction.x / n, y = direction.y / n, projection = dx * x + dy * y;
+    const disc = projection * projection - (dx * dx + dy * dy - r * r);
+    let length = distance + r;
+    if (disc >= 0) {
+      const root = Math.sqrt(disc), entry = projection - root, exit = projection + root;
+      if (entry >= 0) length = Math.min(length, entry);
+      else if (exit >= 0) length = Math.min(length, exit);
+    }
+    return { x: muzzle.x + x * length, y: muzzle.y + y * length };
+  }
+  __name(pathAlongAim, "pathAlongAim");
   function segmentCandidates(obstacles, from, to, padding = 0) {
     const minX = Math.min(from.x, to.x) - padding, maxX = Math.max(from.x, to.x) + padding;
     const minY = Math.min(from.y, to.y) - padding, maxY = Math.max(from.y, to.y) + padding;
@@ -8589,6 +8604,9 @@ THE SOFTWARE.
             if (!self.config.mobileMovement) self.movement.reset();
             outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
             const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
+            if (self.grenadeAuto.phase === "released" && (manualEquip || !self.inputReady() || self.local?.data?.[self.local.slotKey] !== 3)) {
+              self.grenadeAuto.phase = "manual";
+            }
             if (physicalHeld && data2.shootStart && self.grenadeAuto.phase === "idle") self.lastGrenadeAutoEvidence = null;
             const auto = self.grenadeAuto.observe({
               held: physicalHeld,
@@ -9276,8 +9294,7 @@ THE SOFTWARE.
             return fail("wall-blocked");
           }
           const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1, selfRadius) : pos;
-          const length = Math.hypot(shot.world.x - actualMuzzle.x, shot.world.y - actualMuzzle.y) + hitRadius;
-          const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: { x: actualMuzzle.x + dir.x * length, y: actualMuzzle.y + dir.y * length } };
+          const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: pathAlongAim(actualMuzzle, dir, shot.world, hitRadius) };
           if (this.blocked(actualFrom, actualTo, true, obstacles) || this.blockedByPlayer(actualFrom, actualTo, candidate.p, players)) {
             reject("wall");
             return fail("wall-blocked");

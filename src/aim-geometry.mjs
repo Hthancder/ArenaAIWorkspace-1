@@ -84,6 +84,24 @@ export function pathToTarget(muzzle, target, radius = 0) {
   return distance > 0 ? { x: muzzle.x + dx * length / distance, y: muzzle.y + dy * length / distance } : { ...muzzle };
 }
 
+// For a smoothed/assisted direction, stop at the actual ray-circle entry (or
+// exit when inside). If it misses, check the entire conservative segment as
+// before: a hypothetical hit on a different direction is not a safe cutoff.
+export function pathAlongAim(muzzle, direction, target, radius = 0) {
+  const n = Math.hypot(direction.x, direction.y), dx = target.x - muzzle.x, dy = target.y - muzzle.y;
+  const distance = Math.hypot(dx, dy), r = finite(radius) ? Math.max(0, radius) : 0;
+  if (!finite(n) || n <= 1e-8) return { ...muzzle };
+  const x = direction.x / n, y = direction.y / n, projection = dx * x + dy * y;
+  const disc = projection * projection - (dx * dx + dy * dy - r * r);
+  let length = distance + r;
+  if (disc >= 0) {
+    const root = Math.sqrt(disc), entry = projection - root, exit = projection + root;
+    if (entry >= 0) length = Math.min(length, entry);
+    else if (exit >= 0) length = Math.min(length, exit);
+  }
+  return { x: muzzle.x + x * length, y: muzzle.y + y * length };
+}
+
 // Broadphase only: far map objects must not consume the narrow-phase budget.
 // Unsupported/invalid shapes stay relevant so wallcheck still fails closed.
 export function segmentCandidates(obstacles, from, to, padding = 0) {

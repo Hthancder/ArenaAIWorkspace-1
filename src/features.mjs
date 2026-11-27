@@ -11,7 +11,7 @@ import { WeaponSwitch } from './weapon-switch.mjs';
 import { MovementSmoother, previewAim, throwPreview, traceShot } from './previews.mjs';
 import { AimController, SnapshotTracker, modeOf, predictShot, unit, weaponProfile, angleDelta } from './aim.mjs';
 import { discoverInputTimeout, discoverUpdateReceiver, discoverSourceFields, NetworkTiming } from './aim-adapters.mjs';
-import { clippedMuzzle, shotLayer, segmentCandidates, pathToTarget, geometryObjects } from './aim-geometry.mjs';
+import { clippedMuzzle, shotLayer, segmentCandidates, pathToTarget, pathAlongAim, geometryObjects } from './aim-geometry.mjs';
 import { AimEvidence } from './aim-evidence.mjs';
 import { MouseInputFrame } from './mouse-input.mjs';
 import { NativeNames } from './native-names.mjs';
@@ -307,6 +307,12 @@ export class Features {
           if (!self.config.mobileMovement) self.movement.reset();
           outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
           const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
+          // The anti-recook gate belongs to the throwable hold, not all future
+          // weapons or an explicit manual equip. Yield it permanently for this
+          // hold when the player switches or input safety is unavailable.
+          if (self.grenadeAuto.phase === 'released' && (manualEquip || !self.inputReady() || self.local?.data?.[self.local.slotKey] !== 3)) {
+            self.grenadeAuto.phase = 'manual';
+          }
           if (physicalHeld && data.shootStart && self.grenadeAuto.phase === 'idle') self.lastGrenadeAutoEvidence = null;
           const auto = self.grenadeAuto.observe({ held: physicalHeld, edge: data.shootStart && data.shootHold,
             enabled: self.config.grenadeAutoThrow && self.config.grenadeAimMode === 'lock' && self.local?.data?.[self.local.slotKey] === 3,
@@ -845,10 +851,9 @@ export class Features {
         const actualLayer = layerFor(dir);
         if (actualLayer === null) { reject('aimLayer'); return fail('wall-blocked'); }
         const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1, selfRadius) : pos;
-        // The smoothed ray may miss the target circle entirely; don't truncate it
-        // at a hypothetical entry point calculated for a different direction.
-        const length = Math.hypot(shot.world.x - actualMuzzle.x, shot.world.y - actualMuzzle.y) + hitRadius;
-        const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: { x: actualMuzzle.x + dir.x * length, y: actualMuzzle.y + dir.y * length } };
+        // Truncate only if this exact direction intersects the predicted hitbox;
+        // otherwise inspect the entire conservative segment for cover.
+        const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: pathAlongAim(actualMuzzle, dir, shot.world, hitRadius) };
         if (this.blocked(actualFrom, actualTo, true, obstacles) || this.blockedByPlayer(actualFrom, actualTo, candidate.p, players)) { reject('wall'); return fail('wall-blocked'); }
       }
       // Retain the last accepted solution after Fire is released; this is not a

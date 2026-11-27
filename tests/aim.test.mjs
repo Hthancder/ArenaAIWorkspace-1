@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AimController, SnapshotTracker, angleDelta, predictShot, weaponProfile, smoothDamp } from '../src/aim.mjs';
 import { discoverInputTimeout, discoverSourceFields, discoverUpdateReceiver, NetworkTiming } from '../src/aim-adapters.mjs';
-import { clippedMuzzle, shotLayer, pathToTarget } from '../src/aim-geometry.mjs';
+import { clippedMuzzle, shotLayer, pathToTarget, pathAlongAim } from '../src/aim-geometry.mjs';
 import { NativeNames } from '../src/native-names.mjs';
 import { DEFAULTS, normalizeConfig } from '../src/menu.mjs';
 
@@ -308,6 +308,19 @@ test('small-oscillation hypothesis rejects straight motion, gaps and insufficien
 test('bullet wallcheck ends at first hitbox edge or the exit if spawned inside', () => {
   assert.deepEqual(pathToTarget({ x: 0, y: 0 }, { x: 10, y: 0 }, 1), { x: 9, y: 0 });
   assert.deepEqual(pathToTarget({ x: 9.5, y: 0 }, { x: 10, y: 0 }, 1), { x: 11, y: 0 });
+});
+
+test('smoothed wallcheck follows the actual ray and truncates only at a real circle intersection', () => {
+  const from = { x: 0, y: 0 }, target = { x: 10, y: 0 };
+  const direct = pathAlongAim(from, { x: 1, y: 0 }, target, 1);
+  assert.deepEqual(direct, { x: 9, y: 0 });
+  const angle = .05, dir = { x: Math.cos(angle), y: Math.sin(angle) };
+  const hit = pathAlongAim(from, dir, target, 1);
+  assert.ok(Math.abs(Math.hypot(hit.x - target.x, hit.y - target.y) - 1) < 1e-9);
+  assert.ok(Math.hypot(hit.x, hit.y) < 10);
+  const miss = pathAlongAim(from, { x: 0, y: 1 }, target, 1);
+  assert.deepEqual(miss, { x: 0, y: 11 });
+  assert.deepEqual(pathAlongAim({ x: 9.5, y: 0 }, { x: 1, y: 0 }, target, 1), { x: 11, y: 0 });
 });
 
 test('fast bounded strafes tolerate speed but not region departures or excessive diameter', () => {

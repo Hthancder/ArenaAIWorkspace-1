@@ -1643,6 +1643,24 @@ test('wallcheck stops at target hitbox, but checks the actual smoothed direction
   } finally { f.close(); }
 });
 
+test('smoothed Wallcheck ignores cover after actual hitbox entry but stops before it', () => {
+  const f = coordinated({ wallcheck: true, humanLikeAim: true, predict: false });
+  try {
+    const dir = { x: Math.cos(.15), y: Math.sin(.15) };
+    const wall = { __id: 900, __type: 2, active: true, collidable: true, layer: 0, height: 1,
+      collider: { type: 0, pos: { x: 10 + dir.x * 1.5, y: 20 + dir.y * 1.5 }, rad: .06 } };
+    const table = { 900: wall };
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true); f.engine.pre();
+    f.engine.aimController.step = () => dir;
+    const input = new InputMsg(); input.toMouseLen = 1.25;
+    assert.ok(f.engine.processAim(input, true), 'wall after actual circle entry does not block');
+    wall.collider.pos = { x: 10 + dir.x * .5, y: 20 + dir.y * .5 };
+    assert.equal(f.engine.processAim(input, true), null);
+    assert.equal(f.engine.stats.aimState, 'wall-blocked');
+  } finally { f.close(); }
+});
+
 test('strafe stabilization toggle is exposed and can be disabled', () => {
   const dom = env(), config = { ...DEFAULTS }, menu = createMenu(dom.window, config, {});
   try {
@@ -2009,6 +2027,33 @@ test('experimental auto throw releases only a verified live hold, then suppresse
     f.app.input.mouseButtons[0] = false; const up = new InputMsg(); f.app.game.transmit(3, up);
     assert.equal(f.engine.grenadeAuto.phase, 'idle'); assert.equal(f.engine.grenadeManualOverride, false);
   } finally { f.close(); }
+});
+
+test('released grenade gate yields Fire to manual equip, other weapons and blocked input', () => {
+  for (const reason of ['manual-equip', 'different-weapon', 'input-blocked']) {
+    const f = coordinated({ grenadeAimMode: 'lock', grenadeAutoThrow: true });
+    try {
+      const hero = f.app.game.hero; hero.l.index = 3; hero.n.weapon = 'frag';
+      f.engine.pre(); f.engine.grenadeAuto.phase = 'released'; f.engine.grenadeManualOverride = true;
+      const input = new InputMsg(); input.shootStart = true; input.shootHold = true; input.toMouseDir = { x: 0, y: 1 };
+      if (reason === 'manual-equip') input.inputs = [11];
+      if (reason === 'different-weapon') { hero.l.index = 0; hero.n.weapon = 'mp5'; }
+      if (reason === 'input-blocked') f.engine.focusBlocked = true;
+      f.app.game.transmit(3, input);
+      const wire = f.app.game.sent.at(-1).data;
+      assert.equal(wire.shootStart, true, reason); assert.equal(wire.shootHold, true, reason);
+      assert.deepEqual(wire.inputs, input.inputs, reason);
+      assert.equal(f.engine.grenadeAuto.phase, 'manual', reason);
+      if (reason === 'manual-equip') {
+        const back = new InputMsg(); back.shootStart = true; back.shootHold = true; back.inputs = [14];
+        f.app.game.transmit(3, back);
+        assert.equal(f.app.game.sent.at(-1).data.shootHold, true, 'explicit grenade equip remains under manual control');
+        assert.equal(f.engine.grenadeAuto.phase, 'manual', 'cannot automatically reacquire during the same hold');
+      }
+      f.app.input.mouseButtons[0] = false; f.app.game.transmit(3, new InputMsg());
+      assert.equal(f.engine.grenadeAuto.phase, 'idle');
+    } finally { f.close(); }
+  }
 });
 
 test('auto throw yields immediately on lost terrain and cannot retarget before physical Fire is released', () => {
