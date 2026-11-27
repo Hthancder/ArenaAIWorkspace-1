@@ -272,7 +272,15 @@ export class Features {
           const manualEquip = data.inputs.some(isManualEquip);
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           if (!self.inputReady()) { self.stats.aimState = self.inputBlockReason(); self.aimOutput = null; self.aimController.reset(); self.weaponSwitch.reset(); self.movement.reset(); self.switchSlot = null; self.meleeDirection = null; }
-          else if (manualEquip && self.local?.data?.[self.local.slotKey] === 3 && ['preview', 'assist', 'lock'].includes(self.config.grenadeAimMode)) { self.aimOutput = null; self.grenadePlan = null; self.grenadeState = 'manual-equip'; }
+          else if (manualEquip) {
+            // The server applies this packet's aim/movement and equip together.
+            // A pre-frame melee or gun plan belongs to the previous weapon; do
+            // not reuse it or move toward its target during a manual switch.
+            self.aimOutput = null; self.aimPlan = null; self.aimPlanFrame = -1;
+            self.meleeDirection = null; self.switchSlot = null; self.target = null; self.targetId = null; self.dot = null;
+            self.aimController.reset(); self.stats.aimState = 'manual-equip';
+            self.grenadePlan = null; self.grenadeState = 'manual-equip';
+          }
           else {
             // A physical mouse update can arrive after the frame plan but before
             // native serialization. Revalidate instead of sending stale intent.

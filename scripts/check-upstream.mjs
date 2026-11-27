@@ -194,6 +194,15 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.equal(context.sent.at(-1).decoded.shootHold, true, 'Team change never blocks physical Fire');
     assert.ok(Math.abs(context.sent.at(-1).decoded.toMouseDir.y) < .003, 'Wire returns to native direction');
     context.result.restoreEnemyInfo(); engine.config.wallcheck = true;
+    // Native serialization must preserve a manual weapon switch without the
+    // already-prepared gun Lock direction or melee movement.
+    app.input.flush(); clock += 17; context.result.receive({x:12,y:20.7}); engine.pre();
+    assert.ok(engine.aimPlan); const equip = frameInput(); equip.shootStart = false; equip.shootHold = true;
+    equip.toMouseDir = context.result.readInputAim().toMouseDir; equip.toMouseLen = 1.25; equip.addInput(12);
+    app.game[discoverSender(app.game)](3, equip, 128); const equipWire = context.sent.at(-1).decoded;
+    assert.ok(equipWire.inputs.includes(12)); assert.equal(equipWire.shootHold, true);
+    assert.ok(Math.abs(equipWire.toMouseDir.y) < .003, 'Manual equip uses physical rather than cached Lock direction');
+    assert.equal(equipWire.touchMoveActive, false); assert.equal(engine.mouseInput.record, null);
     app.input.flush(); clock+=17; context.result.receive({x:12,y:20}); engine.pre(); context.result.nativeFrame(1/60);
     const count=context.sent.length;
     clock += 34; context.result.receive({x:12,y:20.4});engine.pre();

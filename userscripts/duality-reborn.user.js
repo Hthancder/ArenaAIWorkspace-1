@@ -8549,8 +8549,17 @@ THE SOFTWARE.
               self.movement.reset();
               self.switchSlot = null;
               self.meleeDirection = null;
-            } else if (manualEquip && self.local?.data?.[self.local.slotKey] === 3 && ["preview", "assist", "lock"].includes(self.config.grenadeAimMode)) {
+            } else if (manualEquip) {
               self.aimOutput = null;
+              self.aimPlan = null;
+              self.aimPlanFrame = -1;
+              self.meleeDirection = null;
+              self.switchSlot = null;
+              self.target = null;
+              self.targetId = null;
+              self.dot = null;
+              self.aimController.reset();
+              self.stats.aimState = "manual-equip";
               self.grenadePlan = null;
               self.grenadeState = "manual-equip";
             } else {

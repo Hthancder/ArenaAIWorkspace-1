@@ -967,6 +967,44 @@ test('Melee wins equip/movement over Switch+Mobile, no repeated equip while awai
   } finally { f.close(); }
 });
 
+test('manual equip cancels pre-frame gun and melee aim and never reuses melee movement', () => {
+  for (const melee of [false, true]) for (const wallcheck of [false, true]) {
+    const f = coordinated({ aim: !melee, aimMode: melee ? 'off' : 'lock', melee, wallcheck, mobileMovement: false });
+    try {
+      const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1]; enemy.p = { x: 12, y: 20.5 };
+      if (melee) { hero.l.index = 2; hero.n.weapon = 'fists'; }
+      if (wallcheck) {
+        f.app.game.creator = { table: {}, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+        f.engine.reconcile(true);
+      }
+      f.engine.pre(); assert.ok(f.engine.aimPlan, `expected plan for melee=${melee}, wallcheck=${wallcheck}`);
+      if (melee) assert.ok(f.engine.meleeDirection);
+      const input = new InputMsg(); input.shootHold = true; input.toMouseLen = 1.25; input.inputs = [12];
+      f.app.game.transmit(3, input); const output = f.app.game.sent.at(-1).data;
+      assert.deepEqual(output.inputs, [12]); assert.deepEqual(output.toMouseDir, input.toMouseDir);
+      assert.equal(output.shootHold, true); assert.equal(output.touchMoveActive, input.touchMoveActive);
+      assert.equal(f.engine.meleeDirection, null); assert.equal(f.engine.target, null);
+      assert.equal(f.engine.mouseInput.record, null); assert.equal(f.engine.stats.aimState, 'manual-equip');
+      assert.equal(f.engine.aimPlanFrame, -1);
+    } finally { f.close(); }
+  }
+});
+
+test('manual equip preserves configured mobile movement but does not chase melee target', () => {
+  const f = coordinated({ aim: false, aimMode: 'off', melee: true, mobileMovement: true });
+  try {
+    f.app.game.hero.l.index = 2; f.app.game.hero.n.weapon = 'fists';
+    f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.5 };
+    f.engine.pre(); assert.ok(f.engine.meleeDirection);
+    const input = new InputMsg(); input.shootHold = true; input.toMouseLen = 1.25; input.inputs = [11];
+    f.app.game.transmit(3, input); const output = f.app.game.sent.at(-1).data;
+    assert.equal(output.touchMoveActive, true);
+    assert.ok(Math.abs(output.touchMoveDir.x - Math.SQRT1_2) < 1e-10);
+    assert.ok(Math.abs(output.touchMoveDir.y - Math.SQRT1_2) < 1e-10);
+    assert.deepEqual(output.toMouseDir, input.toMouseDir); assert.deepEqual(output.inputs, [11]);
+  } finally { f.close(); }
+});
+
 test('Aim+Zoom+ESP+XRay share source layer and input; visual exception never blocks subsequent sender', () => {
   const f = coordinated({ zoom: true, esp: true, lines: true, xray: true, layerSpoofer: true });
   try {
