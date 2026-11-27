@@ -1448,6 +1448,36 @@ test('Wallcheck relinquishes blocked selected target, resumes when clear and doe
   } finally { f.close(); }
 });
 
+test('Wallcheck without Keep target selects a clear alternative and yields when all are blocked', () => {
+  const f = coordinated({ wallcheck: true, sticky: false, humanLikeAim: false, fov: 200 });
+  try {
+    const other = new Player(3, { x: 12, y: 23 });
+    f.app.game.barn.playerPool.list.push(other);
+    f.app.game.barn.playerIds.push(3); f.app.game.barn.teamInfo[30] = { playerIds: [3] };
+    const wall = { __id: 999, __type: 2, active: true, collidable: true, dead: false, layer: 0, height: 1,
+      collider: { type: 0, pos: { x: 10.6, y: 20 }, rad: .12 } };
+    const table = { 999: wall };
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true);
+    const first = f.send();
+    assert.equal(f.engine.target?.__id, 3, JSON.stringify({stats:f.engine.stats, plan:f.engine.aimPlan, output:f.engine.aimOutput})); assert.equal(first.wire.shootHold, true);
+    table[998] = { ...wall, __id: 998, collider: { type: 0, pos: { x: 10.6, y: 20.9 }, rad: .2 } };
+    f.advance(); const blocked = f.send();
+    assert.equal(f.engine.target, null); assert.equal(f.engine.stats.aimState, 'wall-blocked');
+    assert.equal(blocked.wire.shootHold, true); assert.deepEqual(blocked.wire.toMouseDir, blocked.native.toMouseDir);
+    delete table[998]; f.advance(); f.send(); assert.equal(f.engine.target?.__id, 3);
+    // Pre-frame chose player 3; when the world changes before serialization,
+    // never redirect that cached vector to the now-visible player 2.
+    f.advance(); f.engine.pre(); assert.equal(f.engine.target?.__id, 3);
+    delete table[999]; table[998] = { ...wall, __id: 998, collider: { type: 0, pos: { x: 10.6, y: 20.9 }, rad: .2 } };
+    const input = new InputMsg(); input.shootHold = true; input.toMouseLen = 1.25;
+    f.app.game.transmit(3, input);
+    assert.equal(f.engine.target, null); assert.equal(f.engine.stats.aimState, 'wall-blocked');
+    assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, input.toMouseDir);
+    assert.equal(f.app.game.sent.at(-1).data.shootHold, true);
+  } finally { f.close(); }
+});
+
 test('Wallcheck treats another player as blocking, and fails closed on unknown obstacle collider', () => {
   const f = coordinated({ wallcheck: true });
   try {

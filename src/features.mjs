@@ -761,8 +761,9 @@ export class Features {
     }
     candidates.sort((a, b) => a.score - b.score || a.distance - b.distance);
     const sticky = cfg.sticky && candidates.find(c => c.stickyCurrent);
-    const ordered = sticky ? [sticky, ...candidates.filter(c => c !== sticky)] : candidates;
-    if (!ordered.length) return fail('no-candidate');
+    const ordered = recheck ? candidates.filter(c => c.p === recheck.target)
+      : sticky ? [sticky, ...candidates.filter(c => c !== sticky)] : candidates;
+    if (!ordered.length) return fail(recheck ? 'aim-state-changed' : 'no-candidate');
     const perks = at(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
     const profile = weaponProfile(this.definitions, localWeapon(m), perks);
     const obstacles = profile || cfg.wallcheck ? world().obstacles : [];
@@ -811,7 +812,13 @@ export class Features {
       const rayFrom = { pos: shot.muzzle, layer: layerFor(shot.dir) };
       const rayTo = { pos: pathToTarget(shot.muzzle, shot.world, hitRadius) };
       if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
-        reject('wall'); if (cfg.sticky) this.stickyId = candidate.p.__id; return fail('wall-blocked');
+        reject('wall');
+        // Keep-target intentionally waits for its selected target. Without it,
+        // try the other already-filtered candidates, but a sender recheck must
+        // never change the target of a cached direction in the same frame.
+        if (cfg.sticky) this.stickyId = candidate.p.__id;
+        if (cfg.sticky || recheck) return fail('wall-blocked');
+        continue;
       }
       this.target = candidate.p; this.targetId = candidate.p.__id; this.stickyId = candidate.p.__id;
       this.stats.predictionState = shot.state;
@@ -874,7 +881,7 @@ export class Features {
       note(this.stats.aimState);
       return { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee };
     }
-    return fail('no-candidate');
+    return fail(this.stats.aimRejections.wall ? 'wall-blocked' : 'no-candidate');
   }
   updateLayer() {
     const m = this.mapping, active = m?.active;

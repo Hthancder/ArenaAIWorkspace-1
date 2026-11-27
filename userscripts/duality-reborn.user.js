@@ -6997,7 +6997,7 @@ THE SOFTWARE.
     observe(entity, pos, now, layer = null) {
       if (!vec(pos) || !finite(now)) return null;
       let s = this.states.get(entity);
-      if (!s || s.id !== entity.__id || s.layer !== layer || now - s.time > 500 || now <= s.time || Math.hypot(pos.x - s.pos.x, pos.y - s.pos.y) > 20) {
+      if (!s || s.id !== entity.__id || s.layer !== layer || now - s.time > 500 || now < s.time || Math.hypot(pos.x - s.pos.x, pos.y - s.pos.y) > 20) {
         s = { id: entity.__id, layer, pos: point(pos), time: now, vx: 0, vy: 0, error: 0, velocityError: 0, samples: [{ p: point(pos), t: now }] };
         rememberMotion(s, pos, now);
         this.states.set(entity, s);
@@ -7061,7 +7061,7 @@ THE SOFTWARE.
     }
     estimate(entity, now) {
       const s = this.states.get(entity);
-      return s && s.id === entity.__id && now - s.time <= 250 ? { ...s, age: Math.max(0, (now - s.time) / 1e3) } : null;
+      return s && s.id === entity.__id && finite(now) && now >= s.time && now - s.time <= 250 ? { ...s, age: (now - s.time) / 1e3 } : null;
     }
   };
   function weaponProfile(defs, type, perks = []) {
@@ -9162,8 +9162,8 @@ THE SOFTWARE.
       }
       candidates.sort((a, b) => a.score - b.score || a.distance - b.distance);
       const sticky = cfg.sticky && candidates.find((c) => c.stickyCurrent);
-      const ordered = sticky ? [sticky, ...candidates.filter((c) => c !== sticky)] : candidates;
-      if (!ordered.length) return fail("no-candidate");
+      const ordered = recheck ? candidates.filter((c) => c.p === recheck.target) : sticky ? [sticky, ...candidates.filter((c) => c !== sticky)] : candidates;
+      if (!ordered.length) return fail(recheck ? "aim-state-changed" : "no-candidate");
       const perks = at2(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
       const profile = weaponProfile(this.definitions, localWeapon(m), perks);
       const obstacles = profile || cfg.wallcheck ? world().obstacles : [];
@@ -9239,7 +9239,8 @@ THE SOFTWARE.
         if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
           reject("wall");
           if (cfg.sticky) this.stickyId = candidate.p.__id;
-          return fail("wall-blocked");
+          if (cfg.sticky || recheck) return fail("wall-blocked");
+          continue;
         }
         this.target = candidate.p;
         this.targetId = candidate.p.__id;
@@ -9314,7 +9315,7 @@ THE SOFTWARE.
         note(this.stats.aimState);
         return { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee };
       }
-      return fail("no-candidate");
+      return fail(this.stats.aimRejections.wall ? "wall-blocked" : "no-candidate");
     }
     updateLayer() {
       const m = this.mapping, active = m?.active;

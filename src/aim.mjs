@@ -79,7 +79,7 @@ export class SnapshotTracker {
   observe(entity, pos, now, layer = null) {
     if (!vec(pos) || !finite(now)) return null;
     let s = this.states.get(entity);
-    if (!s || s.id !== entity.__id || s.layer !== layer || now - s.time > 500 || now <= s.time || Math.hypot(pos.x - s.pos.x, pos.y - s.pos.y) > 20) {
+    if (!s || s.id !== entity.__id || s.layer !== layer || now - s.time > 500 || now < s.time || Math.hypot(pos.x - s.pos.x, pos.y - s.pos.y) > 20) {
       s = { id: entity.__id, layer, pos: point(pos), time: now, vx: 0, vy: 0, error: 0, velocityError: 0, samples: [{ p: point(pos), t: now }] };
       rememberMotion(s, pos, now);
       this.states.set(entity, s); return s;
@@ -126,7 +126,7 @@ export class SnapshotTracker {
   }
   estimate(entity, now) {
     const s = this.states.get(entity);
-    return s && s.id === entity.__id && now - s.time <= 250 ? { ...s, age: Math.max(0, (now - s.time) / 1000) } : null;
+    return s && s.id === entity.__id && finite(now) && now >= s.time && now - s.time <= 250 ? { ...s, age: (now - s.time) / 1000 } : null;
   }
 }
 

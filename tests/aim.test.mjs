@@ -97,6 +97,24 @@ test('Snapshot fit is stable between observations and recovers on stops/turns; q
   t.observe(p, { x: 2.88, y: .36 }, 360); assert.ok(Math.abs(t.estimate(p, 360).vx) < 1e-7); assert.ok(t.estimate(p, 360).vy > 11.9);
 });
 
+test('Tracker coalesces equal-time ordered snapshots without discarding history or dividing by zero', () => {
+  const tracker = new SnapshotTracker(), player = { __id: 1 };
+  tracker.observe(player, { x: 0, y: 0 }, 0, 0);
+  tracker.observe(player, { x: .3, y: 0 }, 30, 0);
+  tracker.observe(player, { x: .59, y: 0 }, 60, 0);
+  tracker.observe(player, { x: .6, y: 0 }, 60, 0);
+  tracker.observe(player, { x: .61, y: 0 }, 60, 0);
+  const estimate = tracker.estimate(player, 60);
+  assert.ok(estimate.samples.length >= 2);
+  assert.ok(Number.isFinite(estimate.vx) && estimate.vx > 9 && estimate.vx < 11);
+  assert.equal(estimate.motion.filter(s => s.t === 60).length, 1);
+  assert.equal(estimate.pos.x, .61);
+  assert.equal(tracker.estimate(player, 59), null);
+  assert.equal(tracker.estimate(player, NaN), null);
+  tracker.observe(player, { x: 5, y: 0 }, 59, 0);
+  assert.equal(tracker.estimate(player, 59).vx, 0, 'clock rollback resets history');
+});
+
 test('Tracker invalidates on gaps/teleports/layer/identity changes; delete and same-ID reuse cannot leak velocity', () => {
   const t = new SnapshotTracker(), p = { __id: 1 };
   t.observe(p, { x: 0, y: 0 }, 0, 0); t.observe(p, { x: .3, y: 0 }, 30, 0);
