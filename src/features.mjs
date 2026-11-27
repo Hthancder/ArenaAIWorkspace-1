@@ -673,7 +673,8 @@ export class Features {
         const stable = c.track.samples?.length >= 3 && playerTrack.samples?.length >= 3;
         const timingKnown = finite(this.timing.rtt) && this.timing.rtt <= 160 && finite(this.timing.lastRtt)
           && this.timing.lastRtt <= 160 && finite(this.timing.rttAt) && now >= this.timing.rttAt && now - this.timing.rttAt <= 1500;
-        const result = stable && timingKnown ? assessAutoThrow({ def, origin: pos, direction: solution.direction,
+        const result = stable && timingKnown ? assessAutoThrow({ def, explosion: this.definitions?.[def.explosionType],
+          selfRadius: at(m.active, [m.schema.netKey, this.sourceFields?.scale]), origin: pos, direction: solution.direction,
           mouseDistance: solution.mouseDistance, playerVelocity: myVelocity, target: c.target,
           targetVelocity: { x: c.track.vx, y: c.track.vy }, fuseRemaining: fuse,
           releaseDelay: transit + c.track.age, layer, obstacles, groundAt, bounds: { width: read(map, 'width'), height: read(map, 'height') } })

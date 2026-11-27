@@ -28,8 +28,14 @@ export function evaluateReleaseWindow({ solution, target, targetVelocity, releas
 
 // Test the *same* wire aim across bounded fuse uncertainty, not independently
 // re-solved trajectories. This remains a hypothesis, not server confirmation.
-export function assessAutoThrow({ def, origin, direction, mouseDistance, playerVelocity, target, targetVelocity,
+export function assessAutoThrow({ def, explosion, selfRadius, origin, direction, mouseDistance, playerVelocity, target, targetVelocity,
   fuseRemaining, releaseDelay, layer, obstacles, groundAt, bounds, dt = 1 / 30 }) {
+  // Source grenades may spawn secondary projectiles at detonation. Their
+  // trajectories and damage are not covered by the open-throw model.
+  if (def?.splitType || def?.numSplit) return { ok: false, reason: 'unsupported-split-projectile' };
+  if (explosion?.type !== 'explosion' || !finite(explosion.rad?.max) || explosion.rad.max <= 0
+    || explosion.rad.max > 100 || !finite(selfRadius) || selfRadius <= 0 || selfRadius > 10)
+    return { ok: false, reason: 'unknown-self-blast-radius' };
   if (!finite(bounds?.width) || !finite(bounds?.height) || bounds.width <= 0 || bounds.height <= 0
     || !finite(def?.rad) || def.rad <= 0) return { ok: false, reason: 'missing-map-bounds' };
   if (!vec(playerVelocity) || !vec(targetVelocity) || Math.hypot(playerVelocity.x, playerVelocity.y) > 4
@@ -41,6 +47,13 @@ export function assessAutoThrow({ def, origin, direction, mouseDistance, playerV
     const margin = def.rad * .5 + .1;
     if (!solution || solution.points.some(p => p.x < margin || p.y < margin || p.x > bounds.width - margin || p.y > bounds.height - margin))
       return { ok: false, reason: 'map-boundary' };
+    // The source can damage the thrower even though teammates are protected.
+    // This is only a constant-velocity lower bound, not proof of safety from
+    // shrapnel, collisions, changed input, replication lag or secondary effects.
+    const ownTime = releaseDelay + solution.time;
+    const ownX = origin.x + playerVelocity.x * ownTime, ownY = origin.y + playerVelocity.y * ownTime;
+    if (!finite(ownTime) || Math.hypot(solution.end.x - ownX, solution.end.y - ownY) <= explosion.rad.max + selfRadius + .5)
+      return { ok: false, reason: 'self-blast-risk' };
     const window = evaluateReleaseWindow({ solution, target, targetVelocity, releaseDelay, radius: .75, minDwell: .03, maxDwell: .5 });
     if (!window.ok) return { ok: false, reason: window.reason };
     const path = validateOpenThrow({ solution, origin, def, layer, obstacles, groundAt });

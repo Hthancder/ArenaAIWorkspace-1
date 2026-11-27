@@ -7999,6 +7999,8 @@ THE SOFTWARE.
   __name(evaluateReleaseWindow, "evaluateReleaseWindow");
   function assessAutoThrow({
     def,
+    explosion,
+    selfRadius,
     origin,
     direction,
     mouseDistance,
@@ -8013,6 +8015,9 @@ THE SOFTWARE.
     bounds,
     dt = 1 / 30
   }) {
+    if (def?.splitType || def?.numSplit) return { ok: false, reason: "unsupported-split-projectile" };
+    if (explosion?.type !== "explosion" || !finite(explosion.rad?.max) || explosion.rad.max <= 0 || explosion.rad.max > 100 || !finite(selfRadius) || selfRadius <= 0 || selfRadius > 10)
+      return { ok: false, reason: "unknown-self-blast-radius" };
     if (!finite(bounds?.width) || !finite(bounds?.height) || bounds.width <= 0 || bounds.height <= 0 || !finite(def?.rad) || def.rad <= 0) return { ok: false, reason: "missing-map-bounds" };
     if (!vec(playerVelocity) || !vec(targetVelocity) || Math.hypot(playerVelocity.x, playerVelocity.y) > 4 || Math.hypot(targetVelocity.x, targetVelocity.y) > 4 || !finite(fuseRemaining) || fuseRemaining < 0.35)
       return { ok: false, reason: "uncertain-motion-or-fuse" };
@@ -8021,6 +8026,10 @@ THE SOFTWARE.
       const margin = def.rad * 0.5 + 0.1;
       if (!solution || solution.points.some((p) => p.x < margin || p.y < margin || p.x > bounds.width - margin || p.y > bounds.height - margin))
         return { ok: false, reason: "map-boundary" };
+      const ownTime = releaseDelay + solution.time;
+      const ownX = origin.x + playerVelocity.x * ownTime, ownY = origin.y + playerVelocity.y * ownTime;
+      if (!finite(ownTime) || Math.hypot(solution.end.x - ownX, solution.end.y - ownY) <= explosion.rad.max + selfRadius + 0.5)
+        return { ok: false, reason: "self-blast-risk" };
       const window2 = evaluateReleaseWindow({ solution, target, targetVelocity, releaseDelay, radius: 0.75, minDwell: 0.03, maxDwell: 0.5 });
       if (!window2.ok) return { ok: false, reason: window2.reason };
       const path2 = validateOpenThrow({ solution, origin, def, layer, obstacles, groundAt });
@@ -9040,6 +9049,8 @@ THE SOFTWARE.
           const timingKnown = finite(this.timing.rtt) && this.timing.rtt <= 160 && finite(this.timing.lastRtt) && this.timing.lastRtt <= 160 && finite(this.timing.rttAt) && now >= this.timing.rttAt && now - this.timing.rttAt <= 1500;
           const result = stable && timingKnown ? assessAutoThrow({
             def,
+            explosion: this.definitions?.[def.explosionType],
+            selfRadius: at2(m.active, [m.schema.netKey, this.sourceFields?.scale]),
             origin: pos,
             direction: solution.direction,
             mouseDistance: solution.mouseDistance,

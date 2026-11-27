@@ -58,6 +58,12 @@ const throwableSource = throwableNames.map(name => {
   assert.ok(node, `source throwable definition ${name}`);
   return `${JSON.stringify(name)}:${throwJS.slice(node.start, node.end)}`;
 }).join(',');
+const explosionJS = transformSync(readFileSync(resolve(root, 'shared/defs/gameObjects/explosionsDefs.ts'), 'utf8'), { loader: 'ts', target: 'es2022' }).code;
+const explosionTree = parse(explosionJS, { ecmaVersion: 'latest', sourceType: 'module' });
+const explosionDefs = explosionTree.body.map(n => n.declaration || n).find(n => n.type === 'VariableDeclaration' && n.declarations[0].id.name === 'ExplosionDefs').declarations[0].init;
+const fragExplosionNode = explosionDefs.properties.find(n => n.key.name === 'explosion_frag')?.value;
+assert.ok(fragExplosionNode, 'source frag explosion definition');
+const fragExplosionSource = explosionJS.slice(fragExplosionNode.start, fragExplosionNode.end);
 const playerJS = transformSync(readFileSync(resolve(root, 'client/src/objects/player.ts'), 'utf8'), { loader: 'ts', target: 'es2022' }).code;
 const playerTree = parse(playerJS, { ecmaVersion: 'latest', sourceType: 'module' });
 const nativeNameFactory = playerTree.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === 'createPlayerNameText');
@@ -91,7 +97,7 @@ class Sprite { constructor(){this.alpha=1;this.visible=false;this._destroyed=fal
 class NativeText extends PixiContainer { constructor(text,style){super();this._text=text;this._style=new PixiTextStyle(style);this.anchor={set(){}};}get style(){return this._style;}get text(){return this._text;}set text(v){this._text=v;} }
 const PIXI={Text:NativeText,Sprite:{from(){return new Sprite()}}};
 ${nameFactorySource}
-const fistsDef=${fistsSource}; const throwableDefs={${throwableSource}}; const fragDef=throwableDefs.frag; const GameObjectDefs={typeToId(){return 0},idToType(){return ''},typeToDef(){return fistsDef}};
+const fistsDef=${fistsSource}; const throwableDefs={${throwableSource}}; const fragDef=throwableDefs.frag; const fragExplosionDef=${fragExplosionSource}; const GameObjectDefs={typeToId(){return 0},idToType(){return ''},typeToDef(){return fistsDef}};
 const sharedShapes=[{color:123,scale:3,collider:{type:0,pos:{x:0,y:0},rad:1}}];
 const MapObjectDefs={typeToDef(){return {type:'obstacle',img:{zIdx:1},map:{shapes:sharedShapes}}}}; const nativeMap=new Map();
 const device = {mobile:false,touch:false}; const window = {innerWidth:800,innerHeight:600};
@@ -135,7 +141,7 @@ globalThis.result={localRotation:()=>{Player.prototype.updateRotation.call(rotat
  frameInput:()=>{const msg=new InputMsg();msg.shootStart=!!binds.isBindPressed(4);msg.shootHold=!!binds.isBindDown(4);if(binds.isBindPressed(10))msg.addInput(10);return msg;},
  deleteEnemyInfo:()=>game.m_processGameUpdate({ack:game.seq,playerInfos:[],deletedPlayerIds:[2],delObjIds:[],fullObjects:[],partObjects:[],activePlayerData:{},bullets:[],explosions:[],emotes:[],planes:[],airstrikeZones:[],mapIndicators:[]}),
  restoreEnemyInfo:()=>{barn.playerInfo[2]={playerId:2,teamId:20,groupId:20};barn.playerIds.push(2);barn.recomputeTeamData();},
- fragDef, throwableDefs, setGrenade:(type='frag')=>{hero.m_netData.m_activeWeapon=type;hero.m_localData.m_curWeapIdx=3;hero.m_localData.m_weapons[3].type=type;input.mouseButtons[0]=true;input.mouseButtonsOld[0]=false;},
+ fragDef, fragExplosionDef, throwableDefs, setGrenade:(type='frag')=>{hero.m_netData.m_activeWeapon=type;hero.m_localData.m_curWeapIdx=3;hero.m_localData.m_weapons[3].type=type;input.mouseButtons[0]=true;input.mouseButtonsOld[0]=false;},
  setMelee:()=>{hero.m_netData.m_activeWeapon='fists';hero.m_localData.m_curWeapIdx=2;input.mouseButtonsOld[0]=true;},
  serverTick:(msg,dt)=>{serverPlayer.animTicker-=dt;if(serverPlayer.animTicker<=0)serverPlayer.animType=0;serverPlayer.shootStart=msg.shootStart;serverPlayer.shootHold=msg.shootHold;serverWeapon.update(dt);return serverPlayer.swings;},
  spawnSmoke:()=>{const p=game.m_smokeBarn.m_allocParticle();p.m_init({x:10,y:20},2,0,0);return p;},
@@ -398,7 +404,10 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.equal(aimWire.shootHold, false, 'grenade aim never starts Fire');
     // Real input-frame scheduler and serializer, with injected stable snapshots,
     // flat terrain and RTT; still not a server acknowledgement or live match.
-    engine.config.grenadeAutoThrow = true; engine.config.grenadeAimActivation = 'hold'; engine.config.grenadeFov = 400;
+    engine.config.grenadeAutoThrow = true; engine.config.grenadeAimActivation = 'hold'; engine.config.grenadeFov = 600;
+    engine.definitions.explosion_frag = context.result.fragExplosionDef;
+    // Keep the source-shaped target outside frag's direct self-blast envelope.
+    enemyPos.x = ownPos.x + 15;
     const fixtureMap = Object.values(app.game).find(v => v && v.factionMode === false);
     Object.assign(fixtureMap, { mapTexture: {}, width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } }); engine.mapping.map = fixtureMap;
     // Source client receives complete update arrays. Seed explicit positions,

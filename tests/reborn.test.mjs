@@ -2002,10 +2002,11 @@ test('experimental auto throw releases only a verified live hold, then suppresse
   const f = coordinated({ aim: false, grenadeAimMode: 'lock', grenadeAimActivation: 'hold', grenadeAutoThrow: true, grenadeFov: 400 });
   try {
     const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
-    f.engine.definitions.frag = { type: 'throwable', cookable: true, fuseTime: 4, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
-    hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = [];
-    enemy.n.sourcePos = { x: 20, y: 20 };
-    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks' };
+    f.engine.definitions.frag = { type: 'throwable', explosionType: 'explosion_frag', cookable: true, fuseTime: 4, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
+    f.engine.definitions.explosion_frag = { type: 'explosion', rad: { max: 12 } };
+    hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = []; hero.n.scale = 1;
+    enemy.n.sourcePos = { x: 25, y: 20 };
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks', scale: 'scale' };
     f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true; f.engine.mapping.creator = { table: {} }; f.engine.mapping.registryKey = 'table';
     f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
     const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
@@ -2026,6 +2027,34 @@ test('experimental auto throw releases only a verified live hold, then suppresse
     const after = send(true); assert.equal(after.shootHold, false); assert.equal(after.shootStart, false);
     f.app.input.mouseButtons[0] = false; const up = new InputMsg(); f.app.game.transmit(3, up);
     assert.equal(f.engine.grenadeAuto.phase, 'idle'); assert.equal(f.engine.grenadeManualOverride, false);
+  } finally { f.close(); }
+});
+
+test('auto throw does not release a grenade near its thrower, while manual Fire remains authoritative', () => {
+  const f = coordinated({ aim: false, grenadeAimMode: 'lock', grenadeAimActivation: 'hold', grenadeAutoThrow: true, grenadeFov: 400 });
+  try {
+    const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+    f.engine.definitions.frag = { type: 'throwable', explosionType: 'explosion_frag', cookable: true, fuseTime: 4, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
+    f.engine.definitions.explosion_frag = { type: 'explosion', rad: { max: 12 } };
+    hero.l.index = 3; hero.n.weapon = 'frag'; hero.n.sourcePos = { x: 10, y: 20 }; hero.n.perks = []; hero.n.scale = 1;
+    enemy.n.sourcePos = { x: 20, y: 20 };
+    f.engine.pre(); f.engine.sourceFields = { pos: 'sourcePos', perks: 'perks', scale: 'scale' };
+    f.engine.capabilities.prediction = true; f.engine.capabilities.wallcheck = true; f.engine.mapping.creator = { table: {} }; f.engine.mapping.registryKey = 'table';
+    f.engine.mapping.map = { width: 100, height: 100, getGroundSurface() { return { type: 'grass' }; } };
+    const send = edge => { const input = new InputMsg(); input.shootStart = edge; input.shootHold = true; f.app.game.transmit(3, input); return f.app.game.sent.at(-1).data; };
+    const update = { fullObjects: [{ __id: hero.__id, pos: hero.n.sourcePos }, { __id: enemy.__id, pos: enemy.n.sourcePos }], partObjects: [], delObjIds: [], activePlayerData: {} };
+    f.engine.observeUpdate(update, f.dom.window.performance.now()); send(true);
+    let sawRisk = false;
+    for (let i = 0; i < 80; i++) {
+      f.advance(33); const now = f.dom.window.performance.now(); f.engine.lastMap = now;
+      f.engine.observeUpdate({ ...update, fullObjects: [] }, now);
+      Object.assign(f.engine.timing, { rtt: 40, lastRtt: 40, rttAt: now });
+      assert.equal(send(false).shootHold, true, 'never automatically release in the blast envelope');
+      if (f.engine.grenadeAutoPlan?.reason === 'self-blast-risk') sawRisk = true;
+    }
+    assert.equal(sawRisk, true);
+    f.app.input.mouseButtons[0] = false; const release = new InputMsg(); release.shootHold = false;
+    f.app.game.transmit(3, release); assert.equal(f.app.game.sent.at(-1).data.shootHold, false, 'manual release remains available');
   } finally { f.close(); }
 });
 

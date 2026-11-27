@@ -6,9 +6,13 @@ import { solveOpenThrow } from '../src/grenade-aim.mjs';
 const def = { type: 'throwable', cookable: true, explodeOnImpact: false, aimDistance: 0, rad: 1, throwPhysics: { speed: 20, velZ: 5, playerVelMult: .6 } };
 const origin = { x: 50, y: 50 }, target = { x: 60, y: 50 }, velocity = { x: 0, y: 0 }, fuseRemaining = 1.12;
 const solution = solveOpenThrow({ def, origin, target, playerVelocity: velocity, fuseRemaining });
-const args = { def, origin, direction: solution.direction, mouseDistance: solution.mouseDistance, playerVelocity: velocity, target, targetVelocity: velocity, fuseRemaining, releaseDelay: 0, layer: 0, bounds: { width: 100, height: 100 }, obstacles: [], groundAt: () => 'ground' };
+const args = { def, explosion: { type: 'explosion', rad: { max: 4 } }, selfRadius: 1, origin, direction: solution.direction, mouseDistance: solution.mouseDistance, playerVelocity: velocity, target, targetVelocity: velocity, fuseRemaining, releaseDelay: 0, layer: 0, bounds: { width: 100, height: 100 }, obstacles: [], groundAt: () => 'ground' };
 test('auto throw checks the same aim under fuse uncertainty and rejects walls and unstable motion', () => {
   assert.equal(assessAutoThrow(args).ok, true);
+  assert.equal(assessAutoThrow({ ...args, explosion: { type: 'explosion', rad: { max: 12 } } }).reason, 'self-blast-risk');
+  assert.equal(assessAutoThrow({ ...args, explosion: null }).reason, 'unknown-self-blast-radius');
+  assert.equal(assessAutoThrow({ ...args, selfRadius: null }).reason, 'unknown-self-blast-radius');
+  assert.equal(assessAutoThrow({ ...args, def: { ...def, splitType: 'mini', numSplit: 6 } }).reason, 'unsupported-split-projectile');
   assert.equal(assessAutoThrow({ ...args, targetVelocity: { x: 10, y: 0 } }).ok, false);
   assert.equal(assessAutoThrow({ ...args, fuseRemaining: .1 }).ok, false);
   assert.equal(assessAutoThrow({ ...args, bounds: null }).reason, 'missing-map-bounds');
