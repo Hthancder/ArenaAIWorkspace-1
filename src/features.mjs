@@ -537,8 +537,11 @@ export class Features {
         || this.config.aim && this.config.aimMode !== 'off' && this.config.predict;
       const complete = needsInference && this.protocol === VERIFIED_PROTOCOL
         && Array.isArray(msg.fullObjects) && Array.isArray(msg.partObjects) && Array.isArray(msg.delObjIds);
+      const sameTick = complete && this.grenadeUpdateAt !== null && now === this.grenadeUpdateAt;
       const cadence = complete && this.grenadeUpdateAt !== null && now > this.grenadeUpdateAt && now - this.grenadeUpdateAt <= 150;
-      if (!cadence) this.grenadeTracker.reset();
+      // Ordered updates may arrive in the same local clock tick. Preserve the
+      // history, but do not infer a new stationary sample without elapsed time.
+      if (!cadence && !sameTick) this.grenadeTracker.reset();
       this.grenadeUpdateAt = complete ? now : null;
       const players = complete || ids.size ? m.players() : null;
       const visible = complete ? new Set(players) : null;
@@ -732,6 +735,10 @@ export class Features {
     let geometry;
     const world = () => geometry ||= geometryObjects(read(m.creator, m.registryKey));
     const layerFor = dir => shotLayer(pos, dir, rawLayer, selfRadius, world().structures);
+    let possibleLayers;
+    const layersForAnyDirection = () => possibleLayers ||= [
+      { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 },
+    ].map(layerFor);
     const candidates = [], reject = key => { this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1; };
     const players = m.players();
     for (const p of players.slice(0, 256)) {
@@ -752,7 +759,12 @@ export class Features {
       // The discovered registry can disappear or become unreadable between
       // reconciliations. An empty failed scan is not evidence of clear cover.
       if (cfg.wallcheck && !world().valid) return fail('wallcheck-unavailable');
-      if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical))) { reject('otherLayer'); continue; }
+      const targetLayer = this.sourceLayer(p), directLayer = layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical);
+      // On stairs, lead or barrel offset can put the final shot in a different
+      // cardinal direction and therefore a different aimLayer. Only reject here
+      // if no possible cardinal direction reaches the target's layer; the
+      // actual solved direction is checked again below before output.
+      if (!sameLayer(targetLayer, directLayer) && !layersForAnyDirection().some(layer => sameLayer(targetLayer, layer))) { reject('otherLayer'); continue; }
       // A real switch margin prevents two enemies on opposite sides of the FOV from
       // trading ownership every frame. The current target needs to be meaningfully
       // better before Lock/Assist changes targets.
@@ -807,9 +819,10 @@ export class Features {
         }
       }
       if (!shot.dir) { reject(shot.state); continue; }
-      if (layerFor(shot.dir) === null || !sameLayer(layerFor(shot.dir), this.sourceLayer(candidate.p))) { reject('aimLayer'); continue; }
+      const shotAimLayer = layerFor(shot.dir);
+      if (shotAimLayer === null || !sameLayer(shotAimLayer, this.sourceLayer(candidate.p))) { reject('aimLayer'); continue; }
       const hitRadius = melee ? 0 : at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1;
-      const rayFrom = { pos: shot.muzzle, layer: layerFor(shot.dir) };
+      const rayFrom = { pos: shot.muzzle, layer: shotAimLayer };
       const rayTo = { pos: pathToTarget(shot.muzzle, shot.world, hitRadius) };
       if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
         reject('wall');

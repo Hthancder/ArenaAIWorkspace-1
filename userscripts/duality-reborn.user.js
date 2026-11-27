@@ -8873,8 +8873,9 @@ THE SOFTWARE.
         }
         const needsInference = this.config.grenadeAimMode && this.config.grenadeAimMode !== "off" || this.config.aim && this.config.aimMode !== "off" && this.config.predict;
         const complete = needsInference && this.protocol === VERIFIED_PROTOCOL && Array.isArray(msg.fullObjects) && Array.isArray(msg.partObjects) && Array.isArray(msg.delObjIds);
+        const sameTick = complete && this.grenadeUpdateAt !== null && now === this.grenadeUpdateAt;
         const cadence = complete && this.grenadeUpdateAt !== null && now > this.grenadeUpdateAt && now - this.grenadeUpdateAt <= 150;
-        if (!cadence) this.grenadeTracker.reset();
+        if (!cadence && !sameTick) this.grenadeTracker.reset();
         this.grenadeUpdateAt = complete ? now : null;
         const players = complete || ids.size ? m.players() : null;
         const visible = complete ? new Set(players) : null;
@@ -9127,6 +9128,13 @@ THE SOFTWARE.
       let geometry;
       const world = /* @__PURE__ */ __name(() => geometry ||= geometryObjects(read(m.creator, m.registryKey)), "world");
       const layerFor = /* @__PURE__ */ __name((dir) => shotLayer(pos, dir, rawLayer, selfRadius, world().structures), "layerFor");
+      let possibleLayers;
+      const layersForAnyDirection = /* @__PURE__ */ __name(() => possibleLayers ||= [
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+        { x: -1, y: 0 },
+        { x: 0, y: -1 }
+      ].map(layerFor), "layersForAnyDirection");
       const candidates = [], reject = /* @__PURE__ */ __name((key) => {
         this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1;
       }, "reject");
@@ -9153,7 +9161,8 @@ THE SOFTWARE.
           continue;
         }
         if (cfg.wallcheck && !world().valid) return fail("wallcheck-unavailable");
-        if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical))) {
+        const targetLayer = this.sourceLayer(p), directLayer = layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical);
+        if (!sameLayer(targetLayer, directLayer) && !layersForAnyDirection().some((layer) => sameLayer(targetLayer, layer))) {
           reject("otherLayer");
           continue;
         }
@@ -9229,12 +9238,13 @@ THE SOFTWARE.
           reject(shot.state);
           continue;
         }
-        if (layerFor(shot.dir) === null || !sameLayer(layerFor(shot.dir), this.sourceLayer(candidate.p))) {
+        const shotAimLayer = layerFor(shot.dir);
+        if (shotAimLayer === null || !sameLayer(shotAimLayer, this.sourceLayer(candidate.p))) {
           reject("aimLayer");
           continue;
         }
         const hitRadius = melee ? 0 : at2(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1;
-        const rayFrom = { pos: shot.muzzle, layer: layerFor(shot.dir) };
+        const rayFrom = { pos: shot.muzzle, layer: shotAimLayer };
         const rayTo = { pos: pathToTarget(shot.muzzle, shot.world, hitRadius) };
         if (this.blocked(rayFrom, rayTo, !melee, obstacles) || !melee && this.blockedByPlayer(rayFrom, rayTo, candidate.p, players)) {
           reject("wall");

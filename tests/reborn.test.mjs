@@ -1790,6 +1790,30 @@ test('active-player-id update forces mapping discovery without waiting for the n
   } finally { f.close(); }
 });
 
+test('stair selection checks the predicted shot layer, not only the direct target bearing', () => {
+  const f = coordinated({ predict: true, humanLikeAim: false, wallcheck: true, fov: 300 });
+  try {
+    const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+    hero.layer = 3; enemy.layer = 1; enemy.p = { x: 14, y: 21 };
+    const stair = { active: true, stairs: [{ collision: { min: { x: 9, y: 19 }, max: { x: 11, y: 21 } }, downDir: { x: -1, y: 0 } }] };
+    const table = { 100: stair };
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true); f.engine.pre();
+    f.engine.definitions.bullet_mp5 = { type: 'bullet', speed: 12, distance: 100 };
+    f.engine.capabilities.prediction = true;
+    f.engine.tracker.observe(enemy, { x: 14, y: 20.2 }, 900, 1);
+    f.engine.tracker.observe(enemy, { x: 14, y: 20.6 }, 950, 1);
+    f.engine.tracker.observe(enemy, { x: 14, y: 21 }, 1000, 1);
+    const input = new InputMsg(); input.toMouseLen = 4;
+    const plan = f.engine.processAim(input, true);
+    assert.ok(plan, JSON.stringify(f.engine.stats));
+    assert.ok(plan.dir.y > plan.dir.x, 'lead crosses from east to north cardinal direction');
+    assert.equal(f.engine.target, enemy); assert.equal(f.engine.stats.predictionState, 'predicted');
+    f.cfg.predict = false;
+    assert.equal(f.engine.processAim(input, true), null, 'direct east shot remains on the incompatible floor');
+  } finally { f.close(); }
+});
+
 test('same-frame A-D snapshot recomputes while retaining bounded-oscillation model', () => {
   const f = coordinated({ predict: true, stabilizeStrafe: true });
   try {
@@ -2027,6 +2051,9 @@ test('grenade stationary inference uses complete recent world updates and is iso
     const now = f.dom.window.performance.now(), g = f.engine.grenadeTracker.estimate(enemy, now), gun = f.engine.tracker.estimate(enemy, now);
     assert.ok(g && g.samples.length >= 3); assert.ok(Math.abs(g.vx) < 1e-9); assert.ok(Math.abs(g.vy) < 1e-9);
     assert.equal(gun.samples.length, 1, 'absence inference never changes gun motion tracking');
+    f.engine.observeUpdate(empty, now);
+    const sameTick = f.engine.grenadeTracker.estimate(enemy, now);
+    assert.ok(sameTick && sameTick.samples.length === g.samples.length, 'same-time update neither discards history nor invents another sample');
     f.advance(33); f.engine.observeUpdate(empty, f.dom.window.performance.now());
     const previousSampleTime = f.engine.grenadeTracker.states.get(enemy).time;
     f.advance(33); f.engine.observeUpdate(empty, f.dom.window.performance.now());

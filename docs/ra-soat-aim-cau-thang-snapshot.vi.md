@@ -1,0 +1,7 @@
+# Aim cầu thang và update cùng tick
+
+- Server Survev pin `3edee7e8bd07fda8a63905aab4c45b595b684a80` chọn `aimLayer` theo hướng bắn trên cầu thang. Trước đây bộ lọc ứng viên dùng hướng trực tiếp tới vị trí hiện tại; lead hoặc offset nòng có thể đổi hướng sang một quadrant khác, khiến bộ lọc loại nhầm mục tiêu. Nay chỉ loại sớm nếu không có quadrant nào có layer tương thích; hướng giải thực tế vẫn được kiểm tra layer trước khi nhận mục tiêu. Giới hạn 6 ứng viên, chất lượng lead và trạng thái world replicate vẫn ảnh hưởng kết quả; không bảo đảm hit.
+- Hai update đầy đủ cùng `performance.now()` không còn xóa lịch sử nội suy đứng yên dùng cho grenade và fallback stationary của súng. Không tạo mẫu đứng yên từ update thứ hai nếu đồng hồ chưa tiến; update mất cấu trúc, đồng hồ lùi hoặc stream ngừng vẫn bỏ lịch sử theo các guard cũ. Không thể tái tạo chính xác thời gian server từ các gói bị dồn.
+- Tái sử dụng kết quả layer của hướng đã giải thay vì quét stair lặp lại ba lần ở đoạn ray; không thay đổi Wallcheck, FOV, input vật lý hay menu.
+
+Kiểm thử: 261 test; 11.520 so sánh nhánh `Player.update`/`math.radToOri` từ source pin với `shotLayer` qua các góc và layer (collider cầu thang giả lập); source fixture client 4 biến thể, loot, 320 đường ném + 20 preview, 568 cấu hình súng đều đạt. Benchmark Node tổng hợp geometry 4000 vật thể median 0,828 ms, p95 1,344 ms/solve; không phải đo FPS. Chưa kiểm tra trong trận live và source pin có thể khác deployment thực tế.
