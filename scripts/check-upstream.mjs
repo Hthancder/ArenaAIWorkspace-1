@@ -110,7 +110,7 @@ const rotationSubject={m_netData:{m_activeWeapon:'fists'},downed:false,currentAn
 for(const key of ['handLContainer','handRContainer','footLContainer','footRContainer'])rotationSubject[key]={position:{set(){}},pivot:{set(){}}};
 const hero=player(1,{x:10,y:20}),enemy=player(2,{x:12,y:20}),ally=player(3,{x:11,y:23}),unknown=player(4,{x:11.5,y:23});
 hero.bodyContainer=rotationSubject.bodyContainer;
-const barn=Object.assign(new PlayerBarn(),{playerPool:{m_pool:[hero,enemy,ally,unknown],m_getPool(){return this.m_pool}},playerIds:[1,2,3,4],teamInfo:{},groupInfo:{},playerInfo:{1:{playerId:1,teamId:10,groupId:10},2:{playerId:2,teamId:20,groupId:20},3:{playerId:3,teamId:10,groupId:30}}});
+const barn=Object.assign(new PlayerBarn(),{playerPool:{m_pool:[hero,enemy,ally,unknown],m_getPool(){return this.m_pool}},playerIds:[1,2,3,4],teamInfo:{},groupInfo:{},playerStatus:{},playerInfo:{1:{playerId:1,teamId:10,groupId:10},2:{playerId:2,teamId:20,groupId:20},3:{playerId:3,teamId:10,groupId:30}}});
 barn.recomputeTeamData();
 const input={keyDown(){return false},mousePos:{x:440,y:300},mouseButtons:{0:true},mouseButtonsOld:{},flush(){this.mouseButtonsOld={...this.mouseButtons};},
  isInputValueDown(b){return !!this.mouseButtons[b.code]},isInputValuePressed(b){return !!this.mouseButtons[b.code]&&!this.mouseButtonsOld[b.code]}};
@@ -133,6 +133,8 @@ const serverWeapon=Object.assign(new WeaponManager(),{player:serverPlayer,curWea
  meleeAttacks:[],meleeAnimCooldown:0,throwableCooldown:0,meleeDamage(){}});
 globalThis.result={localRotation:()=>{Player.prototype.updateRotation.call(rotationSubject,input,camera,true,false,false);return rotationSubject.bodyContainer.rotation;},setLocalRotation:enabled=>{camera.m_localRotationEnabled=enabled;},bodyRotation:()=>hero.bodyContainer.rotation,setWall:on=>{if(on)game.m_objectCreator.m_idToObj[99]={__id:99,__type:2,active:true,collidable:true,dead:false,height:1,layer:0,collider:{type:0,pos:{x:10.85,y:20.17},rad:.2}};else delete game.m_objectCreator.m_idToObj[99];},setZoom:z=>{camera.m_zoom=z;camera.m_targetZoom=z;},nativePrevious:()=>game.m_prevInputMsg,nativeFrame:dt=>game.nativeInputFrame(dt),receive:pos=>game.m_processGameUpdate({ack:game.seq,playerInfos:[],deletedPlayerIds:[],delObjIds:[],fullObjects:[],partObjects:[{__id:2,__type:1,pos,dir:{x:1,y:0}}],activePlayerData:{},bullets:[],explosions:[],emotes:[],planes:[],airstrikeZones:[],mapIndicators:[]}),app,callbacks,fistsDef,nativeMap,readInputAim:()=>game.readInputAim(),
  frameInput:()=>{const msg=new InputMsg();msg.shootStart=!!binds.isBindPressed(4);msg.shootHold=!!binds.isBindDown(4);if(binds.isBindPressed(10))msg.addInput(10);return msg;},
+ deleteEnemyInfo:()=>game.m_processGameUpdate({ack:game.seq,playerInfos:[],deletedPlayerIds:[2],delObjIds:[],fullObjects:[],partObjects:[],activePlayerData:{},bullets:[],explosions:[],emotes:[],planes:[],airstrikeZones:[],mapIndicators:[]}),
+ restoreEnemyInfo:()=>{barn.playerInfo[2]={playerId:2,teamId:20,groupId:20};barn.playerIds.push(2);barn.recomputeTeamData();},
  fragDef, throwableDefs, setGrenade:(type='frag')=>{hero.m_netData.m_activeWeapon=type;hero.m_localData.m_curWeapIdx=3;hero.m_localData.m_weapons[3].type=type;input.mouseButtons[0]=true;input.mouseButtonsOld[0]=false;},
  setMelee:()=>{hero.m_netData.m_activeWeapon='fists';hero.m_localData.m_curWeapIdx=2;input.mouseButtonsOld[0]=true;},
  serverTick:(msg,dt)=>{serverPlayer.animTicker-=dt;if(serverPlayer.animTicker<=0)serverPlayer.animType=0;serverPlayer.shootStart=msg.shootStart;serverPlayer.shootHold=msg.shootHold;serverWeapon.update(dt);return serverPlayer.swings;},
@@ -181,6 +183,17 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     context.result.receive({x:12,y:20.7}); assert.equal(engine.aimPlanFrame,-1,'Native world update invalidates cached aim');
     app.game[engine.timeoutKey]=0; clock+=10; context.result.nativeFrame(1/60);
     wire=context.sent.at(-1).decoded; assert.ok(wire.toMouseDir.y>.3,'Same-frame update reaches actual serialized direction');
+    // The source can update team membership without any world object entries.
+    // With Wallcheck off the cached plan used to survive this update.
+    app.input.flush(); clock += 17; engine.config.wallcheck = false; engine.pre();
+    assert.equal(engine.target?.__id, 2); context.result.deleteEnemyInfo();
+    assert.equal(engine.aimPlanFrame, -1, 'Source player-info deletion invalidates the same-frame plan');
+    const teamInput = frameInput(); teamInput.toMouseDir = { x: 1, y: 0 }; teamInput.toMouseLen = 1.25;
+    app.game[discoverSender(app.game)](3, teamInput, 128);
+    assert.equal(engine.target, null, 'Unknown team cannot inherit the old enemy plan');
+    assert.equal(context.sent.at(-1).decoded.shootHold, true, 'Team change never blocks physical Fire');
+    assert.ok(Math.abs(context.sent.at(-1).decoded.toMouseDir.y) < .003, 'Wire returns to native direction');
+    context.result.restoreEnemyInfo(); engine.config.wallcheck = true;
     app.input.flush(); clock+=17; context.result.receive({x:12,y:20}); engine.pre(); context.result.nativeFrame(1/60);
     const count=context.sent.length;
     clock += 34; context.result.receive({x:12,y:20.4});engine.pre();

@@ -8804,10 +8804,10 @@ THE SOFTWARE.
     }
     observeUpdate(msg, arrivedAt = this.win.performance.now()) {
       this.guard("snapshot-update", () => {
-        this.reconcile();
+        this.reconcile(msg.activePlayerIdDirty === true);
         const m = this.mapping, fields = this.sourceFields, now = arrivedAt;
         this.timing.received(msg, now);
-        if ((msg.fullObjects || []).length || (msg.partObjects || []).length || (msg.delObjIds || []).length) {
+        if ((msg.fullObjects || []).length || (msg.partObjects || []).length || (msg.delObjIds || []).length || (msg.playerInfos || []).length || (msg.deletedPlayerIds || []).length || msg.activePlayerIdDirty === true || msg.activePlayerData?.weapsDirty === true) {
           this.aimPlanFrame = -1;
           this.grenadePlan = null;
         }

@@ -500,13 +500,19 @@ export class Features {
   }
   observeUpdate(msg, arrivedAt = this.win.performance.now()) {
     this.guard('snapshot-update', () => {
-      this.reconcile();
+      // Native processing may replace the active-player reference before the
+      // next frame; do not wait for the normal one-second discovery throttle.
+      this.reconcile(msg.activePlayerIdDirty === true);
       const m = this.mapping, fields = this.sourceFields, now = arrivedAt;
       this.timing.received(msg, now);
-      // Native processing already changed the world. Position, layer, death,
-      // collider and other object fields can all invalidate a cached plan. Do
-      // not send an extra packet or recompute inside the receiver.
-      if ((msg.fullObjects || []).length || (msg.partObjects || []).length || (msg.delObjIds || []).length) { this.aimPlanFrame = -1; this.grenadePlan = null; }
+      // Team info and local weapon changes can arrive without world objects.
+      // They invalidate selection just like position, death and cover updates.
+      // Do not send an extra packet or recompute inside the receiver.
+      if ((msg.fullObjects || []).length || (msg.partObjects || []).length || (msg.delObjIds || []).length
+        || (msg.playerInfos || []).length || (msg.deletedPlayerIds || []).length
+        || msg.activePlayerIdDirty === true || msg.activePlayerData?.weapsDirty === true) {
+        this.aimPlanFrame = -1; this.grenadePlan = null;
+      }
       if (!m?.schema || !fields?.pos) return;
       for (const id of msg.delObjIds || []) {
         const old = this.observedEntities.get(id); if (old) { this.tracker.forget(old); this.grenadeTracker.forget(old); }

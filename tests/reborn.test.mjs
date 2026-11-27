@@ -1667,6 +1667,43 @@ test('world updates invalidate cached plans without sending; control-only and ma
   } finally { f.close(); }
 });
 
+test('team-only and local-weapon updates invalidate a cached aim before the sender', () => {
+  for (const change of ['playerInfos', 'deletedPlayerIds', 'weapsDirty']) {
+    const f = coordinated({ wallcheck: false, humanLikeAim: false });
+    try {
+      const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1]; enemy.p = { x: 12, y: 20.5 };
+      f.engine.pre(); assert.ok(f.engine.aimPlan); assert.equal(f.engine.target, enemy);
+      const update = { ack: 0, fullObjects: [], partObjects: [], delObjIds: [], playerInfos: [], deletedPlayerIds: [], activePlayerData: {} };
+      if (change === 'weapsDirty') {
+        hero.l.index = 3; hero.n.weapon = 'frag'; update.activePlayerData.weapsDirty = true;
+      } else if (change === 'playerInfos') {
+        f.app.game.barn.teamInfo[20].playerIds = []; f.app.game.barn.teamInfo[10].playerIds.push(2);
+        update.playerInfos.push({ playerId: 2 });
+      } else {
+        delete f.app.game.barn.teamInfo[20]; update.deletedPlayerIds.push(2);
+      }
+      const count = f.app.game.sent.length;
+      f.engine.observeUpdate(update); assert.equal(f.engine.aimPlanFrame, -1, change);
+      assert.equal(f.app.game.sent.length, count, 'receiver must not synthesize input');
+      const native = new InputMsg(); native.shootHold = true; native.toMouseLen = 1.25;
+      f.app.game.transmit(3, native); const sent = f.app.game.sent.at(-1).data;
+      assert.equal(f.engine.target, null, change); assert.deepEqual(sent.toMouseDir, native.toMouseDir, change);
+      assert.equal(sent.shootHold, true, 'physical Fire is preserved');
+    } finally { f.close(); }
+  }
+});
+
+test('active-player-id update forces mapping discovery without waiting for the next frame', () => {
+  const f = coordinated({ wallcheck: false });
+  try {
+    f.engine.pre(); const old = f.app.game.hero, replacement = f.app.game.barn.playerPool.list[1];
+    f.app.game.hero = replacement;
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [], delObjIds: [], activePlayerIdDirty: true, activePlayerData: {} });
+    assert.notEqual(f.engine.mapping.active, old); assert.equal(f.engine.mapping.active, replacement);
+    assert.equal(f.engine.aimPlanFrame, -1);
+  } finally { f.close(); }
+});
+
 test('same-frame A-D snapshot recomputes while retaining bounded-oscillation model', () => {
   const f = coordinated({ predict: true, stabilizeStrafe: true });
   try {
