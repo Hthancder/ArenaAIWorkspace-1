@@ -184,6 +184,27 @@ test('cross-layer muzzle overlap uses the source base radius, independent of pla
   assert.ok(Math.abs(clippedMuzzle(origin, dir, gun, [wall], 1, 1).x - 1.895) < 1e-9, 'biased plane just beyond muzzle can still clip');
 });
 
+test('muzzle clipping reevaluates each obstacle against the previously shifted endpoint', () => {
+  const dir = { x: -0.4751493527921102, y: 0.8799051611061495 };
+  const make = (x, y, rad) => ({ active: true, collidable: true, dead: false, layer: 0, height: 1, collider: { type: 0, pos: { x, y }, rad } });
+  const obstacles = [make(.024755407784434684, .1009292699472144, .36540001749526707),
+    make(-.14120266565043407, .4839605890609974, .11964199682697654),
+    make(-.3942117631835551, 1.2382072992418747, .148494633869268)];
+  const muzzle = clippedMuzzle({ x: 0, y: 0 }, dir, { offset: 0, barrel: 2 }, obstacles, 0, 0);
+  assert.ok(Math.hypot(muzzle.x - -.1491319449104743, muzzle.y - .2761699394967654) < 1e-8);
+});
+
+test('ambiguous muzzle inside an AABB relinquishes prediction rather than fabricating an origin', () => {
+  const wall = { active: true, collidable: true, dead: false, layer: 0, height: 1,
+    collider: { type: 1, min: { x: -.4, y: -.5 }, max: { x: .4, y: .5 } } };
+  const origin = { x: 0, y: 0 }, dir = { x: 1, y: 0 }, gun = { ...profile, offset: 0 };
+  assert.equal(clippedMuzzle(origin, dir, gun, [wall], 0, 0), null);
+  const shot = predictShot({ origin, target: { x: 10, y: 0 }, profile: gun,
+    muzzleFor: (pos, direction, p) => clippedMuzzle(pos, direction, p, [wall], 0, 0) });
+  assert.deepEqual(shot, { state: 'uncertain-muzzle' });
+  assert.equal(clippedMuzzle(origin, dir, gun, [wall], 0, 1).x, 2, 'cross-layer source skip is checked first');
+});
+
 test('AST adapters infer contracts by dataflow and reject ambiguous native schedulers', () => {
   const g = { tick(dt) { this.a -= dt; if (changed || this.a < 0) this.a = 1; }, receiver(msg) { for (const x of msg.fullObjects) {} for (const x of msg.partObjects) {} for (const x of msg.delObjIds) {} this.active = msg.activePlayerData; } };
   assert.equal(discoverInputTimeout(g), 'a'); assert.equal(discoverUpdateReceiver(g), 'receiver');

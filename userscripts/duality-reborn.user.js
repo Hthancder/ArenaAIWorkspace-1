@@ -7124,6 +7124,7 @@ THE SOFTWARE.
     let time = 0, world = current2, muzzle;
     for (let i = 0; i < 3; i++) {
       muzzle = muzzleFor(origin, dir, profile);
+      if (!vec(muzzle)) return { state: "uncertain-muzzle" };
       time = intercept({ x: current2.x - muzzle.x, y: current2.y - muzzle.y }, { x: vx * lead, y: vy * lead }, profile.speed, Infinity);
       if (time === null) return { state: "no-intercept" };
       world = { x: current2.x + vx * time * lead, y: current2.y + vy * time * lead };
@@ -7136,6 +7137,7 @@ THE SOFTWARE.
     const confidence = error > Math.max(0.75, radius) * 2 ? Math.max(0.75, radius) * 2 / error : 1;
     if (confidence < 1) for (let i = 0; i < 3; i++) {
       muzzle = muzzleFor(origin, dir, profile);
+      if (!vec(muzzle)) return { state: "uncertain-muzzle" };
       time = intercept({ x: current2.x - muzzle.x, y: current2.y - muzzle.y }, { x: vx * lead * confidence, y: vy * lead * confidence }, profile.speed, Infinity);
       if (time === null) return { state: "no-intercept" };
       world = { x: current2.x + vx * time * lead * confidence, y: current2.y + vy * time * lead * confidence };
@@ -7149,6 +7151,7 @@ THE SOFTWARE.
       dir = { x: Math.cos(a), y: Math.sin(a) };
     }
     const finalMuzzle = muzzleFor(origin, dir, profile);
+    if (!vec(finalMuzzle)) return { state: "uncertain-muzzle" };
     const mouseLen = Math.hypot(world.x - finalMuzzle.x, world.y - finalMuzzle.y) / (profile.variance || 1) + profile.barrel;
     return { mouseLen, state: confidence < 1 ? "reduced-lead-uncertainty" : bounded ? "bounded-oscillation" : track ? "predicted" : "direct-no-history", world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
   }
@@ -7380,7 +7383,9 @@ THE SOFTWARE.
   function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLayer) {
     const radius = 1;
     const gunPos = { x: pos.x - dir.y * profile.offset, y: pos.y + dir.x * profile.offset };
-    let nearest = null;
+    let clipLen = profile.barrel + 1.5;
+    let clipPoint = { x: gunPos.x + dir.x * clipLen, y: gunPos.y + dir.y * clipLen };
+    let clipNormal = { x: -dir.x, y: -dir.y };
     for (const o of obstacles.slice(0, 1024)) {
       if (!o.active || o.dead || !o.collidable || !sameLayer(o.layer, layer) || finite(o.height) && o.height < 0.25) continue;
       const shape = read(o, "collider");
@@ -7393,23 +7398,37 @@ THE SOFTWARE.
         }
         if (inside) continue;
       }
-      let hit = rayHit(gunPos, dir, profile.barrel + 1.5, shape);
+      if (shape?.type === 1 && vec(shape.min) && vec(shape.max) && gunPos.x >= shape.min.x && gunPos.x <= shape.max.x && gunPos.y >= shape.min.y && gunPos.y <= shape.max.y) return null;
+      const dx = clipPoint.x - gunPos.x, dy = clipPoint.y - gunPos.y, segmentLength = Math.hypot(dx, dy);
+      if (segmentLength <= 1e-8) continue;
+      const segmentDir = { x: dx / segmentLength, y: dy / segmentLength };
+      let hit = rayHit(gunPos, segmentDir, segmentLength, shape);
       if (shape?.type === 0 && vec(shape.pos) && finite(shape.rad) && shape.rad > 0) {
         const x = gunPos.x - shape.pos.x, y = gunPos.y - shape.pos.y, c = x * x + y * y - shape.rad * shape.rad;
         if (c < 0) {
-          const b = x * dir.x + y * dir.y, t = -b + Math.sqrt(Math.max(0, b * b - c));
-          if (t <= profile.barrel + 1.5) {
-            const nx = x + dir.x * t, ny = y + dir.y * t, n = Math.hypot(nx, ny);
+          const b = x * segmentDir.x + y * segmentDir.y, t = -b + Math.sqrt(Math.max(0, b * b - c));
+          if (t <= segmentLength) {
+            const nx = x + segmentDir.x * t, ny = y + segmentDir.y * t, n = Math.hypot(nx, ny);
             hit = n > 0 ? { distance: t, normal: { x: nx / n, y: ny / n } } : null;
           } else hit = null;
         }
       }
-      if (hit && (!nearest || hit.distance < nearest.distance)) nearest = hit;
+      if (hit) {
+        const shifted = {
+          x: gunPos.x + segmentDir.x * hit.distance + hit.normal.x * 0.01,
+          y: gunPos.y + segmentDir.y * hit.distance + hit.normal.y * 0.01
+        };
+        const shiftedDistance = Math.hypot(shifted.x - gunPos.x, shifted.y - gunPos.y);
+        if (shiftedDistance < clipLen) {
+          clipLen = shiftedDistance;
+          clipPoint = shifted;
+          clipNormal = hit.normal;
+        }
+      }
     }
-    if (!nearest) return muzzleAt(pos, dir, profile);
-    const dot = dir.x * nearest.normal.x + dir.y * nearest.normal.y;
+    const dot = dir.x * clipNormal.x + dir.y * clipNormal.y;
     if (dot >= -1e-5) return muzzleAt(pos, dir, profile);
-    const plane = nearest.distance + 0.01 / dot;
+    const plane = ((clipPoint.x - gunPos.x) * clipNormal.x + (clipPoint.y - gunPos.y) * clipNormal.y) / dot;
     if (plane >= profile.barrel) return muzzleAt(pos, dir, profile);
     const length = plane - 0.1;
     return { x: gunPos.x + dir.x * length, y: gunPos.y + dir.y * length };
@@ -9325,6 +9344,10 @@ THE SOFTWARE.
             return fail("wall-blocked");
           }
           const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1) : pos;
+          if (!vec(actualMuzzle)) {
+            reject("uncertainMuzzle");
+            return fail("uncertain-muzzle");
+          }
           const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: pathAlongAim(actualMuzzle, dir, shot.world, hitRadius) };
           if (this.blocked(actualFrom, actualTo, true, obstacles) || this.blockedByPlayer(actualFrom, actualTo, candidate.p, players)) {
             reject("wall");

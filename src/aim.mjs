@@ -176,6 +176,7 @@ export function predictShot({ origin, target, track, profile, latency = 0, lead 
   let time = 0, world = current, muzzle;
   for (let i = 0; i < 3; i++) {
     muzzle = muzzleFor(origin, dir, profile);
+    if (!vec(muzzle)) return { state: 'uncertain-muzzle' };
     time = intercept({ x: current.x - muzzle.x, y: current.y - muzzle.y }, { x: vx * lead, y: vy * lead }, profile.speed, Infinity);
     if (time === null) return { state: 'no-intercept' };
     world = { x: current.x + vx * time * lead, y: current.y + vy * time * lead };
@@ -189,6 +190,7 @@ export function predictShot({ origin, target, track, profile, latency = 0, lead 
   const confidence = error > Math.max(.75, radius) * 2 ? Math.max(.75, radius) * 2 / error : 1;
   if (confidence < 1) for (let i = 0; i < 3; i++) {
     muzzle = muzzleFor(origin, dir, profile);
+    if (!vec(muzzle)) return { state: 'uncertain-muzzle' };
     time = intercept({ x: current.x - muzzle.x, y: current.y - muzzle.y }, { x: vx * lead * confidence, y: vy * lead * confidence }, profile.speed, Infinity);
     if (time === null) return { state: 'no-intercept' };
     world = { x: current.x + vx * time * lead * confidence, y: current.y + vy * time * lead * confidence };
@@ -202,6 +204,7 @@ export function predictShot({ origin, target, track, profile, latency = 0, lead 
     dir = { x: Math.cos(a), y: Math.sin(a) };
   }
   const finalMuzzle = muzzleFor(origin, dir, profile);
+  if (!vec(finalMuzzle)) return { state: 'uncertain-muzzle' };
   const mouseLen = Math.hypot(world.x - finalMuzzle.x, world.y - finalMuzzle.y) / (profile.variance || 1) + profile.barrel;
   return { mouseLen, state: confidence < 1 ? 'reduced-lead-uncertainty' : bounded ? 'bounded-oscillation' : track ? 'predicted' : 'direct-no-history', world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
 }

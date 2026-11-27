@@ -63,7 +63,9 @@ export function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLaye
   // for its cross-layer gun-position overlap test.
   const radius = 1;
   const gunPos = { x: pos.x - dir.y * profile.offset, y: pos.y + dir.x * profile.offset };
-  let nearest = null;
+  let clipLen = profile.barrel + 1.5;
+  let clipPoint = { x: gunPos.x + dir.x * clipLen, y: gunPos.y + dir.y * clipLen };
+  let clipNormal = { x: -dir.x, y: -dir.y };
   for (const o of obstacles.slice(0, 1024)) {
     if (!o.active || o.dead || !o.collidable || !sameLayer(o.layer, layer) || finite(o.height) && o.height < .25) continue;
     const shape = read(o, 'collider');
@@ -77,28 +79,39 @@ export function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLaye
       }
       if (inside) continue;
     }
-    let hit = rayHit(gunPos, dir, profile.barrel + 1.5, shape);
-    // The source segment-circle routine uses the exit intersection when the
-    // segment starts inside a circle. Preview's rayHit intentionally reports
-    // zero there, which would falsely clip the muzzle behind the player.
+    // Source AABB intersection has ambiguous normals when the gun starts
+    // inside a box and can produce a very distant/behind-player shot origin.
+    // Do not claim an accurate muzzle for that case; the caller yields aim.
+    if (shape?.type === 1 && vec(shape.min) && vec(shape.max)
+      && gunPos.x >= shape.min.x && gunPos.x <= shape.max.x && gunPos.y >= shape.min.y && gunPos.y <= shape.max.y) return null;
+    // Each source intersection uses the previously shifted endpoint, not the
+    // original ray. Its normal bias can steer the next probe slightly sideways.
+    const dx = clipPoint.x - gunPos.x, dy = clipPoint.y - gunPos.y, segmentLength = Math.hypot(dx, dy);
+    if (segmentLength <= 1e-8) continue;
+    const segmentDir = { x: dx / segmentLength, y: dy / segmentLength };
+    let hit = rayHit(gunPos, segmentDir, segmentLength, shape);
+    // Source circle intersections start inside at the exit, unlike preview's
+    // conservative zero-distance hit.
     if (shape?.type === 0 && vec(shape.pos) && finite(shape.rad) && shape.rad > 0) {
       const x = gunPos.x - shape.pos.x, y = gunPos.y - shape.pos.y, c = x * x + y * y - shape.rad * shape.rad;
       if (c < 0) {
-        const b = x * dir.x + y * dir.y, t = -b + Math.sqrt(Math.max(0, b * b - c));
-        if (t <= profile.barrel + 1.5) {
-          const nx = x + dir.x * t, ny = y + dir.y * t, n = Math.hypot(nx, ny);
+        const b = x * segmentDir.x + y * segmentDir.y, t = -b + Math.sqrt(Math.max(0, b * b - c));
+        if (t <= segmentLength) {
+          const nx = x + segmentDir.x * t, ny = y + segmentDir.y * t, n = Math.hypot(nx, ny);
           hit = n > 0 ? { distance: t, normal: { x: nx / n, y: ny / n } } : null;
         } else hit = null;
       }
     }
-    if (hit && (!nearest || hit.distance < nearest.distance)) nearest = hit;
+    if (hit) {
+      const shifted = { x: gunPos.x + segmentDir.x * hit.distance + hit.normal.x * .01,
+        y: gunPos.y + segmentDir.y * hit.distance + hit.normal.y * .01 };
+      const shiftedDistance = Math.hypot(shifted.x - gunPos.x, shifted.y - gunPos.y);
+      if (shiftedDistance < clipLen) { clipLen = shiftedDistance; clipPoint = shifted; clipNormal = hit.normal; }
+    }
   }
-  if (!nearest) return muzzleAt(pos, dir, profile);
-  const dot = dir.x * nearest.normal.x + dir.y * nearest.normal.y;
+  const dot = dir.x * clipNormal.x + dir.y * clipNormal.y;
   if (dot >= -1e-5) return muzzleAt(pos, dir, profile);
-  // The source offsets the intersection plane before comparing with gunLen;
-  // a hit just beyond the nominal muzzle can still move the plane inside it.
-  const plane = nearest.distance + .01 / dot;
+  const plane = ((clipPoint.x - gunPos.x) * clipNormal.x + (clipPoint.y - gunPos.y) * clipNormal.y) / dot;
   if (plane >= profile.barrel) return muzzleAt(pos, dir, profile);
   const length = plane - .1;
   return { x: gunPos.x + dir.x * length, y: gunPos.y + dir.y * length };

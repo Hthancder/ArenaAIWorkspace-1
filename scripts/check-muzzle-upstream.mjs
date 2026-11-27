@@ -43,4 +43,39 @@ for (const scale of [.3, 1, 2]) for (const layer of [0, 1]) for (const bulletLay
   assert.ok(Math.hypot(actual.x - expected.x, actual.y - expected.y) < 1e-8, `scale=${scale}, layer=${layer}, bullet=${bulletLayer}, x=${x} angle=${angle} lateral=${lateral}: ${JSON.stringify({actual,expected})}`);
   cases++;
 }
-console.log(`PASS ${cases} source central-pellet muzzle comparisons across scales and layers; inert grid, no live gameplay`);
+let seed = 77321, differences = 0, example = null, diffs = [];
+const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+for (let i = 0; i < 3000; i++) {
+  const angle = rand() * Math.PI * 2, dir = { x: Math.cos(angle), y: Math.sin(angle) }, origin = { x: 0, y: 0 };
+  const obstacles = Array.from({ length: 3 }, () => { const ahead = rand() * 3, side = (rand() - .5) * .6;
+    return { __type: 2, active: true, dead: false, collidable: true, layer: 0, height: 1, collider: { type: 0, pos: { x: dir.x * ahead - dir.y * side, y: dir.y * ahead + dir.x * side }, rad: .1 + rand() * .5 } }; });
+  const player = { pos: origin, dir, layer: 0, aimLayer: 0, rad: 1, toMouseLen: 1, cancelAction() {}, game: { grid: { intersectCollider() { return obstacles; } } } };
+  const expected = Object.assign(new context.WeaponManager(), { player }).test({ isDual: false, barrelOffset: 0, barrelLength: 2, fireDelay: .1 }, { ammo: 10 }, false);
+  const actual = clippedMuzzle(origin, dir, { offset: 0, barrel: 2 }, obstacles, 0, 0);
+  const diff = Math.hypot(actual.x - expected.x, actual.y - expected.y);
+  diffs.push(diff); if (diff > 1e-6) { differences++; if (!example || diff > example.diff) example = { dir, obstacles, actual, expected, diff }; }
+}
+let guardedBoxes = 0, checkedBoxes = 0, boxMax = 0, sourceExtreme = 0;
+for (let i = 0; i < 3000; i++) {
+  const angle = rand() * Math.PI * 2, dir = { x: Math.cos(angle), y: Math.sin(angle) }, origin = { x: 0, y: 0 };
+  const obstacles = Array.from({ length: 2 }, () => { const ahead = rand() * 3, side = (rand() - .5) * .6;
+    const x = dir.x * ahead - dir.y * side, y = dir.y * ahead + dir.x * side, halfX = .1 + rand() * .5, halfY = .1 + rand() * .5;
+    return { __type: 2, active: true, dead: false, collidable: true, layer: 0, height: 1, collider: { type: 1, min: { x: x - halfX, y: y - halfY }, max: { x: x + halfX, y: y + halfY } } }; });
+  const player = { pos: origin, dir, layer: 0, aimLayer: 0, rad: 1, toMouseLen: 1, cancelAction() {}, game: { grid: { intersectCollider() { return obstacles; } } } };
+  const expected = Object.assign(new context.WeaponManager(), { player }).test({ isDual: false, barrelOffset: 0, barrelLength: 2, fireDelay: .1 }, { ammo: 10 }, false);
+  const actual = clippedMuzzle(origin, dir, { offset: 0, barrel: 2 }, obstacles, 0, 0);
+  const startsInside = obstacles.some(o => o.collider.min.x <= 0 && o.collider.max.x >= 0 && o.collider.min.y <= 0 && o.collider.max.y >= 0);
+  if (startsInside) {
+    assert.equal(actual, null, 'ambiguous interior AABB yields aim'); guardedBoxes++;
+    if (Math.hypot(expected.x, expected.y) > 3.5) sourceExtreme++;
+  } else {
+    assert.ok(actual); const diff = Math.hypot(actual.x - expected.x, actual.y - expected.y);
+    boxMax = Math.max(boxMax, diff); checkedBoxes++;
+    assert.ok(diff < .02, `outside-AABB mismatch ${diff}`);
+  }
+}
+assert.ok(guardedBoxes > 0 && sourceExtreme > 0, 'fixture exercises interior and extreme source outcomes');
+console.log(`AABB cases: ${guardedBoxes} guarded (source extreme ${sourceExtreme}), ${checkedBoxes} outside (max error ${boxMax})`);
+diffs.sort((a,b) => a-b);
+assert.equal(differences, 0, `multi-circle mismatch: ${JSON.stringify(example)}`);
+console.log(`PASS ${cases} source central-pellet muzzle comparisons plus 3000 ordered multi-circle cases (max error ${diffs.at(-1)}); inert grid, no live gameplay`);

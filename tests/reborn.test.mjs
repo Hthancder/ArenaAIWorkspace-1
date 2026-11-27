@@ -1643,6 +1643,21 @@ test('wallcheck stops at target hitbox, but checks the actual smoothed direction
   } finally { f.close(); }
 });
 
+test('uncertain muzzle inside a box yields aim without blocking Fire, and recovers when clear', () => {
+  const f = coordinated({ wallcheck: false, predict: false, humanLikeAim: false });
+  try {
+    const wall = { __id: 900, __type: 2, active: true, collidable: true, layer: 0, height: 1,
+      collider: { type: 1, min: { x: 9.8, y: 19.8 }, max: { x: 10.2, y: 20.2 } } };
+    const table = { 900: wall };
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true);
+    const blocked = f.send();
+    assert.equal(f.engine.target, null); assert.equal(f.engine.stats.aimRejections['uncertain-muzzle'], 1);
+    assert.equal(blocked.wire.shootHold, true); assert.deepEqual(blocked.wire.toMouseDir, blocked.native.toMouseDir);
+    wall.dead = true; f.advance(); f.send(); assert.equal(f.engine.target?.__id, 2);
+  } finally { f.close(); }
+});
+
 test('smoothed Wallcheck ignores cover after actual hitbox entry but stops before it', () => {
   const f = coordinated({ wallcheck: true, humanLikeAim: true, predict: false });
   try {

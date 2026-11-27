@@ -855,6 +855,7 @@ export class Features {
         const actualLayer = layerFor(dir);
         if (actualLayer === null) { reject('aimLayer'); return fail('wall-blocked'); }
         const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1) : pos;
+        if (!vec(actualMuzzle)) { reject('uncertainMuzzle'); return fail('uncertain-muzzle'); }
         // Truncate only if this exact direction intersects the predicted hitbox;
         // otherwise inspect the entire conservative segment for cover.
         const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: pathAlongAim(actualMuzzle, dir, shot.world, hitRadius) };
