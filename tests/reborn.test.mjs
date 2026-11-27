@@ -1808,6 +1808,30 @@ test('active-player-id update forces mapping discovery without waiting for the n
   } finally { f.close(); }
 });
 
+test('gun targets players on either stair layer, while melee uses the player collision layer', () => {
+  for (const mode of ['gun', 'melee']) {
+    const f = coordinated({ wallcheck: false, humanLikeAim: false, melee: mode === 'melee' });
+    try {
+      const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+      hero.layer = 1; enemy.layer = 2;
+      if (mode === 'melee') { hero.l.index = 2; hero.n.weapon = 'fists'; }
+      const result = f.send();
+      assert.equal(result.wire.shootHold, true);
+      if (mode === 'gun') assert.equal(f.engine.target, enemy, 'source bullets admit stair targets regardless of parity');
+      else assert.equal(f.engine.target, null, 'source melee requires sameLayer of the actual player');
+    } finally { f.close(); }
+  }
+  const f = coordinated({ melee: true, wallcheck: false });
+  try {
+    const hero = f.app.game.hero, enemy = f.app.game.barn.playerPool.list[1];
+    hero.layer = 3; hero.l.index = 2; hero.n.weapon = 'fists'; enemy.layer = 1;
+    const stair = { active: true, stairs: [{ collision: { min: { x: 9, y: 19 }, max: { x: 11, y: 21 } }, downDir: { x: -1, y: 0 } }] };
+    f.app.game.creator = { table: { 100: stair }, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true); f.send();
+    assert.equal(f.engine.target, enemy, 'melee uses player layer 3 rather than its east-facing bullet layer 2');
+  } finally { f.close(); }
+});
+
 test('stair selection checks the predicted shot layer, not only the direct target bearing', () => {
   const f = coordinated({ predict: true, humanLikeAim: false, wallcheck: true, fov: 300 });
   try {

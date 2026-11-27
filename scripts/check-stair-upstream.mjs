@@ -39,4 +39,19 @@ for (const layer of [0, 1, 2, 3]) for (let down = 0; down < 4; down++) {
     cases++;
   }
 }
-console.log(`PASS ${cases} source Player.update stair-layer direction comparisons; inert stair collision, no network or live server`);
+// Collision boundary comes from source coldet.testCircleAabb. Include exact
+// tangencies, which are not collisions unless the center itself is inside.
+const coldetJS = transformSync(readFileSync(resolve(root, 'shared/utils/coldet.ts'), 'utf8'), { loader: 'ts' }).code;
+const coldetTree = parse(coldetJS, { ecmaVersion: 'latest', sourceType: 'module' });
+const coldet = coldetTree.body.map(n => n.declaration || n).find(n => n.type === 'VariableDeclaration' && n.declarations[0].id.name === 'coldet').declarations[0].init;
+const collisionMethod = coldet.properties.find(p => p.key.name === 'testCircleAabb'); assert.ok(collisionMethod);
+const collisionContext = vm.createContext({});
+vm.runInContext(`const math={clamp:(v,a,b)=>Math.max(a,Math.min(b,v))},v2={create:(x,y)=>({x,y}),sub:(a,b)=>({x:a.x-b.x,y:a.y-b.y}),lengthSqr:a=>a.x*a.x+a.y*a.y};globalThis.coldet={${coldetJS.slice(collisionMethod.start, collisionMethod.end)}};`, collisionContext);
+const bounds = { min: { x: -1, y: -1 }, max: { x: 1, y: 1 } }, stairs = [{ active: true, stairs: [{ collision: bounds, downDir: { x: -1, y: 0 } }] }];
+let collisionCases = 0;
+for (const radius of [.25, .5, 1, 2]) for (const delta of [-.001, 0, .001, radius]) for (const edge of [-1, 1]) {
+  const p = { x: edge * (1 + radius + delta), y: 0 };
+  const intersects = collisionContext.coldet.testCircleAabb(p, radius, bounds.min, bounds.max);
+  assert.equal(shotLayer(p, { x: -1, y: 0 }, 0, radius, stairs), intersects ? 3 : 0); collisionCases++;
+}
+console.log(`PASS ${cases} source Player.update stair-layer directions and ${collisionCases} source circle/AABB boundaries; inert fixture, no network or live server`);

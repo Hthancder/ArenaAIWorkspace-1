@@ -11,7 +11,7 @@ import { WeaponSwitch } from './weapon-switch.mjs';
 import { MovementSmoother, previewAim, throwPreview, traceShot } from './previews.mjs';
 import { AimController, SnapshotTracker, modeOf, predictShot, unit, weaponProfile, angleDelta } from './aim.mjs';
 import { discoverInputTimeout, discoverUpdateReceiver, discoverSourceFields, NetworkTiming } from './aim-adapters.mjs';
-import { clippedMuzzle, shotLayer, segmentCandidates, pathToTarget, pathAlongAim, geometryObjects } from './aim-geometry.mjs';
+import { clippedMuzzle, shotLayer, segmentCandidates, pathToTarget, pathAlongAim, geometryObjects, targetLayerEligible } from './aim-geometry.mjs';
 import { AimEvidence } from './aim-evidence.mjs';
 import { MouseInputFrame } from './mouse-input.mjs';
 import { NativeNames } from './native-names.mjs';
@@ -742,6 +742,9 @@ export class Features {
     let geometry;
     const world = () => geometry ||= geometryObjects(read(m.creator, m.registryKey));
     const layerFor = dir => shotLayer(pos, dir, rawLayer, selfRadius, world().structures);
+    // Source bullet collision admits a player on either stair layer even when
+    // the ground parity differs. Melee instead uses sameLayer(player.layer).
+    const targetOnLayer = (targetLayer, attackLayer) => targetLayerEligible(targetLayer, attackLayer, melee);
     let possibleLayers;
     const layersForAnyDirection = () => possibleLayers ||= [
       { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 },
@@ -766,12 +769,12 @@ export class Features {
       // The discovered registry can disappear or become unreadable between
       // reconciliations. An empty failed scan is not evidence of clear cover.
       if (cfg.wallcheck && !world().valid) return fail('wallcheck-unavailable');
-      const targetLayer = this.sourceLayer(p), directLayer = layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical);
+      const targetLayer = this.sourceLayer(p), directLayer = melee ? rawLayer : layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical);
       // On stairs, lead or barrel offset can put the final shot in a different
       // cardinal direction and therefore a different aimLayer. Only reject here
       // if no possible cardinal direction reaches the target's layer; the
       // actual solved direction is checked again below before output.
-      if (!sameLayer(targetLayer, directLayer) && !layersForAnyDirection().some(layer => sameLayer(targetLayer, layer))) { reject('otherLayer'); continue; }
+      if (!targetOnLayer(targetLayer, directLayer) && (melee || !layersForAnyDirection().some(layer => targetOnLayer(targetLayer, layer)))) { reject('otherLayer'); continue; }
       // A real switch margin prevents two enemies on opposite sides of the FOV from
       // trading ownership every frame. The current target needs to be meaningfully
       // better before Lock/Assist changes targets.
@@ -817,7 +820,7 @@ export class Features {
           shot = predictShot({ origin: pos, target: candidate.pos, track, profile,
             latency: track && cfg.latencyCompensation ? this.timing.transit(now) : 0, compensateSnapshot: mode === 'lock', lead: (cfg.leadAdjustment ?? 100) / 100,
             radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1, stabilize: mode === 'lock' && cfg.stabilizeStrafe !== false,
-            muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, muzzleObstacles, layerFor(dir), rawLayer & 1, selfRadius) });
+            muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, muzzleObstacles, layerFor(dir), rawLayer & 1) });
           if (shot.dir && cfg.predict && !track) { shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable'; shot.approximate = true; }
           if (shot.dir && inferredStationary) { shot.state = 'inferred-stationary'; shot.approximate = true; }
           // Strict prediction is an accuracy-first fallback policy: do not invent a
@@ -826,8 +829,8 @@ export class Features {
         }
       }
       if (!shot.dir) { reject(shot.state); continue; }
-      const shotAimLayer = layerFor(shot.dir);
-      if (shotAimLayer === null || !sameLayer(shotAimLayer, this.sourceLayer(candidate.p))) { reject('aimLayer'); continue; }
+      const shotAimLayer = melee ? rawLayer : layerFor(shot.dir);
+      if (!targetOnLayer(this.sourceLayer(candidate.p), shotAimLayer)) { reject('aimLayer'); continue; }
       const hitRadius = melee ? 0 : at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1;
       const rayFrom = { pos: shot.muzzle, layer: shotAimLayer };
       const rayTo = { pos: pathToTarget(shot.muzzle, shot.world, hitRadius) };
@@ -851,7 +854,7 @@ export class Features {
       if (cfg.wallcheck && !melee && dir && (Math.abs(dir.x - shot.dir.x) > 1e-6 || Math.abs(dir.y - shot.dir.y) > 1e-6)) {
         const actualLayer = layerFor(dir);
         if (actualLayer === null) { reject('aimLayer'); return fail('wall-blocked'); }
-        const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1, selfRadius) : pos;
+        const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1) : pos;
         // Truncate only if this exact direction intersects the predicted hitbox;
         // otherwise inspect the entire conservative segment for cover.
         const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: pathAlongAim(actualMuzzle, dir, shot.world, hitRadius) };

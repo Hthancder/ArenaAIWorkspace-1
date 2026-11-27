@@ -156,6 +156,8 @@ test('Stair aim-layer uses source cardinal direction and real collision radius, 
   assert.equal(shotLayer({ x: 0, y: 0 }, { x: -1, y: 0 }, 0, 1, structures), 3);
   assert.equal(shotLayer({ x: 0, y: 0 }, { x: 0, y: 1 }, 0, 1, structures), 0);
   assert.equal(shotLayer({ x: 10, y: 0 }, { x: -1, y: 0 }, 0, 1, structures), 0);
+  assert.equal(shotLayer({ x: 2, y: 0 }, { x: -1, y: 0 }, 0, 1, structures), 0, 'external tangency is not collision');
+  assert.equal(shotLayer({ x: 1.999, y: 0 }, { x: -1, y: 0 }, 0, 1, structures), 3);
   assert.equal(shotLayer({ x: 0, y: 0 }, { x: 1, y: 0 }, 0, 1, Array(257).fill(structures[0])), null);
   assert.equal(shotLayer({ x: 0, y: 0 }, { x: 1, y: 0 }, 0, 1, [{ active: true, stairs: Array(33).fill(structures[0].stairs[0]) }]), null);
   assert.equal(shotLayer({ x: 0, y: 0 }, { x: 1, y: 0 }, 0, 1, [{ active: true, stairs: [{ collision: null }] }]), null);
@@ -166,6 +168,20 @@ test('Muzzle clips against eligible bullet-height obstacles; below-height/dead/o
   const start = { x: 0, y: 0 }, dir = { x: 1, y: 0 };
   assert.ok(Math.abs(clippedMuzzle(start, dir, profile, [obstacle], 0, 0).x - .89) < 1e-9);
   for (const change of [{ dead: true }, { layer: 1 }, { height: .1 }]) assert.equal(clippedMuzzle(start, dir, profile, [{ ...obstacle, ...change }], 0, 0).x, 2);
+});
+
+test('cross-layer muzzle overlap uses the source base radius, independent of player scale', () => {
+  const gun = { ...profile, offset: 0 }, origin = { x: 0, y: 0 }, dir = { x: 1, y: 0 };
+  const wall = { active: true, collidable: true, dead: false, layer: 1, height: 1,
+    collider: { type: 0, pos: { x: 1.5, y: 0 }, rad: .2 } };
+  assert.ok(Math.abs(clippedMuzzle(origin, dir, gun, [wall], 1, 0, 2).x - 1.19) < 1e-9, 'large scale must not wrongly ignore wall');
+  wall.collider.pos.x = .8;
+  assert.equal(clippedMuzzle(origin, dir, gun, [wall], 1, 0, .3).x, 2, 'small scale must not clip a source-ignored wall');
+  assert.ok(Math.abs(clippedMuzzle(origin, dir, gun, [wall], 1, 1).x - .49) < 1e-9, 'same-layer clip still applies');
+  wall.collider = { type: 0, pos: { x: .1, y: 0 }, rad: .5 };
+  assert.equal(clippedMuzzle(origin, dir, gun, [wall], 1, 1).x, 2, 'starting inside a circle intersects its exit; outward normal does not clip');
+  wall.collider = { type: 0, pos: { x: 2.205, y: 0 }, rad: .2 };
+  assert.ok(Math.abs(clippedMuzzle(origin, dir, gun, [wall], 1, 1).x - 1.895) < 1e-9, 'biased plane just beyond muzzle can still clip');
 });
 
 test('AST adapters infer contracts by dataflow and reject ambiguous native schedulers', () => {

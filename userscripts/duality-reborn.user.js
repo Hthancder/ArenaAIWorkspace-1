@@ -7349,6 +7349,10 @@ THE SOFTWARE.
     return { obstacles, structures, valid };
   }
   __name(geometryObjects, "geometryObjects");
+  function targetLayerEligible(targetLayer, attackLayer, melee = false) {
+    return Number.isInteger(targetLayer) && Number.isInteger(attackLayer) && (sameLayer(targetLayer, attackLayer) || !melee && !!(targetLayer & 2));
+  }
+  __name(targetLayerEligible, "targetLayerEligible");
   function shotLayer(pos, direction, layer, radius, structures) {
     if (!Array.isArray(structures) || structures.length > 256) return null;
     for (const structure of structures) {
@@ -7359,7 +7363,8 @@ THE SOFTWARE.
         if (!vec(stair?.collision?.min) || !vec(stair?.collision?.max) || stair.collision.min.x > stair.collision.max.x || stair.collision.min.y > stair.collision.max.y) return null;
         const { min, max } = stair.collision;
         const x = Math.max(min.x, Math.min(max.x, pos.x)), y = Math.max(min.y, Math.min(max.y, pos.y));
-        if ((x - pos.x) ** 2 + (y - pos.y) ** 2 > radius ** 2) continue;
+        const inside = pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y;
+        if (!inside && (x - pos.x) ** 2 + (y - pos.y) ** 2 >= radius ** 2) continue;
         if (!vec(stair.downDir)) return null;
         const cardinal = /* @__PURE__ */ __name((dir) => {
           const angle = Math.atan2(dir.y, dir.x) + Math.PI / 4;
@@ -7372,7 +7377,8 @@ THE SOFTWARE.
     return layer;
   }
   __name(shotLayer, "shotLayer");
-  function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLayer, radius = 1) {
+  function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLayer) {
+    const radius = 1;
     const gunPos = { x: pos.x - dir.y * profile.offset, y: pos.y + dir.x * profile.offset };
     let nearest = null;
     for (const o of obstacles.slice(0, 1024)) {
@@ -7380,19 +7386,32 @@ THE SOFTWARE.
       const shape = read(o, "collider");
       if (!sameLayer(collisionLayer, layer) && shape) {
         let inside = false;
-        if (shape.type === 0 && vec(shape.pos)) inside = Math.hypot(gunPos.x - shape.pos.x, gunPos.y - shape.pos.y) < radius + shape.rad;
+        if (shape.type === 0 && vec(shape.pos)) inside = (gunPos.x - shape.pos.x) ** 2 + (gunPos.y - shape.pos.y) ** 2 < (radius + shape.rad) ** 2;
         if (shape.type === 1 && vec(shape.min) && vec(shape.max)) {
           const x = Math.max(shape.min.x, Math.min(shape.max.x, gunPos.x)), y = Math.max(shape.min.y, Math.min(shape.max.y, gunPos.y));
-          inside = Math.hypot(x - gunPos.x, y - gunPos.y) < radius;
+          inside = (x - gunPos.x) ** 2 + (y - gunPos.y) ** 2 < radius ** 2;
         }
         if (inside) continue;
       }
-      const hit = rayHit(gunPos, dir, profile.barrel + 1.5, shape);
+      let hit = rayHit(gunPos, dir, profile.barrel + 1.5, shape);
+      if (shape?.type === 0 && vec(shape.pos) && finite(shape.rad) && shape.rad > 0) {
+        const x = gunPos.x - shape.pos.x, y = gunPos.y - shape.pos.y, c = x * x + y * y - shape.rad * shape.rad;
+        if (c < 0) {
+          const b = x * dir.x + y * dir.y, t = -b + Math.sqrt(Math.max(0, b * b - c));
+          if (t <= profile.barrel + 1.5) {
+            const nx = x + dir.x * t, ny = y + dir.y * t, n = Math.hypot(nx, ny);
+            hit = n > 0 ? { distance: t, normal: { x: nx / n, y: ny / n } } : null;
+          } else hit = null;
+        }
+      }
       if (hit && (!nearest || hit.distance < nearest.distance)) nearest = hit;
     }
-    if (!nearest || nearest.distance >= profile.barrel) return muzzleAt(pos, dir, profile);
+    if (!nearest) return muzzleAt(pos, dir, profile);
     const dot = dir.x * nearest.normal.x + dir.y * nearest.normal.y;
-    const length = nearest.distance + (dot < -1e-5 ? 0.01 / dot : 0) - 0.1;
+    if (dot >= -1e-5) return muzzleAt(pos, dir, profile);
+    const plane = nearest.distance + 0.01 / dot;
+    if (plane >= profile.barrel) return muzzleAt(pos, dir, profile);
+    const length = plane - 0.1;
     return { x: gunPos.x + dir.x * length, y: gunPos.y + dir.y * length };
   }
   __name(clippedMuzzle, "clippedMuzzle");
@@ -9157,6 +9176,7 @@ THE SOFTWARE.
       let geometry;
       const world = /* @__PURE__ */ __name(() => geometry ||= geometryObjects(read(m.creator, m.registryKey)), "world");
       const layerFor = /* @__PURE__ */ __name((dir) => shotLayer(pos, dir, rawLayer, selfRadius, world().structures), "layerFor");
+      const targetOnLayer = /* @__PURE__ */ __name((targetLayer, attackLayer) => targetLayerEligible(targetLayer, attackLayer, melee), "targetOnLayer");
       let possibleLayers;
       const layersForAnyDirection = /* @__PURE__ */ __name(() => possibleLayers ||= [
         { x: 1, y: 0 },
@@ -9190,8 +9210,8 @@ THE SOFTWARE.
           continue;
         }
         if (cfg.wallcheck && !world().valid) return fail("wallcheck-unavailable");
-        const targetLayer = this.sourceLayer(p), directLayer = layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical);
-        if (!sameLayer(targetLayer, directLayer) && !layersForAnyDirection().some((layer) => sameLayer(targetLayer, layer))) {
+        const targetLayer = this.sourceLayer(p), directLayer = melee ? rawLayer : layerFor(unit({ x: target.x - pos.x, y: target.y - pos.y }) || physical);
+        if (!targetOnLayer(targetLayer, directLayer) && (melee || !layersForAnyDirection().some((layer) => targetOnLayer(targetLayer, layer)))) {
           reject("otherLayer");
           continue;
         }
@@ -9247,7 +9267,7 @@ THE SOFTWARE.
               lead: (cfg.leadAdjustment ?? 100) / 100,
               radius: at2(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
               stabilize: mode === "lock" && cfg.stabilizeStrafe !== false,
-              muzzleFor: /* @__PURE__ */ __name((origin, dir2, model) => clippedMuzzle(origin, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1, selfRadius), "muzzleFor")
+              muzzleFor: /* @__PURE__ */ __name((origin, dir2, model) => clippedMuzzle(origin, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1), "muzzleFor")
             });
             if (shot.dir && cfg.predict && !track) {
               shot.state = predictionReady ? "direct-awaiting-snapshot" : "direct-prediction-unavailable";
@@ -9267,8 +9287,8 @@ THE SOFTWARE.
           reject(shot.state);
           continue;
         }
-        const shotAimLayer = layerFor(shot.dir);
-        if (shotAimLayer === null || !sameLayer(shotAimLayer, this.sourceLayer(candidate.p))) {
+        const shotAimLayer = melee ? rawLayer : layerFor(shot.dir);
+        if (!targetOnLayer(this.sourceLayer(candidate.p), shotAimLayer)) {
           reject("aimLayer");
           continue;
         }
@@ -9304,7 +9324,7 @@ THE SOFTWARE.
             reject("aimLayer");
             return fail("wall-blocked");
           }
-          const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1, selfRadius) : pos;
+          const actualMuzzle = profile ? clippedMuzzle(pos, dir, profile, muzzleObstacles, actualLayer, rawLayer & 1) : pos;
           const actualFrom = { pos: actualMuzzle, layer: actualLayer }, actualTo = { pos: pathAlongAim(actualMuzzle, dir, shot.world, hitRadius) };
           if (this.blocked(actualFrom, actualTo, true, obstacles) || this.blockedByPlayer(actualFrom, actualTo, candidate.p, players)) {
             reject("wall");

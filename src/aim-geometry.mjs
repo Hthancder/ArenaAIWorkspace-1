@@ -22,6 +22,13 @@ export function geometryObjects(registry) {
   return { obstacles, structures, valid };
 }
 
+// Source bullets collide with stair-layer players from either floor; melee
+// collision uses sameLayer on the player's physical layer without that exception.
+export function targetLayerEligible(targetLayer, attackLayer, melee = false) {
+  return Number.isInteger(targetLayer) && Number.isInteger(attackLayer)
+    && (sameLayer(targetLayer, attackLayer) || !melee && !!(targetLayer & 2));
+}
+
 // Structure.stairs is public client state built from shared map definitions.
 // Server checkStructureStairs uses circle/AABB, then cardinal facing to choose aimLayer.
 export function shotLayer(pos, direction, layer, radius, structures) {
@@ -36,7 +43,10 @@ export function shotLayer(pos, direction, layer, radius, structures) {
           || stair.collision.min.x > stair.collision.max.x || stair.collision.min.y > stair.collision.max.y) return null;
       const { min, max } = stair.collision;
       const x = Math.max(min.x, Math.min(max.x, pos.x)), y = Math.max(min.y, Math.min(max.y, pos.y));
-      if ((x - pos.x) ** 2 + (y - pos.y) ** 2 > radius ** 2) continue;
+      // Source testCircleAabb excludes an external tangent, while a center
+      // inside the AABB always collides (including on its boundary).
+      const inside = pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y;
+      if (!inside && (x - pos.x) ** 2 + (y - pos.y) ** 2 >= radius ** 2) continue;
       if (!vec(stair.downDir)) return null;
       const cardinal = dir => { const angle = Math.atan2(dir.y, dir.x) + Math.PI / 4; return Math.floor(((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) / (Math.PI / 2)); };
       const ori = cardinal(direction), downOri = cardinal(stair.downDir);
@@ -48,7 +58,10 @@ export function shotLayer(pos, direction, layer, radius, structures) {
 
 // Match fireWeapon's central pellet muzzle clipping plane (+1.5 probe, .01
 // surface bias, -.1 setback). Shotgun jitter/unknown dual hand remain uncertainty.
-export function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLayer, radius = 1) {
+export function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLayer) {
+  // Source fireWeapon uses GameConfig.player.radius (1), not scaled player.rad,
+  // for its cross-layer gun-position overlap test.
+  const radius = 1;
   const gunPos = { x: pos.x - dir.y * profile.offset, y: pos.y + dir.x * profile.offset };
   let nearest = null;
   for (const o of obstacles.slice(0, 1024)) {
@@ -57,19 +70,37 @@ export function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLaye
     // Server ignores containing obstacles when shooting across a stair boundary.
     if (!sameLayer(collisionLayer, layer) && shape) {
       let inside = false;
-      if (shape.type === 0 && vec(shape.pos)) inside = Math.hypot(gunPos.x - shape.pos.x, gunPos.y - shape.pos.y) < radius + shape.rad;
+      if (shape.type === 0 && vec(shape.pos)) inside = (gunPos.x - shape.pos.x) ** 2 + (gunPos.y - shape.pos.y) ** 2 < (radius + shape.rad) ** 2;
       if (shape.type === 1 && vec(shape.min) && vec(shape.max)) {
         const x = Math.max(shape.min.x, Math.min(shape.max.x, gunPos.x)), y = Math.max(shape.min.y, Math.min(shape.max.y, gunPos.y));
-        inside = Math.hypot(x - gunPos.x, y - gunPos.y) < radius;
+        inside = (x - gunPos.x) ** 2 + (y - gunPos.y) ** 2 < radius ** 2;
       }
       if (inside) continue;
     }
-    const hit = rayHit(gunPos, dir, profile.barrel + 1.5, shape);
+    let hit = rayHit(gunPos, dir, profile.barrel + 1.5, shape);
+    // The source segment-circle routine uses the exit intersection when the
+    // segment starts inside a circle. Preview's rayHit intentionally reports
+    // zero there, which would falsely clip the muzzle behind the player.
+    if (shape?.type === 0 && vec(shape.pos) && finite(shape.rad) && shape.rad > 0) {
+      const x = gunPos.x - shape.pos.x, y = gunPos.y - shape.pos.y, c = x * x + y * y - shape.rad * shape.rad;
+      if (c < 0) {
+        const b = x * dir.x + y * dir.y, t = -b + Math.sqrt(Math.max(0, b * b - c));
+        if (t <= profile.barrel + 1.5) {
+          const nx = x + dir.x * t, ny = y + dir.y * t, n = Math.hypot(nx, ny);
+          hit = n > 0 ? { distance: t, normal: { x: nx / n, y: ny / n } } : null;
+        } else hit = null;
+      }
+    }
     if (hit && (!nearest || hit.distance < nearest.distance)) nearest = hit;
   }
-  if (!nearest || nearest.distance >= profile.barrel) return muzzleAt(pos, dir, profile);
+  if (!nearest) return muzzleAt(pos, dir, profile);
   const dot = dir.x * nearest.normal.x + dir.y * nearest.normal.y;
-  const length = nearest.distance + (dot < -1e-5 ? .01 / dot : 0) - .1;
+  if (dot >= -1e-5) return muzzleAt(pos, dir, profile);
+  // The source offsets the intersection plane before comparing with gunLen;
+  // a hit just beyond the nominal muzzle can still move the plane inside it.
+  const plane = nearest.distance + .01 / dot;
+  if (plane >= profile.barrel) return muzzleAt(pos, dir, profile);
+  const length = plane - .1;
   return { x: gunPos.x + dir.x * length, y: gunPos.y + dir.y * length };
 }
 
