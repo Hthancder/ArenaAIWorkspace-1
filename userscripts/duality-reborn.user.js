@@ -8608,11 +8608,16 @@ THE SOFTWARE.
               return Reflect.apply(original, this, arguments);
             }
             intent = self.mouseInput.intent(self.app.input, self.mapping?.camera, data2);
+            const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
+            if (!physicalHeld) {
+              self.manualEquipHeld = false;
+              self.meleeEquip = null;
+            }
             const manualEquip = data2.inputs.some(isManualEquip);
             if (manualEquip) {
               self.weaponSwitch.reset();
               self.switchSlot = null;
-              self.manualEquipHeld = true;
+              self.manualEquipHeld = physicalHeld;
             }
             if (!self.inputReady()) {
               self.stats.aimState = self.inputBlockReason();
@@ -8647,15 +8652,9 @@ THE SOFTWARE.
                 self.aimOutput = self.timedProcessAim(intent, true, direct, { target: self.target, dir: self.aimPlan.dir });
               } else self.aimOutput = reusable ? self.aimPlan : self.timedProcessAim(intent, true, direct);
             }
-            if (manualEquip) {
-              self.weaponSwitch.reset();
-              self.switchSlot = null;
-              self.manualEquipHeld = true;
-            }
             self.aimOutputFrame = self.frameId;
             self.moveDirection = self.config.mobileMovement && inputShape(data2) ? self.movement.sample(data2, self.config.movementSmooth, self.win.performance.now()) : null;
             if (!self.config.mobileMovement) self.movement.reset();
-            const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
             if (!physicalHeld && self.switchSlot !== null) {
               self.switchSlot = null;
               self.weaponSwitch.reset();
@@ -8900,6 +8899,11 @@ THE SOFTWARE.
       this.reconcile(!!staleIdentity);
       if (this.config.grenadeTimer || this.grenadeTimer.active) this.guard("grenade-timer", () => this.grenadeTimer.validate(this.grenadeContext()));
       this.updateLayer();
+      const firing = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+      if (!firing) {
+        this.manualEquipHeld = false;
+        this.meleeEquip = null;
+      }
       this.switchSlot = null;
       if (this.inputReady()) this.updateSwitch();
       else this.weaponSwitch.reset();

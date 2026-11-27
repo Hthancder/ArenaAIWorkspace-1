@@ -959,6 +959,46 @@ test('manual equip keeps Auto Switch disabled until the physical Fire hold ends'
   } finally { f.close(); }
 });
 
+test('idle manual equip does not claim the next Fire hold', () => {
+  const f = coordinated({ autoSwitch: true });
+  try {
+    f.app.input.mouseButtons[0] = false; const change = f.send([12]);
+    assert.deepEqual(change.wire.inputs, [12]); assert.equal(f.engine.manualEquipHeld, false);
+    f.app.game.hero.l.index = 1;
+    f.app.input.mouseButtons[0] = true; f.advance(300); f.send();
+    f.app.game.hero.l.weapons[1].ammo--; f.advance(300);
+    assert.ok(f.send().wire.inputs.includes(11), 'Auto Switch responds to a shot during the new hold');
+  } finally { f.close(); }
+});
+
+test('release while input is blocked clears manual equip ownership before the next hold', () => {
+  const f = coordinated({ autoSwitch: true });
+  try {
+    f.send([12]); assert.equal(f.engine.manualEquipHeld, true);
+    f.app.game.hero.l.index = 1; f.engine.focusBlocked = true;
+    f.app.input.mouseButtons[0] = false; f.advance(); f.engine.pre();
+    assert.equal(f.engine.manualEquipHeld, false, 'physical release is observed even while aim is blocked');
+    f.engine.focusBlocked = false; f.app.input.mouseButtons[0] = true; f.advance(300); f.send();
+    f.app.game.hero.l.weapons[1].ammo--; f.advance(300);
+    assert.ok(f.send().wire.inputs.includes(11));
+  } finally { f.close(); }
+});
+
+test('blocked sender observes Fire release between frames without clearing a still-held manual equip', () => {
+  const f = coordinated({ autoSwitch: true });
+  try {
+    f.send([12]); f.app.game.hero.l.index = 1; f.engine.focusBlocked = true;
+    f.advance(); f.engine.pre(); assert.equal(f.engine.manualEquipHeld, true, 'blocking alone does not end the hold');
+    f.app.input.mouseButtons[0] = false;
+    const release = new InputMsg(); release.inputs = []; release.shootHold = false;
+    f.app.game.transmit(3, release);
+    assert.equal(f.engine.manualEquipHeld, false, 'sender observes release even when input is blocked');
+    f.engine.focusBlocked = false; f.app.input.mouseButtons[0] = true; f.advance(300); f.send();
+    f.app.game.hero.l.weapons[1].ammo--; f.advance(300);
+    assert.ok(f.send().wire.inputs.includes(11));
+  } finally { f.close(); }
+});
+
 test('Melee Lock owns visual and wire direction even with gun aim off and yields when Fire is released', () => {
   const f = coordinated({ aim: false, aimMode: 'off', melee: true, aimActivation: 'key' });
   try {

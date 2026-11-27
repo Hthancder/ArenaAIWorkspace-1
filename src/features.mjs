@@ -269,8 +269,10 @@ export class Features {
         if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
           if (!inputShape(data)) { self.aimEvidence.invalidInputs++; return Reflect.apply(original, this, arguments); }
           intent = self.mouseInput.intent(self.app.input, self.mapping?.camera, data);
+          const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
+          if (!physicalHeld) { self.manualEquipHeld = false; self.meleeEquip = null; }
           const manualEquip = data.inputs.some(isManualEquip);
-          if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
+          if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = physicalHeld; }
           if (!self.inputReady()) { self.stats.aimState = self.inputBlockReason(); self.aimOutput = null; self.aimController.reset(); self.weaponSwitch.reset(); self.movement.reset(); self.switchSlot = null; self.meleeDirection = null; }
           else if (manualEquip) {
             // The server applies this packet's aim/movement and equip together.
@@ -301,11 +303,9 @@ export class Features {
               self.aimOutput = self.timedProcessAim(intent, true, direct, { target: self.target, dir: self.aimPlan.dir });
             } else self.aimOutput = reusable ? self.aimPlan : self.timedProcessAim(intent, true, direct);
           }
-          if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.aimOutputFrame = self.frameId;
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
           if (!self.config.mobileMovement) self.movement.reset();
-          const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
           // Fire can be released after pre() scheduled a switch but before the
           // native packet is sent. Never send that stale equip after release.
           if (!physicalHeld && self.switchSlot !== null) { self.switchSlot = null; self.weaponSwitch.reset(); }
@@ -498,6 +498,10 @@ export class Features {
     this.reconcile(!!staleIdentity);
     if (this.config.grenadeTimer || this.grenadeTimer.active) this.guard('grenade-timer', () => this.grenadeTimer.validate(this.grenadeContext()));
     this.updateLayer();
+    // End the manual-equip ownership even while aiming is blocked (e.g. a
+    // focused menu); updateSwitch runs before processAim can observe release.
+    const firing = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+    if (!firing) { this.manualEquipHeld = false; this.meleeEquip = null; }
     this.switchSlot = null;
     if (this.inputReady()) this.updateSwitch(); else this.weaponSwitch.reset();
     const aimFrame = ++this.aimFrame, directMouse = this.config.directMouseInput !== false && !!this.flushReady;
