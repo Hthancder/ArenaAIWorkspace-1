@@ -78,6 +78,17 @@ test('weapon switch does not mistake a reload from empty for a shot while Fire i
     assert.equal(manager.sample({ ...input, now: 110 }), 1, 'an observed ammo decrease still switches');
   }
 });
+test('weapon switch starts a fresh ammo baseline on each physical Fire hold', () => {
+  const manager = new WeaponSwitch(), ws = weapons();
+  const input = { enabled: true, ready: true, definitions: switchDefs, held: true, oneGun: false, slot: 0, weapons: ws, now: 0 };
+  assert.equal(manager.sample(input), null);
+  assert.equal(manager.sample({ ...input, held: false, now: 10 }), null);
+  ws[0].ammo--;
+  assert.equal(manager.sample({ ...input, now: 20 }), null, 'late ammo change at the new hold is only a baseline');
+  ws[0].ammo--;
+  assert.equal(manager.sample({ ...input, now: 40 }), 1, 'a later observed shot can trigger a switch');
+});
+
 test('Use One Gun waits for observed equip before requesting return, cancels on release', () => {
   const manager = new WeaponSwitch(), ws = weapons(), input = { enabled: true, ready: true, definitions: switchDefs, held: true, oneGun: true, slot: 0, weapons: ws, now: 0 };
   manager.sample(input); ws[0].ammo--; assert.equal(manager.sample({ ...input, now: 10 }), 1);

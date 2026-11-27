@@ -6731,6 +6731,12 @@ THE SOFTWARE.
       }
       const eligible = /* @__PURE__ */ __name((weapon) => weapon?.type && definitions?.[weapon.type]?.type === "gun" && ["single", "burst"].includes(definitions[weapon.type].fireMode), "eligible");
       const current2 = weapons?.[slot];
+      if (!held) {
+        this.last = null;
+        this.pending = null;
+        this.state = "fire-not-held";
+        return null;
+      }
       if (this.pending) {
         const p = this.pending;
         if (now > p.expires || !held || !weapons?.[p.returnSlot] || weapons[p.returnSlot].type !== p.type || ![p.via, p.returnSlot].includes(slot)) this.pending = null;
@@ -8649,8 +8655,12 @@ THE SOFTWARE.
             self.aimOutputFrame = self.frameId;
             self.moveDirection = self.config.mobileMovement && inputShape(data2) ? self.movement.sample(data2, self.config.movementSmooth, self.win.performance.now()) : null;
             if (!self.config.mobileMovement) self.movement.reset();
-            outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
             const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
+            if (!physicalHeld && self.switchSlot !== null) {
+              self.switchSlot = null;
+              self.weaponSwitch.reset();
+            }
+            outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
             if (self.grenadeAuto.phase === "released" && (manualEquip || !self.inputReady() || self.local?.data?.[self.local.slotKey] !== 3)) {
               self.grenadeAuto.phase = "manual";
             }
@@ -9412,6 +9422,12 @@ THE SOFTWARE.
     }
     updateSwitch() {
       const local = this.local;
+      if (this.config.autoSwitch && this.manualEquipHeld) {
+        this.weaponSwitch.reset();
+        this.switchSlot = null;
+        this.stats.switchState = "manual-equip";
+        return;
+      }
       this.switchSlot = this.weaponSwitch.sample({
         enabled: this.config.autoSwitch,
         ready: !!(this.capabilities.switch && local),

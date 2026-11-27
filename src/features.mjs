@@ -305,8 +305,11 @@ export class Features {
           self.aimOutputFrame = self.frameId;
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
           if (!self.config.mobileMovement) self.movement.reset();
-          outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
           const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
+          // Fire can be released after pre() scheduled a switch but before the
+          // native packet is sent. Never send that stale equip after release.
+          if (!physicalHeld && self.switchSlot !== null) { self.switchSlot = null; self.weaponSwitch.reset(); }
+          outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
           // The anti-recook gate belongs to the throwable hold, not all future
           // weapons or an explicit manual equip. Yield it permanently for this
           // hold when the player switches or input safety is unavailable.
@@ -921,6 +924,11 @@ export class Features {
   }
   updateSwitch() {
     const local = this.local;
+    // Manual equip owns the remainder of the physical Fire hold. Otherwise a
+    // later ammo update can restart Auto Switch and undo the user's choice.
+    if (this.config.autoSwitch && this.manualEquipHeld) {
+      this.weaponSwitch.reset(); this.switchSlot = null; this.stats.switchState = 'manual-equip'; return;
+    }
     this.switchSlot = this.weaponSwitch.sample({ enabled: this.config.autoSwitch, ready: !!(this.capabilities.switch && local),
       slot: local?.data[local.slotKey], weapons: local?.data[local.weaponsKey], definitions: this.definitions,
       held: !!this.binds?.isBindDown(4), oneGun: this.config.useOneGun, now: this.win.performance.now() });

@@ -7,6 +7,9 @@ export class WeaponSwitch {
     if (!enabled || !ready) { this.reset(); this.state = enabled ? 'waiting-contract' : 'disabled'; return null; }
     const eligible = weapon => weapon?.type && definitions?.[weapon.type]?.type === 'gun' && ['single', 'burst'].includes(definitions[weapon.type].fireMode);
     const current = weapons?.[slot];
+    // A late ammo update from an earlier hold is not evidence that the newly
+    // pressed hold fired. Start each hold with a fresh baseline instead.
+    if (!held) { this.last = null; this.pending = null; this.state = 'fire-not-held'; return null; }
     if (this.pending) {
       const p = this.pending;
       if (now > p.expires || !held || !weapons?.[p.returnSlot] || weapons[p.returnSlot].type !== p.type || ![p.via, p.returnSlot].includes(slot)) this.pending = null;

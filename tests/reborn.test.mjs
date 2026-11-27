@@ -925,6 +925,40 @@ test('Aim+Semi+Switch preserve physical Fire/movement and consume one equip; man
   } finally { f.close(); }
 });
 
+test('Auto Switch cancels a pre-frame equip if Fire is released before the sender', () => {
+  const f = coordinated({ autoSwitch: true, humanLikeAim: false });
+  try {
+    f.send(); f.app.game.hero.l.weapons[0].ammo--; f.advance(200);
+    f.engine.pre(); assert.equal(f.engine.switchSlot, 1, 'pre-frame detected an ammo decrease');
+    f.app.input.mouseButtons[0] = false;
+    const release = new InputMsg(); release.shootHold = false; release.inputs = [];
+    f.app.game.transmit(3, release);
+    const wire = f.app.game.sent.at(-1).data;
+    assert.deepEqual(wire.inputs, [], 'do not equip from a stale held-Fire plan');
+    assert.equal(wire.shootHold, false); assert.equal(f.engine.weaponSwitch.pending, null);
+  } finally { f.close(); }
+});
+
+test('manual equip keeps Auto Switch disabled until the physical Fire hold ends', () => {
+  const f = coordinated({ autoSwitch: true, humanLikeAim: false });
+  try {
+    f.send(); f.advance(100);
+    const change = f.send([12]);
+    assert.deepEqual(change.wire.inputs, [12]); assert.equal(change.wire.shootHold, true);
+    f.app.game.hero.l.index = 1;
+    f.advance(100); f.send();
+    f.app.game.hero.l.weapons[1].ammo--;
+    f.advance(300); const after = f.send();
+    assert.ok(!after.wire.inputs.includes(11), 'no automatic reversal while Fire remains held');
+    assert.equal(after.wire.shootHold, true); assert.equal(f.engine.stats.switchState, 'manual-equip');
+    f.app.input.mouseButtons[0] = false; f.advance(); f.send();
+    assert.equal(f.engine.manualEquipHeld, false);
+    f.app.input.mouseButtons[0] = true; f.advance(300); f.send();
+    f.app.game.hero.l.weapons[1].ammo--; f.advance(300); const resumed = f.send();
+    assert.ok(resumed.wire.inputs.includes(11), 'Auto Switch resumes for a new hold after a shot');
+  } finally { f.close(); }
+});
+
 test('Melee Lock owns visual and wire direction even with gun aim off and yields when Fire is released', () => {
   const f = coordinated({ aim: false, aimMode: 'off', melee: true, aimActivation: 'key' });
   try {
