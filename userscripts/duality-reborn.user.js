@@ -8605,6 +8605,10 @@ THE SOFTWARE.
           if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
             if (!inputShape(data2)) {
               self.aimEvidence.invalidInputs++;
+              if (self.switchSlot !== null) {
+                self.weaponSwitch.reset();
+                self.switchSlot = null;
+              }
               return Reflect.apply(original, this, arguments);
             }
             intent = self.mouseInput.intent(self.app.input, self.mapping?.camera, data2);
@@ -8697,6 +8701,11 @@ THE SOFTWARE.
               self.grenadeManualOverride = true;
             }
             if (!self.aimOutput || auto === "suppress") self.restoreInput();
+            const requestedEquip = equipInput(self.switchSlot);
+            if (requestedEquip !== null && !outgoing.inputs.includes(requestedEquip)) {
+              self.weaponSwitch.reset();
+              self.stats.switchState = "equip-not-forwarded";
+            }
             if (self.meleeDirection && self.switchSlot === 2 && outgoing !== data2 && outgoing.inputs.includes(13)) self.meleeEquip = { id: self.target?.__id, until: self.win.performance.now() + 1e3 };
             self.switchSlot = null;
           }
@@ -8704,6 +8713,8 @@ THE SOFTWARE.
           if (type === 3) {
             self.aimEvidence.inputErrors++;
             inputBypassed = true;
+            self.weaponSwitch.reset();
+            self.switchSlot = null;
           }
           self.report("warning", `Input bypassed: ${e.message}`);
           self.aimOutput = null;
@@ -8904,6 +8915,7 @@ THE SOFTWARE.
         this.manualEquipHeld = false;
         this.meleeEquip = null;
       }
+      if (this.switchSlot !== null) this.weaponSwitch.reset();
       this.switchSlot = null;
       if (this.inputReady()) this.updateSwitch();
       else this.weaponSwitch.reset();

@@ -959,6 +959,40 @@ test('manual equip keeps Auto Switch disabled until the physical Fire hold ends'
   } finally { f.close(); }
 });
 
+test('Auto Switch drops an unforwarded cycle when native input is full', () => {
+  const f = coordinated({ autoSwitch: true, useOneGun: true });
+  try {
+    f.send(); f.app.game.hero.l.weapons[0].ammo--; f.advance(300);
+    const { native, wire } = f.send([1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(wire.inputs, native.inputs); assert.equal(f.engine.stats.switchState, 'equip-not-forwarded');
+    assert.equal(f.engine.weaponSwitch.pending, null);
+    f.app.game.hero.l.index = 1; f.advance(200);
+    assert.ok(!f.send().wire.inputs.includes(11), 'unrelated observed slot change must not cause a return');
+  } finally { f.close(); }
+});
+
+test('Auto Switch discards a frame plan that no sender consumed', () => {
+  const f = coordinated({ autoSwitch: true, useOneGun: true });
+  try {
+    f.send(); f.app.game.hero.l.weapons[0].ammo--; f.advance(300); f.engine.pre();
+    assert.equal(f.engine.switchSlot, 1); assert.ok(f.engine.weaponSwitch.pending);
+    f.advance(); f.engine.pre(); assert.equal(f.engine.switchSlot, null); assert.equal(f.engine.weaponSwitch.pending, null);
+    f.app.game.hero.l.index = 1; f.advance(200);
+    assert.ok(!f.send().wire.inputs.includes(11));
+  } finally { f.close(); }
+});
+
+test('Auto Switch drops a pending plan when the input contract is invalid', () => {
+  const f = coordinated({ autoSwitch: true, useOneGun: true });
+  try {
+    f.send(); f.app.game.hero.l.weapons[0].ammo--; f.advance(300); f.engine.pre();
+    assert.ok(f.engine.weaponSwitch.pending);
+    const invalid = new InputMsg(); invalid.inputs = Array(8).fill(1);
+    f.app.game.transmit(3, invalid);
+    assert.equal(f.app.game.sent.at(-1).data, invalid); assert.equal(f.engine.weaponSwitch.pending, null); assert.equal(f.engine.switchSlot, null);
+  } finally { f.close(); }
+});
+
 test('idle manual equip does not claim the next Fire hold', () => {
   const f = coordinated({ autoSwitch: true });
   try {

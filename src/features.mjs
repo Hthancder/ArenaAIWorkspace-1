@@ -267,7 +267,12 @@ export class Features {
           self.stats.lootState = 'paused-after-drop';
         }
         if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
-          if (!inputShape(data)) { self.aimEvidence.invalidInputs++; return Reflect.apply(original, this, arguments); }
+          if (!inputShape(data)) {
+            self.aimEvidence.invalidInputs++;
+            // A frame plan cannot be treated as sent through an unknown input contract.
+            if (self.switchSlot !== null) { self.weaponSwitch.reset(); self.switchSlot = null; }
+            return Reflect.apply(original, this, arguments);
+          }
           intent = self.mouseInput.intent(self.app.input, self.mapping?.camera, data);
           const physicalHeld = self.binds ? !!self.binds.isBindDown(4) : !!self.app.input.mouseButtons?.[0];
           if (!physicalHeld) { self.manualEquipHeld = false; self.meleeEquip = null; }
@@ -346,10 +351,16 @@ export class Features {
             self.grenadeManualOverride = true;
           }
           if (!self.aimOutput || auto === 'suppress') self.restoreInput();
+          // addInput can reject an equip when the native input array is full.
+          // Do not wait for, or cycle back from, a request that was not sent.
+          const requestedEquip = equipInput(self.switchSlot);
+          if (requestedEquip !== null && !outgoing.inputs.includes(requestedEquip)) {
+            self.weaponSwitch.reset(); self.stats.switchState = 'equip-not-forwarded';
+          }
           if (self.meleeDirection && self.switchSlot === 2 && outgoing !== data && outgoing.inputs.includes(13)) self.meleeEquip = { id: self.target?.__id, until: self.win.performance.now() + 1000 };
           self.switchSlot = null;
         }
-      } catch (e) { if (type === 3) { self.aimEvidence.inputErrors++; inputBypassed = true; } self.report('warning', `Input bypassed: ${e.message}`); self.aimOutput = null; self.restoreInput(); outgoing = intent; }
+      } catch (e) { if (type === 3) { self.aimEvidence.inputErrors++; inputBypassed = true; self.weaponSwitch.reset(); self.switchSlot = null; } self.report('warning', `Input bypassed: ${e.message}`); self.aimOutput = null; self.restoreInput(); outgoing = intent; }
       const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
       if (type === 3 && inputShape(outgoing)) {
         const now = self.win.performance.now();
@@ -502,6 +513,9 @@ export class Features {
     // focused menu); updateSwitch runs before processAim can observe release.
     const firing = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
     if (!firing) { this.manualEquipHeld = false; this.meleeEquip = null; }
+    // A planned equip belongs to one frame. If the sender never consumed it,
+    // its pending cycle must not survive into a later unrelated slot change.
+    if (this.switchSlot !== null) this.weaponSwitch.reset();
     this.switchSlot = null;
     if (this.inputReady()) this.updateSwitch(); else this.weaponSwitch.reset();
     const aimFrame = ++this.aimFrame, directMouse = this.config.directMouseInput !== false && !!this.flushReady;
