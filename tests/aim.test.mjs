@@ -150,6 +150,19 @@ test('Solver includes muzzle lateral offset and does not clamp flight time to pr
   assert.equal(predictShot({ origin: { x: 0, y: 0 }, target, track: { ...track, error: 10 }, profile }).state, 'uncertain');
 });
 
+test('Solver reconciles flight time with its final barrel direction and labels unresolved close shots', () => {
+  const origin = { x: 0, y: 0 }, target = { x: -1.695948062667297, y: 1.5536280664094095 };
+  const track = { pos: target, vx: -10, vy: -13, age: .03, error: 0, velocityError: 0 };
+  const model = { offset: -.8, barrel: 1.1, speed: 41, range: 1000, variance: 1 };
+  const shot = predictShot({ origin, target, track, profile: model });
+  assert.ok(shot.dir);
+  const impact = { x: shot.muzzle.x + shot.dir.x * model.speed * shot.time, y: shot.muzzle.y + shot.dir.y * model.speed * shot.time };
+  assert.ok(Math.hypot(impact.x - shot.world.x, impact.y - shot.world.y) <= .02);
+  assert.ok(Math.hypot(shot.world.x - target.x - track.vx * (track.age + shot.time), shot.world.y - target.y - track.vy * (track.age + shot.time)) < 1e-8);
+  const close = predictShot({ origin, target: { x: 1, y: 0 }, profile: { ...model, offset: 0, barrel: 2 } });
+  assert.equal(close.state, 'unresolved-muzzle-solution'); assert.equal(close.approximate, true); assert.ok(close.dir);
+});
+
 test('Stair aim-layer uses source cardinal direction and real collision radius, not spoofed render layer', () => {
   const structures = [{ active: true, stairs: [{ collision: { min: { x: -1, y: -1 }, max: { x: 1, y: 1 } }, downDir: { x: -1, y: 0 } }] }];
   assert.equal(shotLayer({ x: 0, y: 0 }, { x: 1, y: 0 }, 0, 1, structures), 2);

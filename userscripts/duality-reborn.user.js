@@ -7151,15 +7151,39 @@ THE SOFTWARE.
       if (!dir) return { state: "coincident" };
     }
     if (profile.speed * time > profile.range) return { state: "out-of-range-or-horizon" };
-    const rel = { x: world.x - origin.x, y: world.y - origin.y }, distance = Math.hypot(rel.x, rel.y);
+    const rel = { x: world.x - origin.x, y: world.y - origin.y };
+    let distance = Math.hypot(rel.x, rel.y);
     if (distance > Math.abs(profile.offset) + 1e-3) {
       const a = Math.atan2(rel.y, rel.x) - Math.asin(clamp(profile.offset / distance, -1, 1));
       dir = { x: Math.cos(a), y: Math.sin(a) };
     }
-    const finalMuzzle = muzzleFor(origin, dir, profile);
-    if (!vec(finalMuzzle)) return { state: "uncertain-muzzle" };
+    let finalMuzzle;
+    const initialMuzzle = muzzleFor(origin, dir, profile);
+    if (!vec(initialMuzzle)) return { state: "uncertain-muzzle" };
+    const initial = { dir, world, time, distance, muzzle: initialMuzzle };
+    let consistent = false;
+    const velocity = { x: vx * lead * confidence, y: vy * lead * confidence };
+    for (let i = 0; i < 9; i++) {
+      finalMuzzle = i === 0 ? initialMuzzle : muzzleFor(origin, dir, profile);
+      if (!vec(finalMuzzle)) break;
+      time = intercept({ x: current2.x - finalMuzzle.x, y: current2.y - finalMuzzle.y }, velocity, profile.speed, Infinity);
+      if (time === null) break;
+      world = { x: current2.x + velocity.x * time, y: current2.y + velocity.y * time };
+      const miss = Math.hypot(finalMuzzle.x + dir.x * profile.speed * time - world.x, finalMuzzle.y + dir.y * profile.speed * time - world.y);
+      if (miss <= 0.02) {
+        consistent = true;
+        break;
+      }
+      const rel2 = { x: world.x - origin.x, y: world.y - origin.y }, distance2 = Math.hypot(rel2.x, rel2.y);
+      if (distance2 <= Math.abs(profile.offset) + 1e-3) break;
+      const a = Math.atan2(rel2.y, rel2.x) - Math.asin(clamp(profile.offset / distance2, -1, 1));
+      dir = { x: Math.cos(a), y: Math.sin(a) };
+    }
+    if (!consistent) ({ dir, world, time, distance, muzzle: finalMuzzle } = initial);
+    if (profile.speed * time > profile.range) return { state: "out-of-range-or-horizon" };
+    distance = Math.hypot(world.x - origin.x, world.y - origin.y);
     const mouseLen = Math.hypot(world.x - finalMuzzle.x, world.y - finalMuzzle.y) / (profile.variance || 1) + profile.barrel;
-    return { mouseLen, state: confidence < 1 ? "reduced-lead-uncertainty" : bounded ? "bounded-oscillation" : track ? "predicted" : "direct-no-history", world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
+    return { mouseLen, state: !consistent ? "unresolved-muzzle-solution" : confidence < 1 ? "reduced-lead-uncertainty" : bounded ? "bounded-oscillation" : track ? "predicted" : "direct-no-history", world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: !!profile.approximate || confidence < 1 || !consistent };
   }
   __name(predictShot, "predictShot");
   var AimController = class {
@@ -9315,11 +9339,11 @@ THE SOFTWARE.
               muzzleFor: /* @__PURE__ */ __name((origin, dir2, model) => clippedMuzzle(origin, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1), "muzzleFor")
             });
             if (shot.dir && cfg.predict && !track) {
-              shot.state = predictionReady ? "direct-awaiting-snapshot" : "direct-prediction-unavailable";
+              if (shot.state !== "unresolved-muzzle-solution") shot.state = predictionReady ? "direct-awaiting-snapshot" : "direct-prediction-unavailable";
               shot.approximate = true;
             }
             if (shot.dir && inferredStationary) {
-              shot.state = "inferred-stationary";
+              if (shot.state !== "unresolved-muzzle-solution") shot.state = "inferred-stationary";
               shot.approximate = true;
             }
             if (cfg.predictionStrict && (shot.approximate || shot.confidence < 0.85 || shot.state === "uncertain")) {

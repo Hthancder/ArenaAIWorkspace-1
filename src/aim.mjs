@@ -198,15 +198,39 @@ export function predictShot({ origin, target, track, profile, latency = 0, lead 
   }
   if (profile.speed * time > profile.range) return { state: 'out-of-range-or-horizon' };
   // Aim direction is the barrel orientation, including the lateral muzzle offset.
-  const rel = { x: world.x - origin.x, y: world.y - origin.y }, distance = Math.hypot(rel.x, rel.y);
+  const rel = { x: world.x - origin.x, y: world.y - origin.y }; let distance = Math.hypot(rel.x, rel.y);
   if (distance > Math.abs(profile.offset) + .001) {
     const a = Math.atan2(rel.y, rel.x) - Math.asin(clamp(profile.offset / distance, -1, 1));
     dir = { x: Math.cos(a), y: Math.sin(a) };
   }
-  const finalMuzzle = muzzleFor(origin, dir, profile);
-  if (!vec(finalMuzzle)) return { state: 'uncertain-muzzle' };
+  let finalMuzzle;
+  // A changed final barrel angle can change muzzle clipping (or stair layer).
+  // Reconcile the actual muzzle, physical flight time and impact point. Keep
+  // the previous approximate solution if the bounded solve cannot converge,
+  // especially at close range where the muzzle may start inside a hitbox.
+  const initialMuzzle = muzzleFor(origin, dir, profile);
+  if (!vec(initialMuzzle)) return { state: 'uncertain-muzzle' };
+  const initial = { dir, world, time, distance, muzzle: initialMuzzle };
+  let consistent = false;
+  const velocity = { x: vx * lead * confidence, y: vy * lead * confidence };
+  for (let i = 0; i < 9; i++) {
+    finalMuzzle = i === 0 ? initialMuzzle : muzzleFor(origin, dir, profile);
+    if (!vec(finalMuzzle)) break;
+    time = intercept({ x: current.x - finalMuzzle.x, y: current.y - finalMuzzle.y }, velocity, profile.speed, Infinity);
+    if (time === null) break;
+    world = { x: current.x + velocity.x * time, y: current.y + velocity.y * time };
+    const miss = Math.hypot(finalMuzzle.x + dir.x * profile.speed * time - world.x, finalMuzzle.y + dir.y * profile.speed * time - world.y);
+    if (miss <= .02) { consistent = true; break; }
+    const rel = { x: world.x - origin.x, y: world.y - origin.y }, distance = Math.hypot(rel.x, rel.y);
+    if (distance <= Math.abs(profile.offset) + .001) break;
+    const a = Math.atan2(rel.y, rel.x) - Math.asin(clamp(profile.offset / distance, -1, 1));
+    dir = { x: Math.cos(a), y: Math.sin(a) };
+  }
+  if (!consistent) ({ dir, world, time, distance, muzzle: finalMuzzle } = initial);
+  if (profile.speed * time > profile.range) return { state: 'out-of-range-or-horizon' };
+  distance = Math.hypot(world.x - origin.x, world.y - origin.y);
   const mouseLen = Math.hypot(world.x - finalMuzzle.x, world.y - finalMuzzle.y) / (profile.variance || 1) + profile.barrel;
-  return { mouseLen, state: confidence < 1 ? 'reduced-lead-uncertainty' : bounded ? 'bounded-oscillation' : track ? 'predicted' : 'direct-no-history', world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
+  return { mouseLen, state: !consistent ? 'unresolved-muzzle-solution' : confidence < 1 ? 'reduced-lead-uncertainty' : bounded ? 'bounded-oscillation' : track ? 'predicted' : 'direct-no-history', world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: !!profile.approximate || confidence < 1 || !consistent };
 }
 export class AimController {
   reset() { this.angle = null; this.time = null; this.target = null; this.mode = null; this.angularVelocity = 0; this.cubic = null; this.profile = null; }

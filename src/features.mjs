@@ -842,8 +842,14 @@ export class Features {
             latency: track && cfg.latencyCompensation ? this.timing.transit(now) : 0, compensateSnapshot: mode === 'lock', lead: (cfg.leadAdjustment ?? 100) / 100,
             radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1, stabilize: mode === 'lock' && cfg.stabilizeStrafe !== false,
             muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, muzzleObstacles, layerFor(dir), rawLayer & 1) });
-          if (shot.dir && cfg.predict && !track) { shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable'; shot.approximate = true; }
-          if (shot.dir && inferredStationary) { shot.state = 'inferred-stationary'; shot.approximate = true; }
+          if (shot.dir && cfg.predict && !track) {
+            if (shot.state !== 'unresolved-muzzle-solution') shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable';
+            shot.approximate = true;
+          }
+          if (shot.dir && inferredStationary) {
+            if (shot.state !== 'unresolved-muzzle-solution') shot.state = 'inferred-stationary';
+            shot.approximate = true;
+          }
           // Strict prediction is an accuracy-first fallback policy: do not invent a
           // confident solution from stale/missing snapshots or large slope uncertainty.
           if (cfg.predictionStrict && (shot.approximate || shot.confidence < .85 || shot.state === 'uncertain')) { reject('predictionUncertain'); continue; }

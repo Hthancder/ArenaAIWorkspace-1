@@ -925,6 +925,22 @@ test('Aim+Semi+Switch preserve physical Fire/movement and consume one equip; man
   } finally { f.close(); }
 });
 
+test('unresolved close muzzle is marked approximate; strict prediction yields without suppressing Fire', () => {
+  for (const strict of [false, true]) {
+    const f = coordinated({ aimMode: 'lock', humanLikeAim: false, predictionStrict: strict });
+    try {
+      f.engine.definitions = { ...f.engine.definitions, mp5: { ...defs.mp5, barrelLength: 2, barrelOffset: 0 } };
+      f.app.game.barn.playerPool.list[1].p = { x: 10.5, y: 20.5 };
+      const { native, wire } = f.send();
+      assert.equal(wire.shootHold, true);
+      if (strict) {
+        assert.equal(f.engine.stats.aimRejections.predictionUncertain, 1);
+        assert.equal(f.engine.target, null); assert.deepEqual(wire.toMouseDir, native.toMouseDir);
+      } else { assert.equal(f.engine.stats.predictionState, 'unresolved-muzzle-solution'); assert.equal(f.engine.stats.aimApproximate, true); }
+    } finally { f.close(); }
+  }
+});
+
 test('Auto Switch cancels a pre-frame equip if Fire is released before the sender', () => {
   const f = coordinated({ autoSwitch: true, humanLikeAim: false });
   try {
