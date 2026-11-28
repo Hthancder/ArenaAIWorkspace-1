@@ -2536,3 +2536,40 @@ test('gun prediction uses fresh complete omitted updates for early stop only whe
     assert.equal(f.engine.grenadeTracker.estimate(enemy,f.dom.window.performance.now()),null,'gap invalidates omission evidence');
   } finally { f.close(); }
 });
+
+test('native Fire edge activates gun aim after release, without retaining activation or changing Fire', () => {
+  for (const mode of ['lock', 'assist']) for (const humanLikeAim of [false, true]) {
+    const f = coordinated({ aimActivation: 'fire', aimMode: mode, humanLikeAim, smoothProfile: 'duality', fov: 400 });
+    try {
+      f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.5 };
+      f.app.input.mouseButtons[0] = false; f.engine.pre();
+      assert.equal(f.engine.stats.aimState, 'waiting-activation');
+      const down = new InputMsg(); down.shootStart = true; down.shootHold = false; down.toMouseLen = 1.25;
+      f.app.game.transmit(3, down);
+      const wire = f.app.game.sent.at(-1).data;
+      assert.equal(wire.shootStart, true); assert.equal(wire.shootHold, false);
+      assert.notDeepEqual(wire.toMouseDir, down.toMouseDir, `${mode} human=${humanLikeAim}`);
+      const release = new InputMsg(); release.toMouseLen = 1.25;
+      f.app.game.transmit(3, release);
+      assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, release.toMouseDir);
+      assert.equal(f.engine.aimOutput, null, 'edge does not activate a later packet');
+    } finally { f.close(); }
+  }
+});
+
+test('released Fire edge respects key-and-fire activation and Wallcheck without suppressing native Fire', () => {
+  const f = coordinated({ aimActivation: 'both', aimMode: 'lock', humanLikeAim: false, fov: 400 });
+  try {
+    f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.5 };
+    f.app.input.mouseButtons[0] = false; f.engine.pre();
+    const edge = new InputMsg(); edge.shootStart = true; edge.toMouseLen = 1.25;
+    f.app.game.transmit(3, edge);
+    assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, edge.toMouseDir);
+    f.engine.holdAim = true; f.cfg.wallcheck = true; f.engine.capabilities.wallcheck = true;
+    f.engine.mapping.creator = { table: {} }; f.engine.mapping.registryKey = 'table'; f.engine.blocked = () => true;
+    f.app.game.transmit(3, edge);
+    assert.equal(f.engine.stats.aimState, 'wall-blocked');
+    assert.equal(f.app.game.sent.at(-1).data.shootStart, true);
+    assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, edge.toMouseDir);
+  } finally { f.close(); }
+});

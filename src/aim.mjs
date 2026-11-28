@@ -292,8 +292,22 @@ export class AimController {
         const angular = Math.abs(angleDelta(Math.atan2(cur.y, cur.x), b));
         const immediate = distance <= 6 && angular <= Math.PI / 90;
         const duration = immediate ? 0 : 45 + 360 * Math.max(clamp(angular / Math.PI, 0, 1), clamp(distance / 450, 0, 1)) * clamp(smooth / 100, 0, 1);
-        this.cubic = { start: cur, end: desired, startTime: now, duration: Math.max(duration, .001), angularPath: angular > Math.PI * .9 };
+        // On initial acquisition use the same nominal first-frame interval as
+        // the other smoothing profiles. Otherwise cubic returns exactly the
+        // native direction on its first call, including a same-frame Fire.
+        const first = !this.cubic;
+        const startTime = first ? now - 1000 / 60 : now;
+        this.cubic = { start: cur, end: desired, startTime, duration: Math.max(duration, .001), angularPath: angular > Math.PI * .9 };
         if (immediate) cur = desired;
+        else if (first) {
+          const t = clamp((now - startTime) / this.cubic.duration, 0, 1), eased = 1 - (1 - t) ** 3;
+          if (this.cubic.angularPath) {
+            const startAngle = Math.atan2(cur.y, cur.x), endAngle = Math.atan2(desired.y, desired.x);
+            const angle = startAngle + angleDelta(startAngle, endAngle) * eased;
+            const radius = Math.hypot(cur.x, cur.y) + (Math.hypot(desired.x, desired.y) - Math.hypot(cur.x, cur.y)) * eased;
+            cur = { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
+          } else cur = { x: cur.x + (desired.x - cur.x) * eased, y: cur.y + (desired.y - cur.y) * eased };
+        }
       }
       const normalized = unit(cur) || d;
       this.angle = Math.atan2(normalized.y, normalized.x); this.angularVelocity = 0;

@@ -449,3 +449,12 @@ test('wider repeated A-D aims at the middle only while bounded; escape and Assis
   const escape = tracker.estimate(entity, ys.length * 33);
   assert.notEqual(predictShot({ ...opts, target: escape.pos, track: escape, stabilize: true }).state, 'bounded-oscillation');
 });
+
+test('duality smoothing advances on initial acquisition without snapping, and is stable at the same timestamp', () => {
+  const c = new AimController(), target = {};
+  const options = { mode: 'lock', humanLike: true, smooth: 50, profile: 'duality', target, now: 1000, cursorRadius: 120, targetRadius: 120 };
+  const first = c.step({x:1,y:0}, {x:0,y:1}, options);
+  assert.ok(angle(first) > 0 && angle(first) < Math.PI / 2);
+  const again = c.step({x:1,y:0}, {x:0,y:1}, options);
+  assert.ok(Math.abs(angle(first) - angle(again)) < 1e-9);
+});

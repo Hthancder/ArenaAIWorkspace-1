@@ -1,0 +1,10 @@
+# Kiểm tra hướng viên đầu
+
+Đối chiếu source Survev pin `3edee7e8bd07fda8a63905aab4c45b595b684a80`, không phải xác nhận phiên bản server live.
+
+- Client `game.ts` lấy `shootStart` từ `isBindPressed(Fire)` hoặc touch, `shootHold` từ trạng thái giữ; sender hook tính lại aim trước khi gọi sender gốc, không dùng lại plan cũ cho cạnh `shootStart`. InputMsg tuần tự hóa hướng bằng unit vector 10 bit.
+- `input.ts` xác định mouse pressed từ trạng thái hiện tại so với frame trước, không có hàng đợi cạnh chuột trong đoạn đó. Nếu nhấn và nhả đều xảy ra giữa hai lần game đọc input, source này có thể không tạo `shootStart`; userscript không tự tạo Fire để bù.
+- `player.ts` gán `dirNew` mỗi input, giữ `shootStart` khi có cạnh, và trong update gán `dir` trước `weaponManager.update`. `weaponManager.ts` dùng `shootStart` cho súng single, nhưng auto và burst dùng `shootHold`. Nhiều input đến trước cùng tick có thể ghi đè `dirNew` bằng gói sau dù cạnh single vẫn được giữ; auto cũng có thể không bắn nếu hold đã bị nhả. Không có ACK viên đạn ở đây, và sửa ở client không đảm bảo server xử lý gói Fire trước gói nhả.
+- Đã cho cạnh `shootStart` native kích hoạt aim súng trong chính lần gửi đó khi trạng thái giữ đã nhả, vẫn tôn trọng phím kích hoạt, Wallcheck, Strict và không kéo dài sang gói sau. Không thay logic giữ/thả grenade hoặc tự bắn. Test fixture tái hiện cạnh này nhưng không chứng minh client source thực tế sẽ tạo cạnh khi click quá nhanh.
+- Profile smooth Duality trước đó khởi tạo cubic tại đúng thời điểm gọi nên bước đầu trả nguyên hướng chuột. Nay bước đầu tiến một khoảng tương ứng 1/60 giây, vẫn làm mượt và không snap. Các profile Human-like khác cũng chỉ điều chỉnh dần: với sai lệch ban đầu lớn, viên đầu vẫn có thể trượt. Muốn Lock chỉnh trực tiếp ở gói đầu khi điều kiện hợp lệ, tắt Human-like; Assist vẫn chỉ chỉnh theo strength. Wallcheck/Strict có thể chủ động trả hướng native.
+- Tests kiểm tra input mock trước native serialization, không phải xác nhận hướng đã tới server hay trúng trong game. Chưa thử live, chưa kết luận nguyên nhân duy nhất của hiện tượng người dùng gặp.

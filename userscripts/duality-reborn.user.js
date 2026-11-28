@@ -7271,8 +7271,19 @@ THE SOFTWARE.
           const angular = Math.abs(angleDelta(Math.atan2(cur.y, cur.x), b));
           const immediate = distance <= 6 && angular <= Math.PI / 90;
           const duration = immediate ? 0 : 45 + 360 * Math.max(clamp(angular / Math.PI, 0, 1), clamp(distance / 450, 0, 1)) * clamp(smooth / 100, 0, 1);
-          this.cubic = { start: cur, end: desired, startTime: now, duration: Math.max(duration, 1e-3), angularPath: angular > Math.PI * 0.9 };
+          const first = !this.cubic;
+          const startTime = first ? now - 1e3 / 60 : now;
+          this.cubic = { start: cur, end: desired, startTime, duration: Math.max(duration, 1e-3), angularPath: angular > Math.PI * 0.9 };
           if (immediate) cur = desired;
+          else if (first) {
+            const t = clamp((now - startTime) / this.cubic.duration, 0, 1), eased = 1 - (1 - t) ** 3;
+            if (this.cubic.angularPath) {
+              const startAngle = Math.atan2(cur.y, cur.x), endAngle = Math.atan2(desired.y, desired.x);
+              const angle = startAngle + angleDelta(startAngle, endAngle) * eased;
+              const radius = Math.hypot(cur.x, cur.y) + (Math.hypot(desired.x, desired.y) - Math.hypot(cur.x, cur.y)) * eased;
+              cur = { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
+            } else cur = { x: cur.x + (desired.x - cur.x) * eased, y: cur.y + (desired.y - cur.y) * eased };
+          }
         }
         const normalized = unit(cur) || d;
         this.angle = Math.atan2(normalized.y, normalized.x);
@@ -9261,7 +9272,8 @@ THE SOFTWARE.
         this.aimController.reset();
         return this.processGrenadeAim({ native, applyDirect, pos, mouse, camera, physical, firing, now });
       }
-      const trigger = cfg.aimActivation === "key" ? this.holdAim : cfg.aimActivation === "both" ? this.holdAim && firing : firing;
+      const fireActivation = firing || native?.shootStart === true;
+      const trigger = cfg.aimActivation === "key" ? this.holdAim : cfg.aimActivation === "both" ? this.holdAim && fireActivation : fireActivation;
       const gun = this.definitions?.[localWeapon(m)], slot = this.local?.data[this.local.slotKey];
       const meleeDef = gun?.type === "melee" ? gun : cfg.autoMelee && [0, 1].includes(slot) ? this.definitions?.[this.local?.data[this.local.weaponsKey]?.[2]?.type] : null;
       const reach = meleeReach(meleeDef), melee = !!(cfg.melee && !this.manualEquipHeld && this.capabilities.mobile && firing && reach);

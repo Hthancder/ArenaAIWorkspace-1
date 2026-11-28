@@ -744,7 +744,11 @@ export class Features {
     if (this.local?.data?.[this.local.slotKey] === 3 && ['preview', 'assist', 'lock'].includes(cfg.grenadeAimMode)) {
       this.aimController.reset(); return this.processGrenadeAim({ native, applyDirect, pos, mouse, camera, physical, firing, now });
     }
-    const trigger = cfg.aimActivation === 'key' ? this.holdAim : cfg.aimActivation === 'both' ? this.holdAim && firing : firing;
+    // A native Fire edge is itself activation, even if the physical binding
+    // has already been released by the time the sender runs. Do not extend
+    // that activation to later packets or to grenade auto-throw/melee holds.
+    const fireActivation = firing || native?.shootStart === true;
+    const trigger = cfg.aimActivation === 'key' ? this.holdAim : cfg.aimActivation === 'both' ? this.holdAim && fireActivation : fireActivation;
     const gun = this.definitions?.[localWeapon(m)], slot = this.local?.data[this.local.slotKey];
     const meleeDef = gun?.type === 'melee' ? gun : cfg.autoMelee && [0, 1].includes(slot) ? this.definitions?.[this.local?.data[this.local.weaponsKey]?.[2]?.type] : null;
     const reach = meleeReach(meleeDef), melee = !!(cfg.melee && !this.manualEquipHeld && this.capabilities.mobile && firing && reach);
