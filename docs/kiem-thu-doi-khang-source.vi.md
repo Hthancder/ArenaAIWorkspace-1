@@ -1,5 +1,7 @@
 # Thử đối kháng dùng code Survev pinned
 
+**Lưu ý lịch sử:** các số bên dưới dùng benchmark trước khi mô phỏng omission của partial update. Benchmark hiện tại và kết quả sau khi sửa nằm tại `hieu-chinh-dung-som.vi.md`; không so trực tiếp hai ma trận.
+
 ## Phần thực và phần giả
 
 Test sử dụng checkout sạch Survev commit `3edee7e8bd07fda8a63905aab4c45b595b684a80` tại https://github.com/survev/survev (GPL-3.0-or-later). Adapter kiểm tra đúng commit và không có thay đổi, dùng esbuild bundle code source **cục bộ** và thực thi trong Node. Không khởi động server hay kết nối game. Bundle nằm trong `.cache`, không commit source upstream.

@@ -23,6 +23,7 @@ import { simulateOpenThrow, solveMovingOpenThrow, validateOpenThrow } from './gr
 import { assessAutoThrow } from './grenade-release.mjs';
 import { GrenadeAutoRelease } from './grenade-auto-release.mjs';
 import { RuntimePerf } from './runtime-perf.mjs';
+import { inferredStationary } from './stationary-inference.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
 export const isManualEquip = code => code >= 11 && code <= 20 || code === 27 || code === 28;
@@ -822,17 +823,16 @@ export class Features {
         if (!profile && !([0, 1].includes(slot) && !gun)) return fail('unsupported-weapon-profile');
         const predictionReady = !!(cfg.predict && profile && this.capabilities.prediction);
         track = predictionReady ? this.tracker.estimate(candidate.p, now) : null;
-        let inferredStationary = false;
-        if (predictionReady && (!track || track.age > .15) && this.tracker.states.has(candidate.p)) {
-          // A visible player omitted by a continuous source-shaped update stream
-          // may be stationary. Do not fabricate velocity for moving targets or
-          // use this fallback in strict prediction; real updates always win.
-          const stationary = this.grenadeTracker.estimate(candidate.p, now);
-          const recent = stationary && stationary.age <= .15 && stationary.samples?.length >= 2
-            && Math.hypot(stationary.vx, stationary.vy) < .2 && stationary.samples.every(s => Math.hypot(s.p.x - stationary.pos.x, s.p.y - stationary.pos.y) < .02);
-          if (!cfg.predictionStrict && recent) {
-            track = { ...stationary, vx: 0, vy: 0, error: 0, velocityError: 0, motion: [] }; inferredStationary = true;
-          } else { reject('staleSnapshot'); continue; }
+        let usedStationary = false;
+        if (predictionReady && this.tracker.states.has(candidate.p)) {
+          // Absence in a continuous, complete verified stream can indicate a
+          // stop before the gun observation expires. A newer actual movement
+          // always wins; never apply inference in strict mode.
+          const stale = !track || track.age > .15;
+          const candidateStop = !cfg.predictionStrict && (stale || cfg.fastStopInference !== false)
+            ? inferredStationary(track, this.grenadeTracker.estimate(candidate.p, now), !stale) : null;
+          if (candidateStop) { track = candidateStop; usedStationary = true; }
+          else if (stale) { reject('staleSnapshot'); continue; }
         }
         if (!profile) {
           shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos,
@@ -846,7 +846,7 @@ export class Features {
             if (shot.state !== 'unresolved-muzzle-solution') shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable';
             shot.approximate = true;
           }
-          if (shot.dir && inferredStationary) {
+          if (shot.dir && usedStationary) {
             if (shot.state !== 'unresolved-muzzle-solution') shot.state = 'inferred-stationary';
             shot.approximate = true;
           }
@@ -1258,7 +1258,7 @@ export class Features {
       inputBlockReason: this.inputBlockReason(),
       mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, capturingWrites: !!this.mouseInput.record?.captured, ...this.mouseInput.snapshot() },
       registry: { state: m?.registryState ?? 'waiting-mapping', ...m?.registryEvidence },
-      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || 'responsive' },
+      aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, fastStopInference: this.config.fastStopInference !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || 'responsive' },
       aimPreparation: this.aimPreparation,
       runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: 'Script-local hook durations only; not game FPS, GPU time, network delay or hit rate.' },
       aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),

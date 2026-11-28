@@ -1806,6 +1806,8 @@ test('strafe stabilization toggle is exposed and can be disabled', () => {
     const toggle = menu.root.querySelector('[data-config=stabilizeStrafe]');
     assert.ok(toggle); assert.equal(toggle.checked, true);
     toggle.click(); assert.equal(config.stabilizeStrafe, false);
+    const stop = menu.root.querySelector('[data-config=fastStopInference]');
+    assert.ok(stop); assert.equal(stop.checked, true); stop.click(); assert.equal(config.fastStopInference, false);
   } finally { menu.dispose(); dom.window.close(); }
 });
 
@@ -2506,5 +2508,31 @@ test('gun Lock retains stationary enemy on continuous source-shaped updates, but
     enemy.n.sourcePos = { x: 12.2, y: 20 }; f.engine.lastMap = f.dom.window.performance.now();
     f.engine.observeUpdate({ ...empty, partObjects: [{ __id: enemy.__id, pos: enemy.n.sourcePos }] }, f.dom.window.performance.now());
     assert.ok(f.engine.processAim(input, true)); assert.notEqual(f.engine.stats.predictionState, 'inferred-stationary', 'real motion replaces inference');
+  } finally { f.close(); }
+});
+
+test('gun prediction uses fresh complete omitted updates for early stop only when enabled', () => {
+  const f = coordinated({ aim: true, aimMode: 'lock', aimActivation: 'fire', humanLikeAim: false, predict: true, wallcheck: false, grenadeAimMode: 'off', fov: 400 });
+  try {
+    const hero=f.app.game.hero, enemy=f.app.game.barn.playerPool.list[1];
+    hero.n.sourcePos={x:10,y:20}; enemy.n.sourcePos={x:12,y:20};
+    f.engine.pre(); f.engine.sourceFields={pos:'sourcePos',perks:'perks',scale:'scale'}; f.engine.capabilities.prediction=true;
+    const empty={fullObjects:[],partObjects:[],delObjIds:[],activePlayerData:{}};
+    f.engine.observeUpdate({...empty,fullObjects:[{__id:1,pos:hero.n.sourcePos},{__id:2,pos:enemy.n.sourcePos}]},f.dom.window.performance.now());
+    for (const y of [20.4,20.8,21.2]) {
+      enemy.n.sourcePos={x:12,y}; f.advance(33); const now=f.dom.window.performance.now();f.engine.lastMap=now;
+      f.engine.observeUpdate({...empty,partObjects:[{__id:2,pos:enemy.n.sourcePos}]},now);
+    }
+    f.advance(33);const now=f.dom.window.performance.now();f.engine.lastMap=now;f.engine.observeUpdate(empty,now);
+    assert.ok(f.engine.tracker.estimate(enemy,now).age<.15, 'real track is still fresh');
+    const input=new InputMsg();input.shootHold=true;input.toMouseLen=2;
+    assert.ok(f.engine.processAim(input,true));assert.equal(f.engine.stats.predictionState,'inferred-stationary');assert.equal(f.engine.stats.aimApproximate,true);
+    f.cfg.fastStopInference=false;assert.ok(f.engine.processAim(input,true));assert.notEqual(f.engine.stats.predictionState,'inferred-stationary');
+    f.cfg.fastStopInference=true;f.cfg.predictionStrict=true;assert.ok(f.engine.processAim(input,true));assert.notEqual(f.engine.stats.predictionState,'inferred-stationary');
+    f.cfg.predictionStrict=false;enemy.n.sourcePos={x:12,y:21.6};f.advance(33);const later=f.dom.window.performance.now();f.engine.lastMap=later;
+    f.engine.observeUpdate({...empty,partObjects:[{__id:2,pos:enemy.n.sourcePos}]},later);
+    assert.ok(f.engine.processAim(input,true));assert.notEqual(f.engine.stats.predictionState,'inferred-stationary','new actual movement always wins');
+    f.advance(200);f.engine.observeUpdate(empty,f.dom.window.performance.now());
+    assert.equal(f.engine.grenadeTracker.estimate(enemy,f.dom.window.performance.now()),null,'gap invalidates omission evidence');
   } finally { f.close(); }
 });

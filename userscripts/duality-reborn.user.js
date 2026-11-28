@@ -8219,6 +8219,14 @@ THE SOFTWARE.
     }
   };
 
+  // src/stationary-inference.mjs
+  function inferredStationary(track, stationary, requireNewer = false) {
+    if (!stationary || !vec(stationary.pos) || !finite(stationary.age) || stationary.age < 0 || stationary.age > 0.15 || !finite(stationary.time) || !finite(stationary.vx) || !finite(stationary.vy) || Math.hypot(stationary.vx, stationary.vy) >= 0.2 || !Array.isArray(stationary.samples) || stationary.samples.length < 2 || !stationary.samples.every((s) => vec(s?.p) && Math.hypot(s.p.x - stationary.pos.x, s.p.y - stationary.pos.y) < 0.02)) return null;
+    if (requireNewer && (!track || !finite(track.time) || stationary.time <= track.time || !vec(track.pos) || Math.hypot(track.pos.x - stationary.pos.x, track.pos.y - stationary.pos.y) >= 0.02 || track.layer !== stationary.layer)) return null;
+    return { ...stationary, vx: 0, vy: 0, error: 0, velocityError: 0, motion: [] };
+  }
+  __name(inferredStationary, "inferredStationary");
+
   // src/features.mjs
   var VERIFIED_PROTOCOL = 1028;
   var isManualEquip = /* @__PURE__ */ __name((code) => code >= 11 && code <= 20 || code === 27 || code === 28, "isManualEquip");
@@ -9332,14 +9340,14 @@ THE SOFTWARE.
           if (!profile && !([0, 1].includes(slot) && !gun)) return fail("unsupported-weapon-profile");
           const predictionReady = !!(cfg.predict && profile && this.capabilities.prediction);
           track = predictionReady ? this.tracker.estimate(candidate.p, now) : null;
-          let inferredStationary = false;
-          if (predictionReady && (!track || track.age > 0.15) && this.tracker.states.has(candidate.p)) {
-            const stationary = this.grenadeTracker.estimate(candidate.p, now);
-            const recent = stationary && stationary.age <= 0.15 && stationary.samples?.length >= 2 && Math.hypot(stationary.vx, stationary.vy) < 0.2 && stationary.samples.every((s) => Math.hypot(s.p.x - stationary.pos.x, s.p.y - stationary.pos.y) < 0.02);
-            if (!cfg.predictionStrict && recent) {
-              track = { ...stationary, vx: 0, vy: 0, error: 0, velocityError: 0, motion: [] };
-              inferredStationary = true;
-            } else {
+          let usedStationary = false;
+          if (predictionReady && this.tracker.states.has(candidate.p)) {
+            const stale = !track || track.age > 0.15;
+            const candidateStop = !cfg.predictionStrict && (stale || cfg.fastStopInference !== false) ? inferredStationary(track, this.grenadeTracker.estimate(candidate.p, now), !stale) : null;
+            if (candidateStop) {
+              track = candidateStop;
+              usedStationary = true;
+            } else if (stale) {
               reject("staleSnapshot");
               continue;
             }
@@ -9370,7 +9378,7 @@ THE SOFTWARE.
               if (shot.state !== "unresolved-muzzle-solution") shot.state = predictionReady ? "direct-awaiting-snapshot" : "direct-prediction-unavailable";
               shot.approximate = true;
             }
-            if (shot.dir && inferredStationary) {
+            if (shot.dir && usedStationary) {
               if (shot.state !== "unresolved-muzzle-solution") shot.state = "inferred-stationary";
               shot.approximate = true;
             }
@@ -9946,7 +9954,7 @@ THE SOFTWARE.
         inputBlockReason: this.inputBlockReason(),
         mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, capturingWrites: !!this.mouseInput.record?.captured, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
-        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || "responsive" },
+        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, targetAllies: !!this.config.aimAllies, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, stabilizeStrafe: this.config.stabilizeStrafe !== false, fastStopInference: this.config.fastStopInference !== false, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, predictionStrict: !!this.config.predictionStrict, humanLikeAim: !!this.config.humanLikeAim, smooth: this.config.smooth, smoothProfile: this.config.smoothProfile || "responsive" },
         aimPreparation: this.aimPreparation,
         runtimePerformance: { ...this.runtimePerf.snapshot(), meaning: "Script-local hook durations only; not game FPS, GPU time, network delay or hit rate." },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
@@ -9998,6 +10006,7 @@ THE SOFTWARE.
     wallcheck: true,
     predict: true,
     stabilizeStrafe: true,
+    fastStopInference: true,
     melee: false,
     autoMelee: false,
     autoSwitch: false,
@@ -10107,7 +10116,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["smoothProfile", "Aim profile", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
       ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["aimAllies", "Nhắm đồng đội (debug; cả địch)", "aim"], ["wallcheck", "Wallcheck", "wallcheck"], [null, "Lock + Keep target: sau khi chọn trong FOV, giữ mục tiêu trong lần kích hoạt kể cả khi chuột ra ngoài FOV. Vật cản/người chắn vẫn khiến aim nhả. Assist vẫn theo FOV."]]],
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"], ["showTarget", "Hiển thị mục tiêu đang ngắm"], ["targetStyle", "Kiểu mục tiêu"], [null, "Chỉ báo nằm trên người được chọn, khác điểm dự đoán; ẩn khi không có mục tiêu hợp lệ."]]],
-      ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Có thể tắt ổn định nếu mục tiêu thường rời vùng dao động; Assist không dùng cơ chế này."]]],
+      ["Aim — Prediction", [["predict", "Auto prediction", "prediction"], ["fastStopInference", "Nhận biết dừng sớm (thử nghiệm)", "prediction"], ["stabilizeStrafe", "Ổn định dao động A–D (Lock)", "prediction"], [null, "Nhận biết dừng dựa trên snapshot đầy đủ, không đoán trước. Strict không dùng suy luận này. Có thể tắt ổn định A–D nếu mục tiêu thường rời vùng dao động; Assist không dùng A–D."]]],
       ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], ["predictionStrict", "Strict prediction (skip uncertain shots)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread."]]],
       ["Grenade Aim (thử nghiệm)", [["grenadeAimMode", "Chế độ"], ["grenadeAimActivation", "Kích hoạt Assist / Lock"], ["grenadeAssistStrength", "Lực Assist bom (%)"], ["grenadeFov", "FOV bom (pixel)"], ["grenadeAimAllies", "Nhắm bom vào đồng đội (debug; cả địch)"], ["grenadeAutoThrow", "Tự thả (thử nghiệm, chỉ Lock)"], [null, "Debug đồng đội có thể chọn cả địch và đồng đội; Auto Throw có thể tự thả vào mục tiêu đã chọn. Không tự bắt đầu giữ. Mạng và fuse chưa xác nhận; không bảo đảm an toàn hoặc trúng."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
@@ -10193,7 +10202,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       flushPersistence();
     }, "persist");
     const refreshRows = /* @__PURE__ */ __name(() => {
-      const parents = { stabilizeStrafe: "predict", targetStyle: "showTarget", smooth: "humanLikeAim", smoothProfile: "humanLikeAim", useOneGun: "autoSwitch", autoMelee: "melee", smokeOpacity: "xray", treeOpacity: "xray", ceilings: "xray", darkerSmokes: "xray", zoomFactor: "zoom", movementSmooth: "mobileMovement", lootMode: "autoLoot", espOpacity: "lines", espLineWidth: "lines", espShowEnemies: "esp", espShowAllies: "esp", smallerTrees: "mapHighlights", latencyCompensation: "predict", leadAdjustment: "predict", predictionStrict: "predict" };
+      const parents = { stabilizeStrafe: "predict", fastStopInference: "predict", targetStyle: "showTarget", smooth: "humanLikeAim", smoothProfile: "humanLikeAim", useOneGun: "autoSwitch", autoMelee: "melee", smokeOpacity: "xray", treeOpacity: "xray", ceilings: "xray", darkerSmokes: "xray", zoomFactor: "zoom", movementSmooth: "mobileMovement", lootMode: "autoLoot", espOpacity: "lines", espLineWidth: "lines", espShowEnemies: "esp", espShowAllies: "esp", smallerTrees: "mapHighlights", latencyCompensation: "predict", leadAdjustment: "predict", predictionStrict: "predict" };
       for (const input of panel.querySelectorAll("[data-config]")) {
         const parent = parents[input.dataset.config];
         if (parent) input.closest("label").hidden = !config[parent];

@@ -411,6 +411,9 @@ test('wide A-D midpoint is bounded, long-flight-only, approximate and yields on 
 });
 
 test('strafe stabilization setting defaults on and preserves explicit opt-out', () => {
+  assert.equal(normalizeConfig({}).fastStopInference, true);
+  assert.equal(normalizeConfig({version:3,fastStopInference:false}).fastStopInference, false);
+  assert.equal(normalizeConfig({fastStopInference:'false'}).fastStopInference, true);
   assert.equal(normalizeConfig({}).stabilizeStrafe, true);
   assert.equal(normalizeConfig({ version: 3, stabilizeStrafe: false }).stabilizeStrafe, false);
   assert.equal(normalizeConfig({ stabilizeStrafe: 'false' }).stabilizeStrafe, true);

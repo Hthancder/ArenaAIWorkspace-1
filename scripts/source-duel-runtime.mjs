@@ -22,6 +22,11 @@ export async function loadSource(root = '.cache/survev') {
   const from=source.indexOf('const movement = v2.create(0, 0);',update.start);
   const to=source.indexOf('this.mapIndicator?.updatePosition(this.pos);',from);
   assert.ok(from>update.start && to>from && to<update.end,'pinned movement block');
+  const playerUpdate=source.slice(update.start,update.end);
+  assert.match(playerUpdate,/if\s*\(!v2\.eq\(this\.pos, this\.posOld\)\)\s*\{\s*this\.setPartDirty\(\)/, 'source marks changed player position dirty');
+  assert.match(playerUpdate,/if\s*\(!v2\.eq\(this\.dir, this\.dirNew\)\)\s*\{\s*this\.dir = this\.dirNew;\s*this\.setPartDirty\(\)/, 'source marks changed direction dirty');
+  const client=readFileSync(resolve(root,'server/src/game/client.ts'),'utf8');
+  assert.match(client,/game\.objectRegister\.dirtyPart\[obj\.__id\][\s\S]{0,100}updateMsg\.partObjects\.push\(obj\)/, 'source sends partial dirty objects');
   const movement=source.slice(from,to), method=source.slice(recalc.start,recalc.end);
   const entry=`
 import { BulletBarn } from './server/src/game/objects/bullet.ts';
@@ -41,7 +46,7 @@ class Movement { step(dt) { ${movement} } ${method} }
 export { BulletBarn, Grid, WeaponManager, ObjectType, ObjectSerializeFns, BitStream, InputMsg, v2, GameConfig, GameObjectDefs, MapObjectDefs, collider, Movement };
 `;
   mkdirSync('.cache',{recursive:true});
-  const out=resolve('.cache/source-duel-bundle.mjs');
+  const out=resolve(`.cache/source-duel-bundle-${process.pid}.mjs`);
   await build({stdin:{contents:entry,resolveDir:root,sourcefile:'arena-test-adapter.mjs'},outfile:out,bundle:true,platform:'node',format:'esm',target:'node22',logLevel:'silent'});
   return import(pathToFileURL(out).href+`?revision=${rev}`);
 }
