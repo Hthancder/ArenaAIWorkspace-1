@@ -23,6 +23,14 @@ const pairs = [
   ['still','ad-drift'], ['straight','ad-drift'], ['still','ad-shrink-escape'], ['ad-fast','ad-shrink-escape'],
   ['still','ad-escape-stop'], ['ad-fast','ad-escape-stop'], ['still','ad-escape-return'], ['ad-fast','ad-escape-return'],
   ['still','ad-delayed-escape'], ['ad-fast','ad-delayed-escape'],
+  // Broader coverage: moving shooter and target, not only perpendicular A-D.
+  ['still','approach'], ['straight','approach'], ['turn','approach'],
+  ['still','retreat'], ['straight','retreat'], ['zigzag','retreat'],
+  ['still','speed-change'], ['straight','speed-change'], ['turn','speed-change'],
+  ['still','turn'], ['turn','turn'], ['circle','straight'], ['circle','circle'],
+  ['stop-go','stop-go'], ['stop-go','turn'], ['turn','zigzag'], ['circle','irregular'],
+  ['still','irregular-alt'], ['straight','irregular-alt'], ['circle','irregular-alt'],
+  ['still','irregular-escape'], ['straight','irregular-escape'], ['circle','irregular-escape'],
 ];
 // First actual divergence from the preceding pattern, not the beginning of
 // a continuation in the same direction. The delayed escape skips the 2.88
@@ -37,6 +45,11 @@ export function movement(kind, t, phase) {
   const x = (t + phase) * (holdout ? 1.13 : 1);
   if (kind === 'still') return { x: 0, y: 0 };
   if (kind === 'straight') return { x: 0, y: 1 };
+  if (kind === 'approach') return { x: -1, y: 0 };
+  if (kind === 'retreat') return { x: 1, y: 0 };
+  // Partial speeds model changes in effective movement speed without claiming
+  // to reproduce the source's equip, collision or temporary slow mechanics.
+  if (kind === 'speed-change') return { x: 0, y: [.3, 1, .6, 1][Math.floor(x / .8) % 4] };
   if (kind === 'ad-fast') return { x: 0, y: Math.floor(x / .18) % 2 ? -1 : 1 };
   if (kind === 'ad-wide') return { x: 0, y: Math.floor(x / .48) % 2 ? -1 : 1 };
   if (kind === 'ad-escape') return { x: 0, y: x < 2.4 ? (Math.floor(x / .48) % 2 ? -1 : 1) : 1 };
@@ -62,6 +75,13 @@ export function movement(kind, t, phase) {
   if (kind === 'turn') return Math.floor(x / .9) % 2 ? { x: 1, y: 0 } : { x: 0, y: 1 };
   if (kind === 'stop-go') return { x: 0, y: [1, 0, -1, 0][Math.floor(x / .38) % 4] };
   if (kind === 'zigzag') { const n = Math.SQRT1_2; return [{ x: n, y: n }, { x: -n, y: n }, { x: -n, y: -n }, { x: n, y: -n }][Math.floor(x / .33) % 4]; }
+  if (kind === 'irregular-alt' || kind === 'irregular-escape') {
+    if (kind === 'irregular-escape' && x >= 2.8) return {x:0,y:1};
+    const spans=[.19,.31,.22,.4,.17,.36,.26], dirs=[[0,1],[1,0],[-1,0],[0,-1],[1,1],[-1,-1],[1,-1]];
+    const cycle=spans.reduce((a,b)=>a+b,0); let r=x%cycle,i=0;
+    while(r>=spans[i]) r-=spans[i++];
+    const [a,b]=dirs[i], n=Math.hypot(a,b); return {x:a/n,y:b/n};
+  }
   // Fixed irregular sequence: reversals, pauses and diagonals; no future input
   // is exposed to the predictor. Phase shifts keep the two bots independent.
   const sequence = [[0,1],[0,-1],[0,1],[1,1],[0,0],[0,-1],[-1,1],[0,-1],[0,1],[-1,-1]];
@@ -140,7 +160,7 @@ function record(key, model, result, fallback, projected) {
   r.n++; r.hits += result.hit; r.miss += result.miss; r.fallback += fallback; r.projected += projected; totals.set(k,r);
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-for (const [ownKind, targetKind] of pairs) for (const distance of [12,35,70]) for (const ownBoost of [false,true]) for (const targetBoost of [false,true])
+for (const [ownKind, targetKind] of pairs) for (const distance of [6,12,35,70]) for (const ownBoost of [false,true]) for (const targetBoost of [false,true])
 for (const slower of [false,true]) for (const targetSlow of [false,true]) for (const [down,up] of (quick ? [[.03,.03],[.08,.08]] : [[.03,.03],[.08,.08],[.03,.12],[.12,.03]])) for (const bullet of [66,100,182]) for (const hz of (quick ? [60] : [30,60,144])) {
   // Own commands originate locally and reach the simulated server after uplink.
   const ownPhase = holdout ? .16 : .07, targetPhase = holdout ? .37 : .19;

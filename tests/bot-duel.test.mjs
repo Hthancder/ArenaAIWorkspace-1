@@ -9,6 +9,12 @@ test('bot movement includes independent alternating, diagonal, escape and stop i
   assert.equal(movement('ad-escape-stop', 2.8, 0).y, 0);
   assert.equal(movement('ad-escape-return', 2.8, 0).y, -1);
   assert.equal(movement('ad-shrink-escape', 3.1, 0).y, 1);
+  assert.deepEqual(movement('approach', .1, 0), {x:-1,y:0});
+  assert.deepEqual(movement('retreat', .1, 0), {x:1,y:0});
+  assert.equal(movement('speed-change', .1, 0).y, .3);
+  assert.equal(movement('speed-change', .9, 0).y, 1);
+  assert.deepEqual(movement('irregular-alt', .2, 0), {x:1,y:0});
+  assert.deepEqual(movement('irregular-escape', 3, 0), {x:0,y:1});
   const d = movement('ad-diagonal', .1, 0); assert.ok(Math.abs(Math.hypot(d.x,d.y)-1)<1e-12);
   assert.deepEqual(movement('stop-go', .5, 0), { x: 0, y: 0 });
 });
