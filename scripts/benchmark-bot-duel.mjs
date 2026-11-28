@@ -21,7 +21,14 @@ const pairs = [
   ['still','ad-diagonal'], ['ad-fast','ad-diagonal'], ['straight','turn'], ['ad-fast','circle'],
   ['still','ad-pause'], ['ad-fast','ad-pause'], ['still','ad-side-escape'], ['ad-fast','ad-side-escape'],
   ['still','ad-drift'], ['straight','ad-drift'], ['still','ad-shrink-escape'], ['ad-fast','ad-shrink-escape'],
+  ['still','ad-escape-stop'], ['ad-fast','ad-escape-stop'], ['still','ad-escape-return'], ['ad-fast','ad-escape-return'],
 ];
+const eventTimes = Object.freeze({'ad-escape':2.4,'ad-side-escape':2.4,'ad-pause':2.4,'ad-shrink-escape':3,'ad-escape-stop':2.4,'ad-escape-return':2.4});
+export function eventWindow(kind, firedAt, phase, isHoldout = false) {
+  if (eventTimes[kind] === undefined) return null;
+  const since = firedAt - (eventTimes[kind] / (isHoldout ? 1.13 : 1) - phase);
+  return since >= 0 && since < .2 ? '0-200ms' : since >= .2 && since < .5 ? '200-500ms' : since >= .5 && since < 1 ? '500-1000ms' : null;
+}
 export function movement(kind, t, phase) {
   const x = (t + phase) * (holdout ? 1.13 : 1);
   if (kind === 'still') return { x: 0, y: 0 };
@@ -29,6 +36,10 @@ export function movement(kind, t, phase) {
   if (kind === 'ad-fast') return { x: 0, y: Math.floor(x / .18) % 2 ? -1 : 1 };
   if (kind === 'ad-wide') return { x: 0, y: Math.floor(x / .48) % 2 ? -1 : 1 };
   if (kind === 'ad-escape') return { x: 0, y: x < 2.4 ? (Math.floor(x / .48) % 2 ? -1 : 1) : 1 };
+  if (kind === 'ad-escape-stop' || kind === 'ad-escape-return') {
+    const y = x < 2.4 ? (Math.floor(x / .48) % 2 ? -1 : 1) : x < 2.7 ? 1 : kind === 'ad-escape-stop' ? 0 : -1;
+    return { x: 0, y };
+  }
   if (kind === 'ad-pause') return { x: 0, y: x < 2.4 ? (Math.floor(x / .48) % 2 ? -1 : 1) : 0 };
   if (kind === 'ad-side-escape') return x < 2.4 ? { x: 0, y: Math.floor(x / .48) % 2 ? -1 : 1 } : { x: 1, y: 0 };
   if (kind === 'ad-drift') { const s = Math.floor(x / .48) % 2 ? -1 : 1, n = Math.hypot(.15,1); return { x:.15/n, y:s/n }; }
@@ -166,6 +177,11 @@ for (const slower of [false,true]) for (const targetSlow of [false,true]) for (c
         ? tickCollisionSweep(start,dir,bullet,profile.range,targetAt,firedAt,distance)
         : collision(start,dir,bullet,profile.range,targetAt,firedAt,distance);
       const keys=['ALL',`distance:${distance}`,`target:${targetKind}`,`shooter:${ownKind}`,`shooter-boost:${ownBoost}`,`target-boost:${targetBoost}`,`shooter-slow:${slower}`,`target-slow:${targetSlow}`,`down-up-ms:${down*1000}/${up*1000}`,`bullet:${bullet}`,`fps:${hz}`];
+      // Condition on the simulated event at the server's shot time, not on a
+      // future event exposed to prediction. Non-overlapping windows show the
+      // transient cost that aggregate per-pattern hit rate can conceal.
+      const window = eventWindow(targetKind, firedAt, targetPhase, holdout);
+      if (window) keys.push(`event:${targetKind}:${window}`);
       if(process.argv.includes('--details')) keys.push(`duel:${ownKind}/${targetKind}/${distance}/${ownBoost}/${targetBoost}/${slower}/${targetSlow}/${down}/${up}/${bullet}/${hz}`);
       for(const k of keys) record(k,model,result,fallback,model==='guarded'&&!!projected || model==='stable-own'&&!!stable);
     }

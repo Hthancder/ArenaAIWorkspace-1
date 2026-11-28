@@ -1,13 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { movement, trajectory, collision, tickSegmentCircle, tickCollisionSweep } from '../scripts/benchmark-bot-duel.mjs';
+import { movement, trajectory, collision, tickSegmentCircle, tickCollisionSweep, eventWindow } from '../scripts/benchmark-bot-duel.mjs';
 
 test('bot movement includes independent alternating, diagonal, escape and stop inputs', () => {
   assert.deepEqual(movement('ad-fast', .01, 0), { x: 0, y: 1 });
   assert.deepEqual(movement('ad-fast', .2, 0), { x: 0, y: -1 });
   assert.equal(movement('ad-escape', 2.5, 0).y, 1);
+  assert.equal(movement('ad-escape-stop', 2.8, 0).y, 0);
+  assert.equal(movement('ad-escape-return', 2.8, 0).y, -1);
+  assert.equal(movement('ad-shrink-escape', 3.1, 0).y, 1);
   const d = movement('ad-diagonal', .1, 0); assert.ok(Math.abs(Math.hypot(d.x,d.y)-1)<1e-12);
   assert.deepEqual(movement('stop-go', .5, 0), { x: 0, y: 0 });
+});
+
+test('event windows use server shot time and undo holdout time scaling', () => {
+  const event = 2.4 / 1.13 - .37;
+  assert.equal(eventWindow('ad-escape', event - .001, .37, true), null);
+  assert.equal(eventWindow('ad-escape', event + .1, .37, true), '0-200ms');
+  assert.equal(eventWindow('ad-escape', event + .3, .37, true), '200-500ms');
+  assert.equal(eventWindow('ad-escape', event + .8, .37, true), '500-1000ms');
+  assert.equal(eventWindow('ad-escape', event + 1.1, .37, true), null);
+  assert.equal(eventWindow('straight', event + .1, .37, true), null);
 });
 
 test('bot speeds include base, boosted and separate firing slowdown', () => {

@@ -21,3 +21,20 @@ Holdout quick có 269.568 phát tương quan mỗi model, gồm cả mục tiêu
 Mô hình continuous hiện tại tổng 56,3%, A–D rộng 48,7%, thoát 61,2%; không so trực tiếp như phép đo độc lập vì cả input và phát bắn có tương quan, cũng khác lượng tử thời điểm Fire. Cả hai mô hình là giả lập, không có vật cản, recoil, spread, replay server hoặc đo gameplay live. Kết quả xác nhận cần tiếp tục cải thiện thoát A–D mà không mất lợi ích đang có, chứ không chứng minh chính xác live.
 
 Chạy: `node scripts/benchmark-wide-escape.mjs`, `BOT_MODELS=current node scripts/benchmark-bot-duel.mjs --quick --holdout --tick-collision`, `node scripts/check-bot-duel-source.mjs .cache/survev`, `node scripts/check-bot-tick-source.mjs .cache/survev`. Source fixture yêu cầu checkout pinned như các kiểm thử upstream khác.
+
+## Theo từng giai đoạn sau thoát
+
+Bổ sung hai kiểu mục tiêu thoát 300 ms rồi dừng hoặc quay lại; phân nhóm phát bắn theo thời gian server giả lập kể từ sự kiện (0–200, 200–500, 500–1.000 ms). Holdout quick tick có 299.520 phát tương quan/model, khác tập 269.568 phát ở trên nên không so tổng trực tiếp với bảng cũ. Kết quả trước midpoint → hiện tại:
+
+| Giai đoạn | Trước | Hiện tại |
+|---|---:|---:|
+| Thoát cùng trục 0–200 ms | 42,5% | 33,2% |
+| Thoát cùng trục 200–500 ms | 57,2% | 57,2% |
+| Thoát rồi dừng 0–200 ms | 25,2% | 21,5% |
+| Thoát rồi quay lại 0–200 ms | 27,2% | 27,3% |
+| Thoát rồi quay lại 200–500 ms | 31,4% | 31,4% |
+| A–D rộng toàn giai đoạn | 40,7% | 49,5% |
+
+Mỗi ô 0–200 ms chứa 864 phát, 200–500 ms chứa 1.152 phát; các phát cùng quỹ đạo tương quan và có thể bay qua lần đổi hướng tiếp theo. Chúng không cho biết thời gian phản ứng của client thực. Kết quả làm rõ trade-off đầu thời điểm thoát, bị che khuất khi chỉ xem số tổng.
+
+Thử thêm lưu dấu vượt biên trong sáu snapshot gần nhất với biên 0,06/0,2/0,4 wu và pha midpoint với lead 20/40/60%. Biên 0,4 cho A–D rộng 48,3%, 0–200 ms thoát vẫn 33,2%; blend 20% cho A–D rộng 47,2%, A–D chéo 59,3% (hiện tại 49,5%/62,3%) trong khi thoát 0–200 ms vẫn 33,2%. Các biên nhỏ hơn hoặc blend lớn hơn làm hại A–D rõ hơn. Không ship các ứng viên vì chưa giải quyết được trường hợp quan trọng mà không đánh đổi đáng kể. Các ca stop/return là mẫu tổng hợp mới, không đại diện mọi hành vi người chơi.
