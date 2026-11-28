@@ -153,7 +153,7 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
   const code = transformSync(bbCode + classes + fixture, { target: 'es2022', minify: renamed,
     ...(renamed ? { mangleProps: /^m(_[a-zA-Z0-9]+)+$/, mangleQuoted: true } : {}) }).code;
   const context = vm.createContext({ sent: [], TextEncoder, TextDecoder, PixiContainer, PixiTextStyle }); vm.runInContext(code, context);
-  const { app, join, readInputAim, frameInput } = context.result;
+  const { app, join, frameInput } = context.result;
   const dom = new JSDOM('<body></body>', { url: 'https://survev.io', pretendToBeVisual: true });
   let clock = 1000; Object.defineProperty(dom.window.performance, 'now', { value: () => clock, configurable: true });
   const m = discover(app.game);

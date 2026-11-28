@@ -6,12 +6,6 @@ export function safeLabel(value, limit = 24) {
   if (typeof value !== 'string') return '';
   return [...value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '').replace(/\s+/g, ' ').trim()].slice(0, limit).join('');
 }
-function playerName(player) {
-  const text = read(player, 'nameText');
-  // PIXI Text 7.4.3 stores text in own _text; .text is a prototype accessor.
-  // Do not invoke arbitrary getters or read unmasked playerInfo names as fallback.
-  return safeLabel(read(text, 'text') ?? read(text, '_text'));
-}
 export function espColor(kind, config, selected = false) {
   const key = selected ? 'target' : kind;
   const custom = config[{ enemy: 'espEnemyColor', ally: 'espAllyColor', unknown: 'espUnknownColor', target: 'espTargetColor' }[key]];
@@ -99,7 +93,7 @@ export class EspRenderer {
   }
   draw(ctx, frame, config, width, height) {
     if (!frame.origin) return frame.stats;
-    const occupied = [], fontSize = finite(config.espFontSize) ? config.espFontSize : 12;
+    const fontSize = finite(config.espFontSize) ? config.espFontSize : 12;
     ctx.save();
     try {
       ctx.font = `${fontSize}px system-ui, sans-serif`; ctx.textBaseline = 'top'; ctx.textAlign = 'left';

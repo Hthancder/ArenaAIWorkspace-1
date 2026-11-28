@@ -1,4 +1,4 @@
-import { ast, finite, methods, path, paths, read, unique, walk } from './core.mjs';
+import { ast, finite, methods, path, paths, unique, walk } from './core.mjs';
 
 // Identify native send scheduling by data flow, not the property's spelling.
 export function discoverInputTimeout(game) {

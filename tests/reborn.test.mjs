@@ -2573,3 +2573,30 @@ test('released Fire edge respects key-and-fire activation and Wallcheck without 
     assert.deepEqual(f.app.game.sent.at(-1).data.toMouseDir, edge.toMouseDir);
   } finally { f.close(); }
 });
+
+test('v3 settings survive a reload while obsolete configuration migrations stay bounded', () => {
+  const saved = { ...DEFAULTS, lines: true, showDot: true };
+  const storage = { getItem: () => JSON.stringify(saved) };
+  const loaded = loadConfig(storage);
+  assert.equal(loaded.lines, true); assert.equal(loaded.showDot, true);
+  const loadedAgain = normalizeConfig(JSON.parse(JSON.stringify(loaded)));
+  assert.equal(loadedAgain.lines, true); assert.equal(loadedAgain.showDot, true);
+  assert.equal(normalizeConfig({ version: 2, lines: true, showDot: true }).lines, true);
+  assert.equal(normalizeConfig({ version: 1, lines: true, showDot: true }).lines, false);
+  assert.equal(normalizeConfig({ version: 1, lines: true, showDot: true }).showDot, false);
+});
+
+test('hiding a tab releases the aim key and smoothing even without a blur or keyup', () => {
+  const f = coordinated({ aimActivation: 'key', humanLikeAim: true });
+  try {
+    f.dom.window.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { code: f.cfg.aimKey }));
+    f.engine.pre(); assert.equal(f.engine.holdAim, true); assert.notEqual(f.engine.aimController.time, null);
+    Object.defineProperty(f.dom.window.document, 'hidden', { configurable: true, value: true });
+    f.dom.window.document.dispatchEvent(new f.dom.window.Event('visibilitychange'));
+    assert.equal(f.engine.holdAim, false); assert.equal(f.engine.aimController.time, null);
+    assert.equal(f.engine.mouseInput.record, null);
+    Object.defineProperty(f.dom.window.document, 'hidden', { configurable: true, value: false });
+    f.advance(); f.engine.pre();
+    assert.equal(f.engine.stats.aimState, 'waiting-activation');
+  } finally { f.close(); }
+});

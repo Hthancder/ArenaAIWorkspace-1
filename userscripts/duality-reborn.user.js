@@ -6396,7 +6396,7 @@ THE SOFTWARE.
     }
     draw(ctx, frame, config, width, height) {
       if (!frame.origin) return frame.stats;
-      const occupied = [], fontSize = finite(config.espFontSize) ? config.espFontSize : 12;
+      const fontSize = finite(config.espFontSize) ? config.espFontSize : 12;
       ctx.save();
       try {
         ctx.font = `${fontSize}px system-ui, sans-serif`;
@@ -8523,6 +8523,8 @@ THE SOFTWARE.
         if (win.document.hidden) {
           releaseLayer();
           this.restoreInput();
+          this.holdAim = false;
+          this.aimController.reset();
           this.grenadeTimer.reset();
           this.grenadeAimTimer.reset();
           this.grenadePlan = null;
@@ -10097,7 +10099,7 @@ THE SOFTWARE.
     if (["ring", "cross", "brackets", "diamond"].includes(saved.targetStyle)) result.targetStyle = saved.targetStyle;
     for (const [key, values] of Object.entries({ aimMode: ["off", "assist", "lock"], aimActivation: ["fire", "key", "both"], smoothProfile: ["responsive", "natural", "precise", "duality"], grenadeAimMode: ["off", "preview", "assist", "lock"], grenadeAimActivation: ["hold", "equip"] })) if (values.includes(saved[key])) result[key] = saved[key];
     for (const key of ["espLegend", "espLabels", "espDistance", "espWeapons", "espHighlightTarget", "espMarkers", "espOffscreen"]) result[key] = false;
-    if (saved.version !== 2) {
+    if (saved.version !== 2 && saved.version !== 3) {
       result.lines = false;
       result.showDot = false;
     }

@@ -1,4 +1,4 @@
-import { ast, at, Disposables, entries, finite, methods, object, path, patchMethod, read, readMethod, walk } from './core.mjs';
+import { ast, at, Disposables, finite, methods, object, path, patchMethod, read, readMethod, walk } from './core.mjs';
 
 // Exact original map markers, not a type-name guess for every map object.
 export const MAP_MARKERS = Object.freeze({

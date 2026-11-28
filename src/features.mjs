@@ -1,6 +1,6 @@
-import { aimPoint, ast, at, clamp, discover, discoverLootSource, discoverSender, Disposables, entries, finite, intercept, isPlayer,
+import { aimPoint, ast, at, clamp, discover, discoverLootSource, discoverSender, Disposables, entries, finite,
   localWeapon, methods, object, overlayPosition, patchMethod, paths, point, project, read, readMethod, sameLayer,
-  segmentBlocked, teamRelations, Tracker, unique, vec, walk } from './core.mjs';
+  segmentBlocked, teamRelations, unique, vec, walk } from './core.mjs';
 
 import { buildEspFrame, emptyEspStats, EspRenderer, prepareOverlay } from './esp.mjs';
 import { fadeObjectKind } from './xray.mjs';
@@ -19,7 +19,7 @@ import { drawTargetIndicator } from './target-indicator.mjs';
 import { LootBackoff } from './loot-backoff.mjs';
 import { nearbyLootSafety } from './loot-safety.mjs';
 import { GrenadeTimer, drawGrenadeTimer } from './grenade-timer.mjs';
-import { simulateOpenThrow, solveMovingOpenThrow, validateOpenThrow } from './grenade-aim.mjs';
+import { solveMovingOpenThrow, validateOpenThrow } from './grenade-aim.mjs';
 import { assessAutoThrow } from './grenade-release.mjs';
 import { GrenadeAutoRelease } from './grenade-auto-release.mjs';
 import { RuntimePerf } from './runtime-perf.mjs';
@@ -182,7 +182,7 @@ export class Features {
     win.addEventListener('mouseup', event => { if (event.button === 0 && (this.config.aimActivation !== 'key' || this.meleeDirection)) this.restoreInput(); }, { signal: controller.signal });
     win.addEventListener('blur', () => { releaseLayer(); this.restoreInput(); this.focusBlocked = true; this.holdAim = false; this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; }, { signal: controller.signal });
     win.addEventListener('focus', () => { this.focusBlocked = false; }, { signal: controller.signal });
-    win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) { releaseLayer(); this.restoreInput(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; } }, { signal: controller.signal });
+    win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) { releaseLayer(); this.restoreInput(); this.holdAim = false; this.aimController.reset(); this.grenadeTimer.reset(); this.grenadeAimTimer.reset(); this.grenadePlan = null; } }, { signal: controller.signal });
     this.reconcile(true);
   }
   guard(name, fn) {

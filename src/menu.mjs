@@ -36,7 +36,9 @@ export function normalizeConfig(saved) {
   for (const [key, values] of Object.entries({ aimMode: ['off', 'assist', 'lock'], aimActivation: ['fire', 'key', 'both'], smoothProfile: ['responsive', 'natural', 'precise', 'duality'], grenadeAimMode: ['off', 'preview', 'assist', 'lock'], grenadeAimActivation: ['hold', 'equip'] })) if (values.includes(saved[key])) result[key] = saved[key];
   // Removed HUD/tag fields never reappear, including old saved configurations.
   for (const key of ['espLegend', 'espLabels', 'espDistance', 'espWeapons', 'espHighlightTarget', 'espMarkers', 'espOffscreen']) result[key] = false;
-  if (saved.version !== 2) { result.lines = false; result.showDot = false; }
+  // Only pre-v2 configurations need this migration. v3 saves these controls
+  // too; resetting them on every reload silently discards user changes.
+  if (saved.version !== 2 && saved.version !== 3) { result.lines = false; result.showDot = false; }
   // v3 separates human-like movement limiting from combat-effective Lock.
   // New installs start natural/ramped; legacy Smooth Lock maps to human-like,
   // but users can always disable it for immediate Lock.
