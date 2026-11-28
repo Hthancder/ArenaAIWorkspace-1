@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { movement, trajectory, collision } from '../scripts/benchmark-bot-duel.mjs';
+import { movement, trajectory, collision, tickSegmentCircle, tickCollisionSweep } from '../scripts/benchmark-bot-duel.mjs';
 
 test('bot movement includes independent alternating, diagonal, escape and stop inputs', () => {
   assert.deepEqual(movement('ad-fast', .01, 0), { x: 0, y: 1 });
@@ -24,4 +24,15 @@ test('duel collision sweeps against the moving target rather than only the end p
   assert.equal(collision({x:0,y:0},{x:1,y:0},20,20,crossing,0,10).hit,true);
   assert.equal(collision({x:0,y:0},{x:1,y:0},20,8,still,0,10).hit,false);
   assert.equal(collision({x:0,y:3},{x:1,y:0},20,20,still,0,10).hit,false);
+});
+
+test('source-shaped tick collision tests circle at tick time and detects exit from an overlapping muzzle', () => {
+  const center = {x:0,y:0};
+  assert.equal(tickSegmentCircle({x:-2,y:0},{x:2,y:0},center,1),true);
+  assert.equal(tickSegmentCircle({x:0,y:0},{x:.1,y:0},center,1),false, 'segment wholly inside does not reach source exit intersection');
+  assert.equal(tickSegmentCircle({x:0,y:0},{x:2,y:0},center,1),true);
+  assert.equal(tickSegmentCircle({x:-2,y:1.1},{x:2,y:1.1},center,1),false);
+  const still = () => ({x:0,y:0});
+  assert.equal(tickCollisionSweep({x:0,y:0},{x:1,y:0},100,20,still,0,10).hit,true);
+  assert.equal(tickCollisionSweep({x:0,y:0},{x:1,y:0},100,8,still,0,10).hit,false);
 });
