@@ -1847,6 +1847,28 @@ test('last prediction diagnostics expose bounded snapshot evidence without posit
   } finally { f.close(); }
 });
 
+test('wide strafe is Lock-only and strict prediction rejects its approximate midpoint', () => {
+  const f = coordinated({ predict: true, stabilizeStrafe: true, aimMode: 'lock', humanLikeAim: false, fov: 400 });
+  try {
+    f.app.game.camera.zoom = .15; f.engine.pre();
+    const enemy = f.app.game.barn.playerPool.list[1]; f.engine.capabilities.prediction = true;
+    for (let i = 0; i < 28; i++) {
+      const t = 109 + i * 33, y = 2.4 * 2 / Math.PI * Math.asin(Math.sin(2 * Math.PI * (i * 33) / 800));
+      f.engine.tracker.observe(enemy, { x: 65, y: 20 + y }, t);
+    }
+    enemy.p = { ...f.engine.tracker.estimate(enemy, 1000).pos };
+    const input = new InputMsg(); input.toMouseLen = 55; input.shootHold = true;
+    assert.ok(f.engine.processAim(input, true), JSON.stringify(f.engine.stats));
+    assert.equal(f.engine.stats.predictionState, 'wide-bounded-oscillation'); assert.equal(f.engine.stats.aimApproximate, true);
+    f.cfg.predictionStrict = true;
+    assert.equal(f.engine.processAim(input, true), null); assert.equal(f.engine.stats.aimRejections.predictionUncertain, 1);
+    f.cfg.predictionStrict = false; f.cfg.aimMode = 'assist';
+    assert.ok(f.engine.processAim(input, true)); assert.notEqual(f.engine.stats.predictionState, 'wide-bounded-oscillation');
+    f.cfg.aimMode = 'lock'; f.cfg.stabilizeStrafe = false;
+    assert.ok(f.engine.processAim(input, true)); assert.notEqual(f.engine.stats.predictionState, 'wide-bounded-oscillation');
+  } finally { f.close(); }
+});
+
 test('sender evidence counts malformed inputs without changing the native message', () => {
   const f = coordinated();
   try {

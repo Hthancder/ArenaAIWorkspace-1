@@ -6,6 +6,8 @@ import { resolve } from 'node:path';
 import { projectOwnOrigin } from '../src/self-motion.mjs';
 const { SnapshotTracker, predictShot, muzzleAt } = await import(process.env.AIM_MODULE || '../src/aim.mjs');
 const experiment = process.env.BOT_EXPERIMENT ? await import(process.env.BOT_EXPERIMENT) : null;
+const quick = process.argv.includes('--quick'), holdout = process.argv.includes('--holdout');
+const chosenModels = process.env.BOT_MODELS ? new Set(process.env.BOT_MODELS.split(',')) : null;
 // Center test coordinates in the source's positive [0, 1024] map domain.
 const quant = n => Math.round((n + 512) * 65535 / 1024) * 1024 / 65535 - 512;
 export const SIM = Object.freeze({ baseSpeed: 12, boostBonus: 1.85, fireMultiplier: .5, radius: 1 });
@@ -17,14 +19,19 @@ const pairs = [
   ['irregular','straight'], ['irregular','ad-fast'], ['irregular','irregular'], ['stop-go','ad-wide'], ['zigzag','zigzag'],
   ['still','ad-escape'], ['ad-fast','ad-escape'], ['still','ad-jitter'], ['irregular','ad-jitter'],
   ['still','ad-diagonal'], ['ad-fast','ad-diagonal'], ['straight','turn'], ['ad-fast','circle'],
+  ['still','ad-pause'], ['ad-fast','ad-pause'], ['still','ad-side-escape'], ['ad-fast','ad-side-escape'],
+  ['still','ad-drift'], ['straight','ad-drift'],
 ];
 export function movement(kind, t, phase) {
-  const x = t + phase;
+  const x = (t + phase) * (holdout ? 1.13 : 1);
   if (kind === 'still') return { x: 0, y: 0 };
   if (kind === 'straight') return { x: 0, y: 1 };
   if (kind === 'ad-fast') return { x: 0, y: Math.floor(x / .18) % 2 ? -1 : 1 };
   if (kind === 'ad-wide') return { x: 0, y: Math.floor(x / .48) % 2 ? -1 : 1 };
   if (kind === 'ad-escape') return { x: 0, y: x < 2.4 ? (Math.floor(x / .48) % 2 ? -1 : 1) : 1 };
+  if (kind === 'ad-pause') return { x: 0, y: x < 2.4 ? (Math.floor(x / .48) % 2 ? -1 : 1) : 0 };
+  if (kind === 'ad-side-escape') return x < 2.4 ? { x: 0, y: Math.floor(x / .48) % 2 ? -1 : 1 } : { x: 1, y: 0 };
+  if (kind === 'ad-drift') { const s = Math.floor(x / .48) % 2 ? -1 : 1, n = Math.hypot(.15,1); return { x:.15/n, y:s/n }; }
   if (kind === 'ad-diagonal') { const s = Math.floor(x / .48) % 2 ? -Math.SQRT1_2 : Math.SQRT1_2; return { x: s, y: s }; }
   if (kind === 'ad-jitter') {
     const spans = [.18,.55,.26,.4,.65,.31], cycle = spans.reduce((a,b)=>a+b,0); let t = x % cycle, i = 0;
@@ -87,14 +94,16 @@ function record(key, model, result, fallback, projected) {
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
 for (const [ownKind, targetKind] of pairs) for (const distance of [12,35,70]) for (const ownBoost of [false,true]) for (const targetBoost of [false,true])
-for (const slower of [false,true]) for (const targetSlow of [false,true]) for (const [down,up] of [[.03,.03],[.08,.08],[.03,.12],[.12,.03]]) for (const bullet of [66,100,182]) for (const hz of [30,60,144]) {
+for (const slower of [false,true]) for (const targetSlow of [false,true]) for (const [down,up] of (quick ? [[.03,.03],[.08,.08]] : [[.03,.03],[.08,.08],[.03,.12],[.12,.03]])) for (const bullet of [66,100,182]) for (const hz of (quick ? [60] : [30,60,144])) {
   // Own commands originate locally and reach the simulated server after uplink.
-  const ownAt = trajectory(ownKind, .07, SIM.baseSpeed + (ownBoost ? SIM.boostBonus : 0), slower, up), targetAt = trajectory(targetKind, .19, SIM.baseSpeed + (targetBoost ? SIM.boostBonus : 0), targetSlow);
+  const ownPhase = holdout ? .16 : .07, targetPhase = holdout ? .37 : .19;
+  const ownAt = trajectory(ownKind, ownPhase, SIM.baseSpeed + (ownBoost ? SIM.boostBonus : 0), slower, up), targetAt = trajectory(targetKind, targetPhase, SIM.baseSpeed + (targetBoost ? SIM.boostBonus : 0), targetSlow);
   const own = new SnapshotTracker(), enemy = new SnapshotTracker(), me = {__id:1}, target = {__id:2};
   const profile = { speed: bullet, range: 250, barrel: 2, offset: .25, variance: 1 };
   const packets = []; let lastArrival = 0;
   for (let i=0; i<150; i++) {
-    const t=i/33, jitter=.006*Math.sin(i*2.7)+(i%67===60?.09:0), arrival=Math.max(t+down+jitter,lastArrival+.00001); lastArrival=arrival;
+    const t=i/33, jitter=holdout ? .009*Math.sin(i*1.37)+(i%71===62?.12:0) : .006*Math.sin(i*2.7)+(i%67===60?.09:0);
+    const arrival=Math.max(t+down+jitter,lastArrival+.00001); lastArrival=arrival;
     packets.push({t,arrival});
   }
   let cursor=0, nextShot=1;
@@ -105,12 +114,13 @@ for (const slower of [false,true]) for (const targetSlow of [false,true]) for (c
       own.observe(me,{x:quant(a.x),y:quant(a.y)},p.arrival*1000,0);
       enemy.observe(target,{x:quant(distance+b.x),y:quant(b.y)},p.arrival*1000,0);
     }
-    if(now+1e-8<nextShot)continue; nextShot+=.12;
+    if(now+1e-8<nextShot)continue; nextShot+=holdout ? .137 : .12;
     const a=own.estimate(me,now*1000), b=enemy.estimate(target,now*1000); if(!a||!b)continue;
-    const input=movement(ownKind,now,.07), realOrigin=ownAt(now+up), transit=(down+up)/2;
+    const input=movement(ownKind,now,ownPhase), realOrigin=ownAt(now+up), transit=(down+up)/2;
     const projected=projectOwnOrigin(a.pos,a,input,{rtt:(down+up)*1000,lastRtt:(down+up)*1000,rttAt:now*1000},now*1000);
     const stable = stableProjection(a,projected);
     for (const model of ['direct','current','guarded','stable-own','oracle-origin', ...(experiment ? ['experimental'] : [])]) {
+      if (chosenModels && !chosenModels.has(model)) continue;
       const origin=model==='guarded'&&projected?projected:model==='stable-own'&&stable?stable:model==='oracle-origin'?realOrigin:a.pos;
       const predicted=model==='experimental' ? experiment.candidate(b,profile,origin,transit) : null;
       const adjusted=predicted?{...b,pos:predicted,vx:0,vy:0,age:0,error:0,velocityError:0,motion:[]}:b;

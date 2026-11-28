@@ -390,6 +390,26 @@ test('fast bounded strafes tolerate speed but not region departures or excessive
   assert.notEqual(predictShot({ ...opts, target: side.pos, track: side }).state, 'bounded-oscillation');
 });
 
+test('wide A-D midpoint is bounded, long-flight-only, approximate and yields on departure', () => {
+  const tracker = new SnapshotTracker(), entity = { __id: 153 };
+  for (let i = 0; i < 28; i++) {
+    const t = i * 33, y = 2.4 * 2 / Math.PI * Math.asin(Math.sin(2 * Math.PI * t / 800));
+    tracker.observe(entity, { x: 55, y }, t);
+  }
+  const track = tracker.estimate(entity, 27 * 33), gun = { speed: 66, range: 250, barrel: 2, offset: 0, variance: 1 };
+  const opts = { origin: { x: 0, y: 0 }, target: track.pos, track, profile: gun, radius: 1, stabilize: true };
+  const shot = predictShot(opts);
+  assert.equal(shot.state, 'wide-bounded-oscillation'); assert.equal(shot.approximate, true); assert.ok(Math.abs(shot.world.y) < .08);
+  assert.notEqual(predictShot({ ...opts, stabilize: false }).state, 'wide-bounded-oscillation');
+  assert.notEqual(predictShot({ ...opts, radius: .5 }).state, 'wide-bounded-oscillation');
+  assert.notEqual(predictShot({ ...opts, origin: { x: 45, y: 0 } }).state, 'wide-bounded-oscillation');
+  const motion = track.motion.filter((_, i) => i < 8 || i > 15);
+  assert.notEqual(predictShot({ ...opts, track: { ...track, motion } }).state, 'wide-bounded-oscillation');
+  tracker.observe(entity, { x: 55.3, y: track.pos.y }, 28 * 33);
+  const departure = tracker.estimate(entity, 28 * 33);
+  assert.notEqual(predictShot({ ...opts, track: departure, target: departure.pos }).state, 'wide-bounded-oscillation');
+});
+
 test('strafe stabilization setting defaults on and preserves explicit opt-out', () => {
   assert.equal(normalizeConfig({}).stabilizeStrafe, true);
   assert.equal(normalizeConfig({ version: 3, stabilizeStrafe: false }).stabilizeStrafe, false);

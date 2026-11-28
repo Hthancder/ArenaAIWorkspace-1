@@ -34,7 +34,7 @@ function rememberMotion(s, pos, now) {
 
 // Only infer a bounded weave after observing a complete reversal cycle within
 // a small region. A long snapshot gap or missing history disables this model.
-export function boundedOscillation(track, radius) {
+export function boundedOscillation(track, radius, diameterLimit = null) {
   const samples = track?.motion;
   if (!Array.isArray(samples) || samples.length < 8 || !finite(track.age) || track.age > .15 || !finite(radius) || radius <= 0) return null;
   if (samples.at(-1).t - samples[0].t < 550) return null;
@@ -58,7 +58,8 @@ export function boundedOscillation(track, radius) {
   const dx = maxX - minX, dy = maxY - minY, diameter = Math.hypot(dx, dy);
   // A wider bounded strafe can still favor its midpoint; cap it by hitbox
   // size and world distance. Beyond one diameter the midpoint may still miss.
-  if (diameter < .2 || diameter > Math.min(3.5 * radius, 3.5)) return null;
+  const maxDiameter = finite(diameterLimit) && diameterLimit > 0 ? diameterLimit : Math.min(3.5 * radius, 3.5);
+  if (diameter < .2 || diameter > maxDiameter) return null;
   const axis = dx >= dy ? 'x' : 'y';
   let sign = 0, turns = 0;
   for (let i = 1; i < samples.length; i++) {
@@ -69,6 +70,26 @@ export function boundedOscillation(track, radius) {
     sign = next;
   }
   return turns >= 2 ? { x: (minX + maxX) / 2, y: (minY + maxY) / 2, diameter } : null;
+}
+
+// For a wider repeated strafe, use the observed region's midpoint only when
+// nominal flight time is long enough relative to crossing that region. This is
+// a bounded fallback, not a prediction of the opponent's next reversal.
+export function wideBoundedOscillation(track, radius, origin, profile, region = null) {
+  if (!vec(origin) || !vec(track?.pos) || !finite(profile?.speed) || profile.speed <= 0 || !finite(radius) || radius <= 0) return null;
+  const bounded = region || boundedOscillation(track, radius, Math.min(6 * radius, 6));
+  if (!bounded || bounded.diameter <= 3.5) return null;
+  const speed = Math.hypot(track.vx, track.vy);
+  const flight = Math.hypot(track.pos.x - origin.x, track.pos.y - origin.y) / profile.speed;
+  if (!finite(speed) || speed <= 1 || flight <= bounded.diameter / speed * .65) return null;
+  const samples = track.motion; let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const { p } of samples) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+  const axis = maxX - minX >= maxY - minY ? 'x' : 'y'; let traveled = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const d = samples[i].p[axis] - samples[i - 1].p[axis];
+    if (Math.abs(d) >= .035) traveled += Math.abs(d);
+  }
+  return traveled > bounded.diameter * 1.45 ? bounded : null;
 }
 
 // Observations only: never add a synthetic zero-velocity sample on render frames.
@@ -166,7 +187,11 @@ function linearHistory(track) {
 }
 export function predictShot({ origin, target, track, profile, latency = 0, lead = 1, radius = 1, muzzleFor = muzzleAt, stabilize = false, compensateSnapshot = false }) {
   if (!vec(origin) || !vec(target) || !profile) return { state: 'missing-profile' };
-  const bounded = stabilize ? boundedOscillation(track, radius) : null;
+  // Scan motion history once for both the original and the wider bounds.
+  const region = stabilize ? boundedOscillation(track, radius, Math.min(6 * radius, 6)) : null;
+  const smallBounded = region && region.diameter <= Math.min(3.5 * radius, 3.5) ? region : null;
+  const wideBounded = region && !smallBounded ? wideBoundedOscillation(track, radius, origin, profile, region) : null;
+  const bounded = smallBounded || wideBounded;
   target = bounded || track?.pos || target;
   const age = track?.age || 0, vx = bounded ? 0 : track?.vx || 0, vy = bounded ? 0 : track?.vy || 0;
   const transit = clamp(latency * (compensateSnapshot && !bounded && linearHistory(track) ? 2 : 1), 0, .1), ahead = age + transit;
@@ -230,7 +255,7 @@ export function predictShot({ origin, target, track, profile, latency = 0, lead 
   if (profile.speed * time > profile.range) return { state: 'out-of-range-or-horizon' };
   distance = Math.hypot(world.x - origin.x, world.y - origin.y);
   const mouseLen = Math.hypot(world.x - finalMuzzle.x, world.y - finalMuzzle.y) / (profile.variance || 1) + profile.barrel;
-  return { mouseLen, state: !consistent ? 'unresolved-muzzle-solution' : confidence < 1 ? 'reduced-lead-uncertainty' : bounded ? 'bounded-oscillation' : track ? 'predicted' : 'direct-no-history', world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: !!profile.approximate || confidence < 1 || !consistent };
+  return { mouseLen, state: !consistent ? 'unresolved-muzzle-solution' : wideBounded ? 'wide-bounded-oscillation' : confidence < 1 ? 'reduced-lead-uncertainty' : bounded ? 'bounded-oscillation' : track ? 'predicted' : 'direct-no-history', world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: !!profile.approximate || confidence < 1 || !consistent || !!wideBounded };
 }
 export class AimController {
   reset() { this.angle = null; this.time = null; this.target = null; this.mode = null; this.angularVelocity = 0; this.cubic = null; this.profile = null; }

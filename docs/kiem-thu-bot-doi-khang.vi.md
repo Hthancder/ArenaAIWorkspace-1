@@ -16,7 +16,7 @@ Snapshot giả 33 Hz lượng tử hóa, jitter và nghẽn định kỳ, giữ 
 
 ## Kết quả cần chú ý
 
-Đây là tỷ lệ va chạm của **mô hình giả**, tuyệt đối không suy ra hitrate thật:
+Bảng dưới là kết quả lịch sử với predictor ở commit `b21b23c` và 28 cặp ban đầu; bản cải tiến và bộ 34 cặp được so sánh trong `docs/cai-tien-aim-a-d-rong.vi.md`. Đây là tỷ lệ va chạm của **mô hình giả**, tuyệt đối không suy ra hitrate thật:
 
 | Nhóm | current | so sánh / nhận xét |
 |---|---:|---|
