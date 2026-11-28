@@ -21,6 +21,15 @@ test('event windows use server shot time and undo holdout time scaling', () => {
   assert.equal(eventWindow('ad-escape', event + .8, .37, true), '500-1000ms');
   assert.equal(eventWindow('ad-escape', event + 1.1, .37, true), null);
   assert.equal(eventWindow('straight', event + .1, .37, true), null);
+  assert.equal(eventWindow('ad-escape-stop', 2.4 - .19 + .1, .19), '0-200ms');
+  assert.equal(eventWindow('ad-shrink-escape', 3.12 - .19 + .1, .19), '0-200ms');
+  const continuedShrink = x => Math.floor((x - 2) / .16) % 2 ? -1 : 1;
+  assert.equal(movement('ad-shrink-escape', 3.1, 0).y, continuedShrink(3.1));
+  assert.notEqual(movement('ad-shrink-escape', 3.13, 0).y, continuedShrink(3.13));
+  assert.notEqual(movement('ad-escape', 2.41, 0).y, movement('ad-wide', 2.41, 0).y);
+  assert.equal(movement('ad-delayed-escape', 2.7, 0).y, movement('ad-wide', 2.7, 0).y);
+  assert.notEqual(movement('ad-delayed-escape', 2.89, 0).y, movement('ad-wide', 2.89, 0).y);
+  assert.equal(eventWindow('ad-delayed-escape', 2.88 + .1, 0), '0-200ms');
 });
 
 test('bot speeds include base, boosted and separate firing slowdown', () => {

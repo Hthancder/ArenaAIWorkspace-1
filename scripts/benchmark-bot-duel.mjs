@@ -22,8 +22,12 @@ const pairs = [
   ['still','ad-pause'], ['ad-fast','ad-pause'], ['still','ad-side-escape'], ['ad-fast','ad-side-escape'],
   ['still','ad-drift'], ['straight','ad-drift'], ['still','ad-shrink-escape'], ['ad-fast','ad-shrink-escape'],
   ['still','ad-escape-stop'], ['ad-fast','ad-escape-stop'], ['still','ad-escape-return'], ['ad-fast','ad-escape-return'],
+  ['still','ad-delayed-escape'], ['ad-fast','ad-delayed-escape'],
 ];
-const eventTimes = Object.freeze({'ad-escape':2.4,'ad-side-escape':2.4,'ad-pause':2.4,'ad-shrink-escape':3,'ad-escape-stop':2.4,'ad-escape-return':2.4});
+// First actual divergence from the preceding pattern, not the beginning of
+// a continuation in the same direction. The delayed escape skips the 2.88
+// reversal, while ad-escape skips the previous reversal at 2.4.
+const eventTimes = Object.freeze({'ad-escape':2.4,'ad-side-escape':2.4,'ad-pause':2.4,'ad-shrink-escape':3.12,'ad-escape-stop':2.4,'ad-escape-return':2.4,'ad-delayed-escape':2.88});
 export function eventWindow(kind, firedAt, phase, isHoldout = false) {
   if (eventTimes[kind] === undefined) return null;
   const since = firedAt - (eventTimes[kind] / (isHoldout ? 1.13 : 1) - phase);
@@ -36,6 +40,7 @@ export function movement(kind, t, phase) {
   if (kind === 'ad-fast') return { x: 0, y: Math.floor(x / .18) % 2 ? -1 : 1 };
   if (kind === 'ad-wide') return { x: 0, y: Math.floor(x / .48) % 2 ? -1 : 1 };
   if (kind === 'ad-escape') return { x: 0, y: x < 2.4 ? (Math.floor(x / .48) % 2 ? -1 : 1) : 1 };
+  if (kind === 'ad-delayed-escape') return { x: 0, y: x < 2.4 ? (Math.floor(x / .48) % 2 ? -1 : 1) : -1 };
   if (kind === 'ad-escape-stop' || kind === 'ad-escape-return') {
     const y = x < 2.4 ? (Math.floor(x / .48) % 2 ? -1 : 1) : x < 2.7 ? 1 : kind === 'ad-escape-stop' ? 0 : -1;
     return { x: 0, y };
