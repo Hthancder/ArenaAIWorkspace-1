@@ -10,7 +10,8 @@
     "check": "npm test && node --check userscripts/duality-reborn.user.js",
     "check:upstream": "node scripts/check-upstream.mjs",
     "benchmark:aim": "node scripts/benchmark-aim.mjs",
-    "benchmark:bot": "node scripts/benchmark-bot-duel.mjs"
+    "benchmark:bot": "node scripts/benchmark-bot-duel.mjs",
+    "benchmark:source": "node scripts/benchmark-source-duel.mjs"
   },
   "dependencies": {
     "acorn": "8.15.0"
