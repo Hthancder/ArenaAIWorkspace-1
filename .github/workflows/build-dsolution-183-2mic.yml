@@ -130,6 +130,7 @@ jobs:
           ./tests/ram-recovery/run.sh /tmp/Bruce
           ./tests/lan-guard/run.sh /tmp/Bruce
           ./tests/ble-audit/run.sh /tmp/Bruce
+          ./tests/beacon-spam/run.sh /tmp/Bruce
           ./tests/web-mirror/run.sh /tmp/Bruce
           node --check /tmp/Bruce/embedded_resources/web_interface/index.js
 

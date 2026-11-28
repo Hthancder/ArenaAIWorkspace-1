@@ -81,3 +81,72 @@ các mục đã về đúng nhóm.
   vẫn giữ nguyên hành vi; tài liệu này chỉ sắp xếp lại chỗ vào.
 - Các board khác dùng chung `WifiMenu`; cần build lại cho từng board để chắc chắn các nhánh
   `CONFIG_IDF_TARGET_*` và `LITE_VERSION` vẫn biên dịch.
+
+## Beacon SPAM: số lượng chọn được + deauth song song
+
+Trước đây `Beacon SPAM` chỉ có một kiểu chạy: phát mãi cho tới khi bấm nút, và
+phát một mình. Nay hai thứ đó đều chọn được ngay trước khi chạy.
+
+### Đường đi trong menu (không thêm màn mới)
+
+```
+WiFi → WiFi Atks → Beacon SPAM
+        ↓ chọn nguồn SSID (Funny / Ricky / Random / Single / Custom file)
+        ↓ Beacon Count      ← mới: Unlimited, 50, 100, 500, Custom…
+        ↓ Deauth in parallel ← mới: No / Yes same channel / Yes sweep all channels
+        ↓ màn chạy: đếm beacon + đếm deauth + kênh hiện tại
+```
+
+### Hai menu mới
+
+| Menu | Lựa chọn | Ý nghĩa |
+|---|---|---|
+| `Beacon Count` | `Unlimited (until stop)` | như hành vi cũ, chỉ dừng khi bấm BACK |
+| | `50 / 100 / 500 beacons` | dừng đúng số, hiện màn "done" rồi về menu |
+| | `Custom…` | bàn phím số, `0` = không giới hạn, tối đa 100000 |
+| `Deauth in parallel?` | `No` | chỉ phát beacon |
+| | `Yes - same channel` | beacon + deauth trên đúng kênh đang phát |
+| | `Yes - sweep all channels` | beacon + deauth, deauth tự nhảy kênh 1…11 |
+
+### Vì sao phải gộp vào một vòng lặp
+
+Card WiFi chỉ nằm được ở **một kênh tại một thời điểm**. Nếu chạy deauth ở một
+task riêng song song thì hai bên giành nhau `esp_wifi_set_channel()`: beacon sẽ
+phát lẫn sang kênh của deauth và ngược lại. Vì vậy "song song" ở đây được làm
+đúng cách: **một vòng lặp, mỗi lượt phát 1 beacon rồi phát 3 frame deauth**, kênh
+do một biến duy nhất quyết định.
+
+Số liệu thực tế của vòng lặp (đã test trên máy tính, xem dưới):
+
+- 1 beacon ↔ 3 frame deauth mỗi lượt;
+- chế độ sweep nhảy kênh sau mỗi lượt, chế độ same-channel đứng yên;
+- chế độ không kèm deauth thì cứ hết danh sách SSID lại nhảy kênh như bản cũ
+  (`nextChannel()` sau mỗi lượt vòng qua danh sách) — **giữ nguyên hành vi cũ**;
+- dừng đúng số beacon đã chọn, không phát thừa.
+
+### Nút bấm khi đang chạy
+
+| Nút | Tác dụng |
+|---|---|
+| `Sel` (Boot) | tạm dừng / chạy tiếp |
+| `Esc` (giữ Boot) | dừng và về menu |
+
+Trước đây không có tạm dừng.
+
+### Kiểm thử
+
+`tests/beacon-spam/run.sh` **trích thẳng** đoạn mã trong
+`src/modules/wifi/wifi_atks.cpp` (hàm sinh SSID + vòng lặp truyền) rồi biên dịch
+và chạy trên máy tính, nên test không thể lệch khỏi code thật. Các trường hợp
+đang được khoá:
+
+1. dừng đúng 1 / 5 / 100 beacon;
+2. 10 beacon + deauth = đúng 30 frame deauth, và 0 frame khi tắt deauth;
+3. chế độ sweep thật sự đổi kênh;
+4. danh sách SSID **không có newline ở cuối** vẫn phát được mục cuối
+   (đây là lỗi bắt được ngay khi viết test);
+5. `nextChannel()` vẫn chạy khi hết một lượt danh sách — chống tái phát lỗi
+   "beacon đứng một kênh" của bản viết lại đầu tiên;
+6. SSID single ghép số đếm không vượt 32 byte; SSID random dài 7–28 ký tự.
+
+`tests/beacon-spam/run.sh /tmp/Bruce` là cách chạy riêng; CI chạy cùng 14 suite khác.
